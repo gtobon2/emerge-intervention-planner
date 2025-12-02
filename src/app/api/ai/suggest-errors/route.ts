@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, DEFAULT_MODEL, SYSTEM_PROMPTS } from '@/lib/ai';
+import { getAICompletion, isAIConfigured, SYSTEM_PROMPTS } from '@/lib/ai';
 import { generateErrorSuggestionPrompt } from '@/lib/ai/prompts';
 import type { Curriculum, CurriculumPosition } from '@/lib/supabase/types';
 
@@ -19,32 +19,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = getAnthropicClient();
-    if (!client) {
+    if (!isAIConfigured()) {
       return NextResponse.json(
-        { error: 'AI service not configured' },
+        { error: 'AI service not configured. Please add OPENAI_API_KEY or ANTHROPIC_API_KEY to your environment.' },
         { status: 503 }
       );
     }
 
     const prompt = generateErrorSuggestionPrompt(curriculum, position, previousErrors);
 
-    const message = await client.messages.create({
-      model: DEFAULT_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPTS.errorSuggestion,
-      messages: [{ role: 'user', content: prompt }],
+    const result = await getAICompletion({
+      systemPrompt: SYSTEM_PROMPTS.errorSuggestion,
+      userPrompt: prompt,
+      maxTokens: 1024,
     });
 
-    const content = message.content[0];
-    const text = content.type === 'text' ? content.text : '';
-
     return NextResponse.json({
-      suggestions: text,
-      usage: {
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-      },
+      suggestions: result.text,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
     });
   } catch (error) {
     console.error('Error suggesting errors:', error);

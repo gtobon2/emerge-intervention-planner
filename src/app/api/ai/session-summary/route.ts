@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, DEFAULT_MODEL, SYSTEM_PROMPTS } from '@/lib/ai';
+import { getAICompletion, isAIConfigured, SYSTEM_PROMPTS } from '@/lib/ai';
 import { generateSessionSummaryPrompt } from '@/lib/ai/prompts';
 import type { Session } from '@/lib/supabase/types';
 
@@ -18,32 +18,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = getAnthropicClient();
-    if (!client) {
+    if (!isAIConfigured()) {
       return NextResponse.json(
-        { error: 'AI service not configured' },
+        { error: 'AI service not configured. Please add OPENAI_API_KEY or ANTHROPIC_API_KEY to your environment.' },
         { status: 503 }
       );
     }
 
     const prompt = generateSessionSummaryPrompt(session, groupName);
 
-    const message = await client.messages.create({
-      model: DEFAULT_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPTS.sessionSummary,
-      messages: [{ role: 'user', content: prompt }],
+    const result = await getAICompletion({
+      systemPrompt: SYSTEM_PROMPTS.sessionSummary,
+      userPrompt: prompt,
+      maxTokens: 1024,
     });
 
-    const content = message.content[0];
-    const text = content.type === 'text' ? content.text : '';
-
     return NextResponse.json({
-      summary: text,
-      usage: {
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-      },
+      summary: result.text,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
     });
   } catch (error) {
     console.error('Error generating session summary:', error);

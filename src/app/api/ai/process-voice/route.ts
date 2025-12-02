@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, DEFAULT_MODEL, SYSTEM_PROMPTS } from '@/lib/ai';
+import { getAICompletion, isAIConfigured, SYSTEM_PROMPTS } from '@/lib/ai';
 import { generateVoiceNotePrompt } from '@/lib/ai/prompts';
 
 export async function POST(request: NextRequest) {
@@ -14,32 +14,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = getAnthropicClient();
-    if (!client) {
+    if (!isAIConfigured()) {
       return NextResponse.json(
-        { error: 'AI service not configured' },
+        { error: 'AI service not configured. Please add OPENAI_API_KEY or ANTHROPIC_API_KEY to your environment.' },
         { status: 503 }
       );
     }
 
     const prompt = generateVoiceNotePrompt(transcription);
 
-    const message = await client.messages.create({
-      model: DEFAULT_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPTS.voiceTranscription,
-      messages: [{ role: 'user', content: prompt }],
+    const result = await getAICompletion({
+      systemPrompt: SYSTEM_PROMPTS.voiceTranscription,
+      userPrompt: prompt,
+      maxTokens: 1024,
     });
 
-    const content = message.content[0];
-    const text = content.type === 'text' ? content.text : '';
-
     return NextResponse.json({
-      processedNotes: text,
-      usage: {
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-      },
+      processedNotes: result.text,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
     });
   } catch (error) {
     console.error('Error processing voice notes:', error);
