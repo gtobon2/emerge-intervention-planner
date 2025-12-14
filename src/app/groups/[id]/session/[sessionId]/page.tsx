@@ -27,6 +27,7 @@ import { OTRCounter } from '@/components/ui/otr-counter';
 import type {
   Session,
   Group,
+  Student,
   Curriculum,
   Pacing,
   MasteryLevel,
@@ -36,9 +37,50 @@ import type {
 import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
+import { getStudentsForGroup, MOCK_GROUPS, MOCK_SESSIONS } from '@/lib/mock-data';
+
+// Get initials from student name
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// Student circle colors (rotating palette)
+const STUDENT_COLORS = [
+  'bg-movement text-white',
+  'bg-emerald-500 text-white',
+  'bg-blue-500 text-white',
+  'bg-purple-500 text-white',
+  'bg-amber-500 text-white',
+];
 
 // Mock data for demonstration - in production, fetch from API/Supabase
 function getMockSession(sessionId: string, groupId: string): Session {
+  // Try to find actual session from mock data first
+  const existingSession = MOCK_SESSIONS.find(s => s.id === sessionId);
+  if (existingSession) {
+    return {
+      ...existingSession,
+      anticipated_errors: existingSession.anticipated_errors || [
+        {
+          id: '1',
+          error_pattern: 'Confuses b/d in reading',
+          correction_protocol: 'Use sky writing and tactile letter cards',
+        },
+        {
+          id: '2',
+          error_pattern: 'Omits final consonant in blends',
+          correction_protocol: 'Tap each phoneme, use finger spelling',
+        },
+      ],
+    };
+  }
+
+  // Default session if not found
   return {
     id: sessionId,
     group_id: groupId,
@@ -88,6 +130,13 @@ function getMockSession(sessionId: string, groupId: string): Session {
 }
 
 function getMockGroup(groupId: string): Group {
+  // Try to find actual group from mock data first
+  const existingGroup = MOCK_GROUPS.find(g => g.id === groupId);
+  if (existingGroup) {
+    return existingGroup;
+  }
+
+  // Default group if not found
   return {
     id: groupId,
     name: 'Group A - Reading Foundations',
@@ -109,6 +158,7 @@ export default function SessionPage({
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSessionActive, setIsSessionActive] = useState(false);
 
@@ -124,11 +174,17 @@ export default function SessionPage({
   const [pacing, setPacing] = useState<Pacing | null>(null);
   const [mastery, setMastery] = useState<MasteryLevel | null>(null);
 
+  // Per-student tracking
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null); // null = group level
+  const [studentOTRs, setStudentOTRs] = useState<Record<string, number>>({}); // studentId -> count
+  const [errorStudents, setErrorStudents] = useState<Record<string, string[]>>({}); // errorId -> studentIds[]
+
   // UI state
   const [showErrorPanel, setShowErrorPanel] = useState(true);
   const [showNewErrorForm, setShowNewErrorForm] = useState(false);
   const [newErrorPattern, setNewErrorPattern] = useState('');
   const [newErrorCorrection, setNewErrorCorrection] = useState('');
+  const [newErrorStudent, setNewErrorStudent] = useState<string>('');
 
   // Voice input
   const {
@@ -156,9 +212,20 @@ export default function SessionPage({
     // In production, fetch from Supabase
     const mockSession = getMockSession(params.sessionId, params.id);
     const mockGroup = getMockGroup(params.id);
+    const mockStudents = getStudentsForGroup(params.id);
+
     setSession(mockSession);
     setGroup(mockGroup);
+    setStudents(mockStudents);
     setAnticipatedErrors(mockSession.anticipated_errors || []);
+
+    // Initialize per-student OTR tracking
+    const initialOTRs: Record<string, number> = {};
+    mockStudents.forEach((s) => {
+      initialOTRs[s.id] = 0;
+    });
+    setStudentOTRs(initialOTRs);
+
     setIsLoading(false);
   }, [params.id, params.sessionId]);
 
@@ -188,19 +255,54 @@ export default function SessionPage({
 
   const handleAddUnexpectedError = () => {
     if (newErrorPattern.trim()) {
+      const errorId = `unexpected-${Date.now()}`;
       setUnexpectedErrors((prev) => [
         ...prev,
         {
+          id: errorId,
           error_pattern: newErrorPattern,
           correction_used: newErrorCorrection,
           correction_worked: true,
           add_to_bank: true,
+          student_id: newErrorStudent || undefined,
         },
       ]);
       setNewErrorPattern('');
       setNewErrorCorrection('');
+      setNewErrorStudent('');
       setShowNewErrorForm(false);
     }
+  };
+
+  // Toggle student association with an error
+  const handleToggleErrorStudent = (errorId: string, studentId: string) => {
+    setErrorStudents((prev) => {
+      const currentStudents = prev[errorId] || [];
+      if (currentStudents.includes(studentId)) {
+        return {
+          ...prev,
+          [errorId]: currentStudents.filter((id) => id !== studentId),
+        };
+      } else {
+        return {
+          ...prev,
+          [errorId]: [...currentStudents, studentId],
+        };
+      }
+    });
+  };
+
+  // Increment OTR for a specific student
+  const handleStudentOTR = (studentId: string) => {
+    setStudentOTRs((prev) => ({
+      ...prev,
+      [studentId]: (prev[studentId] || 0) + 1,
+    }));
+  };
+
+  // Get total OTRs across all students
+  const getTotalOTRs = () => {
+    return Object.values(studentOTRs).reduce((sum, count) => sum + count, 0);
   };
 
   const handleComponentToggle = (component: string) => {
@@ -420,7 +522,55 @@ export default function SessionPage({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main tracking area */}
             <div className="lg:col-span-2 space-y-6">
-              {/* OTR Counter */}
+              {/* Student Circles - Per-student tracking */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-gray-700">
+                    Students in Session
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    {students.map((student, index) => (
+                      <button
+                        key={student.id}
+                        onClick={() => handleStudentOTR(student.id)}
+                        className={`
+                          flex flex-col items-center gap-1 p-2 rounded-lg transition-all
+                          hover:bg-gray-50 active:scale-95 min-w-[70px]
+                        `}
+                        title={`${student.name} - Click to add OTR`}
+                      >
+                        <div
+                          className={`
+                            w-12 h-12 rounded-full flex items-center justify-center
+                            text-lg font-bold shadow-md transition-transform
+                            hover:scale-110 cursor-pointer
+                            ${STUDENT_COLORS[index % STUDENT_COLORS.length]}
+                          `}
+                        >
+                          {getInitials(student.name)}
+                        </div>
+                        <span className="text-xs text-gray-600 font-medium truncate max-w-[70px]">
+                          {student.name.split(' ')[0]}
+                        </span>
+                        <span className="text-xs font-bold text-movement">
+                          {studentOTRs[student.id] || 0} OTRs
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t text-center">
+                    <p className="text-sm text-gray-500">Total OTRs</p>
+                    <p className="text-3xl font-bold text-movement">{getTotalOTRs()}</p>
+                    <p className="text-xs text-gray-400">
+                      Target: {session.planned_otr_target || 40}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* OTR Counter - Group level */}
               <Card>
                 <CardContent className="py-6">
                   <OTRCounter target={session.planned_otr_target || 40} />
@@ -578,32 +728,60 @@ export default function SessionPage({
                         </label>
 
                         {anticipatedErrorsChecked[error.id] && (
-                          <div className="mt-2 ml-6 flex gap-2">
-                            <button
-                              onClick={() =>
-                                handleCorrectionWorked(error.id, true)
-                              }
-                              className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
-                                correctionWorked[error.id] === true
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'bg-gray-200 text-gray-700'
-                              }`}
-                            >
-                              Worked
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleCorrectionWorked(error.id, false)
-                              }
-                              className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
-                                correctionWorked[error.id] === false
-                                  ? 'bg-red-500 text-white'
-                                  : 'bg-gray-200 text-gray-700'
-                              }`}
-                            >
-                              Didn&apos;t Work
-                            </button>
-                          </div>
+                          <>
+                            {/* Who made this error? */}
+                            <div className="mt-2 ml-6">
+                              <p className="text-xs text-gray-500 mb-2">Who made this error?</p>
+                              <div className="flex flex-wrap gap-1">
+                                {students.map((student, index) => {
+                                  const isSelected = (errorStudents[error.id] || []).includes(student.id);
+                                  return (
+                                    <button
+                                      key={student.id}
+                                      onClick={() => handleToggleErrorStudent(error.id, student.id)}
+                                      className={`
+                                        w-8 h-8 rounded-full flex items-center justify-center
+                                        text-xs font-bold transition-all
+                                        ${isSelected
+                                          ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                          : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                        }
+                                      `}
+                                      title={student.name}
+                                    >
+                                      {getInitials(student.name)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="mt-2 ml-6 flex gap-2">
+                              <button
+                                onClick={() =>
+                                  handleCorrectionWorked(error.id, true)
+                                }
+                                className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
+                                  correctionWorked[error.id] === true
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                Worked
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleCorrectionWorked(error.id, false)
+                                }
+                                className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
+                                  correctionWorked[error.id] === false
+                                    ? 'bg-red-500 text-white'
+                                    : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                Didn&apos;t Work
+                              </button>
+                            </div>
+                          </>
                         )}
                       </div>
                     ))}
@@ -614,19 +792,39 @@ export default function SessionPage({
                         <h4 className="text-sm font-medium text-gray-700 mb-2">
                           New Errors Observed
                         </h4>
-                        {unexpectedErrors.map((error, i) => (
-                          <div
-                            key={i}
-                            className="p-2 bg-red-50 border border-red-200 rounded text-sm mb-2"
-                          >
-                            <p className="font-medium">{error.error_pattern}</p>
-                            {error.correction_used && (
-                              <p className="text-xs text-gray-600">
-                                Correction: {error.correction_used}
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                        {unexpectedErrors.map((error, i) => {
+                          const errorStudent = students.find(s => s.id === (error as any).student_id);
+                          const studentIndex = students.findIndex(s => s.id === (error as any).student_id);
+                          return (
+                            <div
+                              key={i}
+                              className="p-2 bg-red-50 border border-red-200 rounded text-sm mb-2"
+                            >
+                              <div className="flex items-start gap-2">
+                                {errorStudent && (
+                                  <div
+                                    className={`
+                                      w-6 h-6 rounded-full flex items-center justify-center
+                                      text-xs font-bold flex-shrink-0
+                                      ${STUDENT_COLORS[studentIndex % STUDENT_COLORS.length]}
+                                    `}
+                                    title={errorStudent.name}
+                                  >
+                                    {getInitials(errorStudent.name)}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-medium">{error.error_pattern}</p>
+                                  {error.correction_used && (
+                                    <p className="text-xs text-gray-600">
+                                      Correction: {error.correction_used}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -647,6 +845,32 @@ export default function SessionPage({
                           onChange={(e) => setNewErrorCorrection(e.target.value)}
                           className="w-full px-2 py-1 text-sm border rounded"
                         />
+                        {/* Student selector */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Who made this error?</p>
+                          <div className="flex flex-wrap gap-1">
+                            {students.map((student, index) => (
+                              <button
+                                key={student.id}
+                                type="button"
+                                onClick={() => setNewErrorStudent(
+                                  newErrorStudent === student.id ? '' : student.id
+                                )}
+                                className={`
+                                  w-8 h-8 rounded-full flex items-center justify-center
+                                  text-xs font-bold transition-all
+                                  ${newErrorStudent === student.id
+                                    ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                  }
+                                `}
+                                title={student.name}
+                              >
+                                {getInitials(student.name)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <div className="flex gap-2">
                           <Button
                             size="sm"
@@ -658,7 +882,10 @@ export default function SessionPage({
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setShowNewErrorForm(false)}
+                            onClick={() => {
+                              setShowNewErrorForm(false);
+                              setNewErrorStudent('');
+                            }}
                           >
                             Cancel
                           </Button>
