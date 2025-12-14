@@ -10,6 +10,7 @@ import type {
 
 interface SessionsState {
   sessions: Session[];
+  allSessions: SessionWithGroup[];
   todaySessions: TodaySession[];
   selectedSession: SessionWithGroup | null;
   isLoading: boolean;
@@ -17,6 +18,7 @@ interface SessionsState {
 
   // Actions
   fetchSessionsForGroup: (groupId: string) => Promise<void>;
+  fetchAllSessions: () => Promise<void>;
   fetchTodaySessions: () => Promise<void>;
   fetchSessionById: (id: string) => Promise<void>;
   createSession: (session: SessionInsert) => Promise<Session | null>;
@@ -28,10 +30,35 @@ interface SessionsState {
 
 export const useSessionsStore = create<SessionsState>((set, get) => ({
   sessions: [],
+  allSessions: [],
   todaySessions: [],
   selectedSession: null,
   isLoading: false,
   error: null,
+
+  fetchAllSessions: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select(`
+          *,
+          groups (*)
+        `)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      const sessionsWithGroups: SessionWithGroup[] = (data || []).map((session: any) => ({
+        ...session,
+        group: session.groups,
+      }));
+
+      set({ allSessions: sessionsWithGroups, isLoading: false });
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false });
+    }
+  },
 
   fetchSessionsForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });

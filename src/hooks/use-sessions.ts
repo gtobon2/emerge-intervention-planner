@@ -65,3 +65,18 @@ export function useTodaySessions() {
     refetch: fetchTodaySessions,
   };
 }
+
+export function useAllSessions() {
+  const { allSessions, fetchAllSessions, isLoading, error } = useSessionsStore();
+
+  useEffect(() => {
+    fetchAllSessions();
+  }, [fetchAllSessions]);
+
+  return {
+    sessions: allSessions,
+    isLoading,
+    error,
+    refetch: fetchAllSessions,
+  };
+}

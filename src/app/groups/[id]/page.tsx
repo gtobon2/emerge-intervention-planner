@@ -54,41 +54,42 @@ export default function GroupDetailPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <Link href="/groups">
-            <Button variant="ghost" size="sm" className="gap-1">
+            <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              <span className="hidden sm:inline">Back</span>
             </Button>
           </Link>
         </div>
 
         {/* Group Info */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary mb-2">
               {selectedGroup.name}
             </h1>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-3">
               <CurriculumBadge curriculum={selectedGroup.curriculum} />
               <TierBadge tier={selectedGroup.tier} />
-              <span className="text-text-muted">Grade {selectedGroup.grade}</span>
+              <span className="text-sm md:text-base text-text-muted">Grade {selectedGroup.grade}</span>
             </div>
-            <div className="flex items-center gap-2 text-text-muted">
-              <BookOpen className="w-4 h-4" />
-              <span>Current Position: {positionLabel}</span>
+            <div className="flex items-center gap-2 text-sm md:text-base text-text-muted">
+              <BookOpen className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Current Position: {positionLabel}</span>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" className="gap-2">
+          <div className="flex gap-2 w-full md:w-auto">
+            <Button variant="secondary" className="gap-2 flex-1 md:flex-initial min-h-[44px]">
               <Settings className="w-4 h-4" />
-              Edit
+              <span>Edit</span>
             </Button>
-            <Button className="gap-2">
+            <Button className="gap-2 flex-1 md:flex-initial min-h-[44px]">
               <Plus className="w-4 h-4" />
-              Plan Session
+              <span className="hidden sm:inline">Plan Session</span>
+              <span className="sm:hidden">Plan</span>
             </Button>
           </div>
         </div>
@@ -132,15 +133,15 @@ export default function GroupDetailPage() {
         </div>
 
         {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Sessions */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between text-base md:text-lg">
                   <span>Recent Sessions</span>
                   <Link href={`/groups/${groupId}/sessions`}>
-                    <Button variant="ghost" size="sm">View All</Button>
+                    <Button variant="ghost" size="sm" className="min-h-[44px]">View All</Button>
                   </Link>
                 </CardTitle>
               </CardHeader>
@@ -154,8 +155,8 @@ export default function GroupDetailPage() {
                 ) : recentSessions.length === 0 ? (
                   <div className="text-center py-8 text-text-muted">
                     <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No sessions yet</p>
-                    <Button variant="secondary" className="mt-4">
+                    <p className="text-sm md:text-base">No sessions yet</p>
+                    <Button variant="secondary" className="mt-4 min-h-[44px]">
                       Plan First Session
                     </Button>
                   </div>
@@ -165,10 +166,10 @@ export default function GroupDetailPage() {
                       <Link
                         key={session.id}
                         href={`/groups/${groupId}/session/${session.id}`}
-                        className="block p-3 bg-foundation rounded-lg hover:bg-foundation/80 transition-colors"
+                        className="block p-3 md:p-4 bg-foundation rounded-lg hover:bg-foundation/80 transition-colors min-h-[60px]"
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-text-primary">
+                          <span className="font-medium text-sm md:text-base text-text-primary">
                             {new Date(session.date).toLocaleDateString('en-US', {
                               weekday: 'short',
                               month: 'short',
@@ -177,7 +178,7 @@ export default function GroupDetailPage() {
                           </span>
                           <StatusBadge status={session.status} />
                         </div>
-                        <p className="text-sm text-text-muted">
+                        <p className="text-xs md:text-sm text-text-muted truncate">
                           {formatCurriculumPosition(selectedGroup.curriculum, session.curriculum_position)}
                         </p>
                       </Link>
@@ -192,30 +193,59 @@ export default function GroupDetailPage() {
           <div>
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between text-base md:text-lg">
                   <span>Students</span>
-                  <Button variant="ghost" size="sm" className="gap-1">
-                    <Plus className="w-4 h-4" />
-                    Add
-                  </Button>
+                  <Link href={`/groups/${groupId}/students`}>
+                    <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
+                      <Settings className="w-4 h-4" />
+                      <span className="hidden sm:inline">Manage</span>
+                    </Button>
+                  </Link>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {selectedGroup.students?.length === 0 ? (
                   <div className="text-center py-8 text-text-muted">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No students added</p>
+                    <p className="mb-2 text-sm md:text-base">No students added</p>
+                    <Link href={`/groups/${groupId}/students`}>
+                      <Button variant="secondary" size="sm" className="gap-1 min-h-[44px]">
+                        <Plus className="w-4 h-4" />
+                        Add Students
+                      </Button>
+                    </Link>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {selectedGroup.students?.map((student) => (
-                      <div
-                        key={student.id}
-                        className="p-2 bg-foundation rounded-lg flex items-center justify-between"
-                      >
-                        <span className="text-text-primary">{student.name}</span>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      {selectedGroup.students?.slice(0, 5).map((student) => (
+                        <div
+                          key={student.id}
+                          className="p-3 bg-foundation rounded-lg min-h-[44px] flex items-center"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm md:text-base text-text-primary truncate block">{student.name}</span>
+                            {student.notes && (
+                              <p className="text-xs text-text-muted mt-1 line-clamp-1">
+                                {student.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedGroup.students && selectedGroup.students.length > 5 && (
+                      <Link href={`/groups/${groupId}/students`}>
+                        <Button variant="ghost" size="sm" className="w-full min-h-[44px]">
+                          View all {selectedGroup.students.length} students
+                        </Button>
+                      </Link>
+                    )}
+                    <Link href={`/groups/${groupId}/students`}>
+                      <Button variant="secondary" size="sm" className="w-full gap-1 min-h-[44px]">
+                        Manage Students
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </CardContent>

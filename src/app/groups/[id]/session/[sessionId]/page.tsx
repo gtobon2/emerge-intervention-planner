@@ -17,6 +17,7 @@ import {
   Plus,
   CheckCircle,
   X,
+  Mic,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,8 @@ import type {
   AnticipatedError,
 } from '@/lib/supabase/types';
 import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
+import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 
 // Mock data for demonstration - in production, fetch from API/Supabase
 function getMockSession(sessionId: string, groupId: string): Session {
@@ -111,6 +114,7 @@ export default function SessionPage({
   const [isSessionActive, setIsSessionActive] = useState(false);
 
   // Session tracking state
+  const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
   const [anticipatedErrorsChecked, setAnticipatedErrorsChecked] = useState<Record<string, boolean>>({});
   const [correctionWorked, setCorrectionWorked] = useState<Record<string, boolean | null>>({});
   const [unexpectedErrors, setUnexpectedErrors] = useState<ObservedError[]>([]);
@@ -127,12 +131,35 @@ export default function SessionPage({
   const [newErrorPattern, setNewErrorPattern] = useState('');
   const [newErrorCorrection, setNewErrorCorrection] = useState('');
 
+  // Voice input
+  const {
+    isListening,
+    isSupported: isVoiceSupported,
+    error: voiceError,
+    toggle: toggleVoiceInput,
+  } = useSpeechRecognition({
+    continuous: true,
+    interimResults: true,
+    onTranscript: (transcript, isFinal) => {
+      if (isFinal) {
+        setNotes((prev) => {
+          const separator = prev.trim() ? ' ' : '';
+          return prev + separator + transcript;
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('Voice input error:', error);
+    },
+  });
+
   useEffect(() => {
     // In production, fetch from Supabase
     const mockSession = getMockSession(resolvedParams.sessionId, resolvedParams.id);
     const mockGroup = getMockGroup(resolvedParams.id);
     setSession(mockSession);
     setGroup(mockGroup);
+    setAnticipatedErrors(mockSession.anticipated_errors || []);
     setIsLoading(false);
   }, [resolvedParams.id, resolvedParams.sessionId]);
 
@@ -185,6 +212,24 @@ export default function SessionPage({
     );
   };
 
+  // AI handler functions
+  const handleAddAIError = (error: AnticipatedError) => {
+    setAnticipatedErrors((prev) => [...prev, error]);
+  };
+
+  const handleAddAllAIErrors = (errors: AnticipatedError[]) => {
+    setAnticipatedErrors((prev) => [...prev, ...errors]);
+  };
+
+  const handleSaveSummaryToNotes = (summary: string) => {
+    setNotes((prev) => {
+      if (prev.trim()) {
+        return `${prev}\n\n--- AI Generated Summary ---\n${summary}`;
+      }
+      return summary;
+    });
+  };
+
   if (isLoading || !session || !group) {
     return (
       <div className="p-6">
@@ -211,37 +256,62 @@ export default function SessionPage({
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <Link
                 href={`/groups/${group.id}`}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -ml-2"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Link>
-              <div>
-                <h1 className="font-semibold text-lg">{group.name}</h1>
-                <div className="flex items-center gap-2 text-sm">
+              <div className="min-w-0 flex-1">
+                <h1 className="font-semibold text-base sm:text-lg truncate">{group.name}</h1>
+                <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
                   <CurriculumBadge curriculum={group.curriculum} />
                   <TierBadge tier={group.tier} />
-                  <span className="text-gray-500">
+                  <span className="text-gray-500 hidden sm:inline truncate">
                     {formatCurriculumPosition(group.curriculum, session.curriculum_position)}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {isSessionActive ? (
                 <>
                   <Timer targetMinutes={group.schedule?.duration || 45} />
-                  <Button variant="primary" onClick={handleCompleteSession}>
-                    <Check className="w-4 h-4 mr-1" />
-                    Complete Session
+                  <div className="hidden md:block">
+                    <AISessionSummary
+                      session={{
+                        ...session,
+                        components_completed: componentsCompleted,
+                        actual_otr_estimate: null,
+                        exit_ticket_correct: exitTicketCorrect,
+                        exit_ticket_total: exitTicketTotal,
+                        pacing,
+                        mastery_demonstrated: mastery,
+                        errors_observed: anticipatedErrors
+                          .filter((e) => anticipatedErrorsChecked[e.id])
+                          .map((e) => ({
+                            error_pattern: e.error_pattern,
+                            correction_used: e.correction_protocol,
+                            correction_worked: correctionWorked[e.id] ?? true,
+                          })),
+                        unexpected_errors: unexpectedErrors,
+                        notes,
+                      }}
+                      groupName={group.name}
+                      onSaveToNotes={handleSaveSummaryToNotes}
+                    />
+                  </div>
+                  <Button variant="primary" onClick={handleCompleteSession} className="min-h-[44px] flex-1 sm:flex-initial">
+                    <Check className="w-4 h-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Complete Session</span>
+                    <span className="sm:hidden">Complete</span>
                   </Button>
                 </>
               ) : (
-                <Button variant="primary" onClick={handleStartSession}>
+                <Button variant="primary" onClick={handleStartSession} className="min-h-[44px] w-full sm:w-auto">
                   <Play className="w-4 h-4 mr-1" />
                   Start Session
                 </Button>
@@ -251,7 +321,7 @@ export default function SessionPage({
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-4 md:py-6">
         {!isSessionActive ? (
           // Pre-session view
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -315,27 +385,42 @@ export default function SessionPage({
             {/* Anticipated Errors */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  Anticipated Errors
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    Anticipated Errors
+                  </CardTitle>
+                  <AIErrorSuggestions
+                    curriculum={group.curriculum}
+                    position={session.curriculum_position}
+                    previousErrors={anticipatedErrors.map((e) => e.error_pattern)}
+                    onAddError={handleAddAIError}
+                    onAddAllErrors={handleAddAllAIErrors}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {session.anticipated_errors?.map((error) => (
-                    <div
-                      key={error.id}
-                      className="p-3 bg-amber-50 border border-amber-200 rounded-lg"
-                    >
-                      <p className="font-medium text-amber-900">
-                        {error.error_pattern}
-                      </p>
-                      <p className="text-sm text-amber-700 mt-1">
-                        <strong>Correction:</strong> {error.correction_protocol}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                {anticipatedErrors.length > 0 ? (
+                  <div className="space-y-3">
+                    {anticipatedErrors.map((error) => (
+                      <div
+                        key={error.id}
+                        className="p-3 bg-amber-50 border border-amber-200 rounded-lg"
+                      >
+                        <p className="font-medium text-amber-900">
+                          {error.error_pattern}
+                        </p>
+                        <p className="text-sm text-amber-700 mt-1">
+                          <strong>Correction:</strong> {error.correction_protocol}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No anticipated errors yet. Use AI to generate suggestions or add manually.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -360,28 +445,28 @@ export default function SessionPage({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {lessonComponents.map((component) => (
                       <button
                         key={component.name}
                         onClick={() => handleComponentToggle(component.name)}
-                        className={`p-3 rounded-lg border text-left transition-all ${
+                        className={`p-3 md:p-4 rounded-lg border text-left transition-all min-h-[60px] ${
                           componentsCompleted.includes(component.name)
                             ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                            : 'bg-white border-gray-200 hover:border-gray-300'
+                            : 'bg-white border-gray-200 hover:border-gray-300 active:scale-98'
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           {componentsCompleted.includes(component.name) ? (
-                            <CheckCircle className="w-4 h-4 text-emerald-500" />
+                            <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                           ) : (
-                            <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                            <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
                           )}
-                          <span className="font-medium text-sm">
+                          <span className="font-medium text-sm md:text-base">
                             {component.name}
                           </span>
                         </div>
-                        <span className="text-xs text-gray-500 ml-6">
+                        <span className="text-xs text-gray-500 ml-7">
                           {component.duration} min
                         </span>
                       </button>
@@ -393,10 +478,49 @@ export default function SessionPage({
               {/* Notes */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-blue-500" />
-                    Session Notes
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-blue-500" />
+                      Session Notes
+                    </CardTitle>
+                    {isVoiceSupported && (
+                      <button
+                        type="button"
+                        onClick={toggleVoiceInput}
+                        className={`
+                          flex items-center gap-2 px-3 py-2 rounded-lg transition-all
+                          ${
+                            isListening
+                              ? 'bg-red-500 text-white animate-pulse shadow-lg'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }
+                        `}
+                        title={isListening ? 'Stop voice input' : 'Click to start voice input'}
+                      >
+                        <Mic className="w-4 h-4" />
+                        {isListening && (
+                          <>
+                            <span className="w-2 h-2 bg-white rounded-full" />
+                            <span className="text-sm font-medium">Recording</span>
+                          </>
+                        )}
+                        {!isListening && <span className="text-sm">Voice Input</span>}
+                      </button>
+                    )}
+                  </div>
+                  {isListening && (
+                    <p className="text-sm text-movement mt-2 animate-pulse">
+                      Listening... speak now
+                    </p>
+                  )}
+                  {voiceError && (
+                    <p className="text-sm text-red-500 mt-2">{voiceError}</p>
+                  )}
+                  {!isVoiceSupported && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Voice input not supported in this browser. Use Chrome, Edge, or Safari for voice features.
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <textarea
@@ -434,7 +558,7 @@ export default function SessionPage({
                     <p className="text-sm text-gray-500 mb-3">
                       Check errors observed and note if correction worked
                     </p>
-                    {session.anticipated_errors?.map((error) => (
+                    {anticipatedErrors.map((error) => (
                       <div
                         key={error.id}
                         className={`p-3 rounded-lg border transition-colors ${
@@ -468,7 +592,7 @@ export default function SessionPage({
                               onClick={() =>
                                 handleCorrectionWorked(error.id, true)
                               }
-                              className={`px-2 py-1 rounded text-xs ${
+                              className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
                                 correctionWorked[error.id] === true
                                   ? 'bg-emerald-500 text-white'
                                   : 'bg-gray-200 text-gray-700'
@@ -480,7 +604,7 @@ export default function SessionPage({
                               onClick={() =>
                                 handleCorrectionWorked(error.id, false)
                               }
-                              className={`px-2 py-1 rounded text-xs ${
+                              className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
                                 correctionWorked[error.id] === false
                                   ? 'bg-red-500 text-white'
                                   : 'bg-gray-200 text-gray-700'
@@ -608,7 +732,7 @@ export default function SessionPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1">
+                    <label className="text-xs text-gray-600 block mb-2">
                       Pacing
                     </label>
                     <div className="flex gap-2">
@@ -617,7 +741,7 @@ export default function SessionPage({
                           <button
                             key={p}
                             onClick={() => setPacing(p)}
-                            className={`px-2 py-1 rounded text-xs flex-1 ${
+                            className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
                               pacing === p
                                 ? 'bg-movement text-white'
                                 : 'bg-gray-100 text-gray-700'
@@ -631,7 +755,7 @@ export default function SessionPage({
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1">
+                    <label className="text-xs text-gray-600 block mb-2">
                       Mastery
                     </label>
                     <div className="flex gap-2">
@@ -639,7 +763,7 @@ export default function SessionPage({
                         <button
                           key={m}
                           onClick={() => setMastery(m)}
-                          className={`px-2 py-1 rounded text-xs flex-1 ${
+                          className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
                             mastery === m
                               ? m === 'yes'
                                 ? 'bg-emerald-500 text-white'

@@ -38,18 +38,18 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
-            <p className="text-text-muted">
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary">Dashboard</h1>
+            <p className="text-sm md:text-base text-text-muted mt-1">
               Welcome back! Here&apos;s your intervention overview.
             </p>
           </div>
-          <Button className="gap-2">
+          <Button className="gap-2 w-full sm:w-auto min-h-[44px]">
             <Plus className="w-4 h-4" />
-            New Session
+            <span>New Session</span>
           </Button>
         </div>
 
@@ -57,24 +57,24 @@ export default function DashboardPage() {
         <QuickStats stats={stats} isLoading={groupsLoading} />
 
         {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Groups List */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Your Groups</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-base sm:text-lg font-semibold text-text-primary">Your Groups</h2>
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-text-muted" />
+                <Filter className="w-4 h-4 text-text-muted hidden sm:block" />
                 <Select
                   options={curriculumOptions}
                   value={filter.curriculum}
                   onChange={(e) => setFilter({ curriculum: e.target.value as Curriculum | 'all' })}
-                  className="w-40"
+                  className="w-full sm:w-40"
                 />
               </div>
             </div>
 
             {groupsLoading ? (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="h-32 bg-surface rounded-xl animate-pulse" />
                 ))}
@@ -82,10 +82,10 @@ export default function DashboardPage() {
             ) : filteredGroups.length === 0 ? (
               <div className="text-center py-12 bg-surface rounded-xl">
                 <p className="text-text-muted mb-4">No groups found</p>
-                <Button variant="secondary">Create Your First Group</Button>
+                <Button variant="secondary" className="min-h-[44px]">Create Your First Group</Button>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredGroups.map((group) => (
                   <GroupCard
                     key={group.id}
@@ -98,7 +98,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Today's Schedule */}
-          <div>
+          <div className="order-first lg:order-last">
             <TodaySchedule
               sessions={todaySessions}
               isLoading={sessionsLoading}
