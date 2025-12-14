@@ -32,7 +32,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         className={`
           min-h-screen transition-all duration-300
           pt-16 lg:pt-0
-          lg:${sidebarCollapsed ? 'ml-16' : 'ml-64'}
+          ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}
         `}
       >
         <div className="p-4 md:p-6">

@@ -37,7 +37,7 @@ import type {
 import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
-import { getStudentsForGroup, MOCK_GROUPS, MOCK_SESSIONS } from '@/lib/mock-data';
+import { getStudentsForGroup, MOCK_GROUPS, MOCK_SESSIONS, MOCK_STUDENTS } from '@/lib/mock-data';
 
 // Get initials from student name
 function getInitials(name: string): string {
@@ -212,7 +212,29 @@ export default function SessionPage({
     // In production, fetch from Supabase
     const mockSession = getMockSession(params.sessionId, params.id);
     const mockGroup = getMockGroup(params.id);
-    const mockStudents = getStudentsForGroup(params.id);
+
+    // Try to get students for this group ID
+    let mockStudents = getStudentsForGroup(params.id);
+
+    // Fallback: if no students found, try the session's group_id
+    if (mockStudents.length === 0 && mockSession.group_id) {
+      mockStudents = getStudentsForGroup(mockSession.group_id);
+    }
+
+    // Fallback: if still no students, try to find by group name
+    if (mockStudents.length === 0 && mockGroup.name) {
+      const matchingGroup = MOCK_GROUPS.find(g =>
+        g.name.toLowerCase().includes(mockGroup.name.toLowerCase().split(' ')[0])
+      );
+      if (matchingGroup) {
+        mockStudents = getStudentsForGroup(matchingGroup.id);
+      }
+    }
+
+    // Last fallback: use first group's students for demo
+    if (mockStudents.length === 0) {
+      mockStudents = MOCK_STUDENTS.filter(s => s.group_id === 'group-1');
+    }
 
     setSession(mockSession);
     setGroup(mockGroup);
