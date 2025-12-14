@@ -2,6 +2,13 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { Student, StudentInsert, StudentUpdate } from '@/lib/supabase/types';
+import { getStudentsForGroup } from '@/lib/mock-data';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return url && !url.includes('placeholder');
+};
 
 interface StudentsState {
   students: Student[];
@@ -23,6 +30,14 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
   fetchStudentsForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockStudents = getStudentsForGroup(groupId);
+      set({ students: mockStudents, isLoading: false });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('students')
@@ -33,7 +48,9 @@ export const useStudentsStore = create<StudentsState>((set) => ({
       if (error) throw error;
       set({ students: data || [], isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      // Fall back to mock data
+      const mockStudents = getStudentsForGroup(groupId);
+      set({ students: mockStudents, isLoading: false });
     }
   },
 

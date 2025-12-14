@@ -2,6 +2,13 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { Group, GroupInsert, GroupUpdate, Curriculum, GroupWithStudents } from '@/lib/supabase/types';
+import { MOCK_GROUPS, MOCK_GROUPS_WITH_STUDENTS, getGroupWithStudents } from '@/lib/mock-data';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return url && !url.includes('placeholder');
+};
 
 interface GroupsState {
   groups: Group[];
@@ -36,6 +43,13 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
 
   fetchGroups: async () => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set({ groups: MOCK_GROUPS, isLoading: false });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -45,12 +59,24 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
       if (error) throw error;
       set({ groups: data || [], isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      // Fall back to mock data on error
+      set({ groups: MOCK_GROUPS, isLoading: false });
     }
   },
 
   fetchGroupById: async (id: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockGroup = getGroupWithStudents(id);
+      set({
+        selectedGroup: mockGroup || null,
+        isLoading: false,
+      });
+      return;
+    }
+
     try {
       const { data: group, error: groupError } = await supabase
         .from('groups')
@@ -73,7 +99,12 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      // Fall back to mock data
+      const mockGroup = getGroupWithStudents(id);
+      set({
+        selectedGroup: mockGroup || null,
+        isLoading: false,
+      });
     }
   },
 

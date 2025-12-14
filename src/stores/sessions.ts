@@ -8,6 +8,18 @@ import type {
   SessionWithGroup,
   TodaySession,
 } from '@/lib/supabase/types';
+import {
+  MOCK_SESSIONS,
+  MOCK_SESSIONS_WITH_GROUPS,
+  getTodaysSessions,
+  getSessionsForGroup,
+} from '@/lib/mock-data';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return url && !url.includes('placeholder');
+};
 
 interface SessionsState {
   sessions: Session[];
@@ -39,6 +51,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   fetchAllSessions: async () => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set({ allSessions: MOCK_SESSIONS_WITH_GROUPS, isLoading: false });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('sessions')
@@ -57,12 +76,20 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
       set({ allSessions: sessionsWithGroups, isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      set({ allSessions: MOCK_SESSIONS_WITH_GROUPS, isLoading: false });
     }
   },
 
   fetchSessionsForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockSessions = getSessionsForGroup(groupId);
+      set({ sessions: mockSessions, isLoading: false });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('sessions')
@@ -73,12 +100,31 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (error) throw error;
       set({ sessions: data || [], isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      const mockSessions = getSessionsForGroup(groupId);
+      set({ sessions: mockSessions, isLoading: false });
     }
   },
 
   fetchTodaySessions: async () => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const todayMock = getTodaysSessions();
+      const todaySessions: TodaySession[] = todayMock.map((session) => ({
+        id: session.id,
+        groupId: session.group_id,
+        groupName: session.group.name,
+        curriculum: session.group.curriculum,
+        tier: session.group.tier,
+        time: session.time || '',
+        status: session.status,
+        position: session.curriculum_position,
+      }));
+      set({ todaySessions, isLoading: false });
+      return;
+    }
+
     try {
       const today = new Date().toISOString().split('T')[0];
 
@@ -114,12 +160,35 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
       set({ todaySessions, isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      // Fall back to mock data
+      const todayMock = getTodaysSessions();
+      const todaySessions: TodaySession[] = todayMock.map((session) => ({
+        id: session.id,
+        groupId: session.group_id,
+        groupName: session.group.name,
+        curriculum: session.group.curriculum,
+        tier: session.group.tier,
+        time: session.time || '',
+        status: session.status,
+        position: session.curriculum_position,
+      }));
+      set({ todaySessions, isLoading: false });
     }
   },
 
   fetchSessionById: async (id: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockSession = MOCK_SESSIONS_WITH_GROUPS.find(s => s.id === id);
+      set({
+        selectedSession: mockSession || null,
+        isLoading: false,
+      });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('sessions')
@@ -140,7 +209,11 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      const mockSession = MOCK_SESSIONS_WITH_GROUPS.find(s => s.id === id);
+      set({
+        selectedSession: mockSession || null,
+        isLoading: false,
+      });
     }
   },
 

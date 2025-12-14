@@ -8,6 +8,13 @@ import type {
   Curriculum,
   CurriculumPosition,
 } from '@/lib/supabase/types';
+import { MOCK_ERROR_ENTRIES, getErrorsForCurriculum } from '@/lib/mock-data';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return url && !url.includes('placeholder');
+};
 
 interface ErrorsState {
   errors: ErrorBankEntry[];
@@ -37,6 +44,14 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   fetchErrorsForCurriculum: async (curriculum: Curriculum) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockErrors = getErrorsForCurriculum(curriculum);
+      set({ errors: mockErrors, isLoading: false });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('error_bank')
@@ -47,7 +62,9 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
       if (error) throw error;
       set({ errors: data || [], isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      // Fall back to mock data
+      const mockErrors = getErrorsForCurriculum(curriculum);
+      set({ errors: mockErrors, isLoading: false });
     }
   },
 

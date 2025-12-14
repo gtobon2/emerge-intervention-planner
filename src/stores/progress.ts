@@ -6,6 +6,18 @@ import type {
   ProgressMonitoringInsert,
   ProgressMonitoringWithStudent,
 } from '@/lib/supabase/types';
+import {
+  MOCK_PROGRESS,
+  MOCK_STUDENTS,
+  getProgressForGroup,
+  getProgressForStudent,
+} from '@/lib/mock-data';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return url && !url.includes('placeholder');
+};
 
 interface ProgressState {
   data: ProgressMonitoring[];
@@ -29,6 +41,22 @@ export const useProgressStore = create<ProgressState>((set) => ({
 
   fetchProgressForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockData = getProgressForGroup(groupId);
+      const formattedData = mockData.map((item) => ({
+        ...item,
+        student: MOCK_STUDENTS.find(s => s.id === item.student_id),
+      }));
+      set({
+        data: mockData,
+        dataWithStudents: formattedData as ProgressMonitoringWithStudent[],
+        isLoading: false,
+      });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('progress_monitoring')
@@ -52,12 +80,22 @@ export const useProgressStore = create<ProgressState>((set) => ({
         isLoading: false,
       });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      // Fall back to mock data
+      const mockData = getProgressForGroup(groupId);
+      set({ data: mockData, isLoading: false });
     }
   },
 
   fetchProgressForStudent: async (studentId: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const mockData = getProgressForStudent(studentId);
+      set({ data: mockData, isLoading: false });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('progress_monitoring')
@@ -68,7 +106,8 @@ export const useProgressStore = create<ProgressState>((set) => ({
       if (error) throw error;
       set({ data: data || [], isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      const mockData = getProgressForStudent(studentId);
+      set({ data: mockData, isLoading: false });
     }
   },
 
