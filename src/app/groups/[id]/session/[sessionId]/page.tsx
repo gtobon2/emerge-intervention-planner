@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -104,9 +104,8 @@ function getMockGroup(groupId: string): Group {
 export default function SessionPage({
   params,
 }: {
-  params: Promise<{ id: string; sessionId: string }>;
+  params: { id: string; sessionId: string };
 }) {
-  const resolvedParams = use(params);
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
@@ -155,13 +154,13 @@ export default function SessionPage({
 
   useEffect(() => {
     // In production, fetch from Supabase
-    const mockSession = getMockSession(resolvedParams.sessionId, resolvedParams.id);
-    const mockGroup = getMockGroup(resolvedParams.id);
+    const mockSession = getMockSession(params.sessionId, params.id);
+    const mockGroup = getMockGroup(params.id);
     setSession(mockSession);
     setGroup(mockGroup);
     setAnticipatedErrors(mockSession.anticipated_errors || []);
     setIsLoading(false);
-  }, [resolvedParams.id, resolvedParams.sessionId]);
+  }, [params.id, params.sessionId]);
 
   const handleStartSession = () => {
     setIsSessionActive(true);
@@ -170,7 +169,7 @@ export default function SessionPage({
   const handleCompleteSession = () => {
     // In production, save to Supabase
     alert('Session completed! Data would be saved.');
-    router.push(`/groups/${resolvedParams.id}`);
+    router.push(`/groups/${params.id}`);
   };
 
   const handleAnticipatedErrorToggle = (errorId: string) => {
