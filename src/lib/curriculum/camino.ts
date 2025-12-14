@@ -203,15 +203,15 @@ export const FLUENCY_BENCHMARKS: Record<string, FluencyBenchmark> = {
 
 // Camino lesson structure (11 components, 45 min)
 export const CAMINO_LESSON_COMPONENTS = [
-  { name: 'Warm-Up Review', duration: 5, description: 'Review previous skills' },
-  { name: 'Phonemic Awareness', duration: 5, description: 'PA activities' },
-  { name: 'New Phonics Concept', duration: 10, description: 'I Do/We Do/You Do' },
-  { name: 'Word Blending/Decoding', duration: 7, description: 'Syllable and word practice' },
-  { name: 'Decodable Text Reading', duration: 10, description: 'Connected text practice' },
-  { name: 'Comprehension & Discussion', duration: 5, description: 'Understanding check' },
-  { name: 'Vocabulary & Oral Language', duration: 5, description: 'Word meaning and usage' },
-  { name: 'Writing/Spelling', duration: 7, description: 'Dictation and writing' },
-  { name: 'Review & Reinforcement', duration: 3, description: 'Wrap up and preview' }
+  { name: 'Warm-Up Review', duration_minutes: 5, description: 'Review previous skills' },
+  { name: 'Phonemic Awareness', duration_minutes: 5, description: 'PA activities' },
+  { name: 'New Phonics Concept', duration_minutes: 10, description: 'I Do/We Do/You Do' },
+  { name: 'Word Blending/Decoding', duration_minutes: 7, description: 'Syllable and word practice' },
+  { name: 'Decodable Text Reading', duration_minutes: 10, description: 'Connected text practice' },
+  { name: 'Comprehension & Discussion', duration_minutes: 5, description: 'Understanding check' },
+  { name: 'Vocabulary & Oral Language', duration_minutes: 5, description: 'Word meaning and usage' },
+  { name: 'Writing/Spelling', duration_minutes: 7, description: 'Dictation and writing' },
+  { name: 'Review & Reinforcement', duration_minutes: 3, description: 'Wrap up and preview' }
 ];
 
 // Helper functions

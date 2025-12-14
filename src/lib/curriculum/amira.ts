@@ -45,11 +45,11 @@ export const MICRO_INTERVENTIONS = [
 
 // Amira lesson components for teacher-led portions
 export const AMIRA_LESSON_COMPONENTS = [
-  { name: 'Connection', duration: 3, description: 'Connect to previous learning' },
-  { name: 'Skill Introduction', duration: 5, description: 'Brief teacher instruction on focus skill' },
-  { name: 'Amira Session', duration: 20, description: 'Student works with AI tutor' },
-  { name: 'Debrief', duration: 5, description: 'Review AI report and discuss' },
-  { name: 'Extension', duration: 7, description: 'Additional practice on flagged skills' }
+  { name: 'Connection', duration_minutes: 3, description: 'Connect to previous learning' },
+  { name: 'Skill Introduction', duration_minutes: 5, description: 'Brief teacher instruction on focus skill' },
+  { name: 'Amira Session', duration_minutes: 20, description: 'Student works with AI tutor' },
+  { name: 'Debrief', duration_minutes: 5, description: 'Review AI report and discuss' },
+  { name: 'Extension', duration_minutes: 7, description: 'Additional practice on flagged skills' }
 ];
 
 // Helper functions

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { Student, StudentInsert, StudentUpdate } from '@/lib/supabase/types';

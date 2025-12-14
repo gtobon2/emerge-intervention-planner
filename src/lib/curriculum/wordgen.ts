@@ -58,12 +58,12 @@ export const DAILY_CYCLE: DailyActivity[] = [
 
 // WordGen lesson structure (approximately 45 min)
 export const WORDGEN_LESSON_COMPONENTS = [
-  { name: 'Word Review', duration: 5, description: 'Quick review of words from previous days' },
-  { name: 'Text Reading', duration: 10, description: 'Shared or partner reading of unit text' },
-  { name: 'Word Work', duration: 10, description: 'Deep word analysis activities' },
-  { name: 'Discussion', duration: 10, description: 'Structured academic discussion' },
-  { name: 'Writing', duration: 8, description: 'Writing using target vocabulary' },
-  { name: 'Wrap-Up', duration: 2, description: 'Summarize and preview next day' }
+  { name: 'Word Review', duration_minutes: 5, description: 'Quick review of words from previous days' },
+  { name: 'Text Reading', duration_minutes: 10, description: 'Shared or partner reading of unit text' },
+  { name: 'Word Work', duration_minutes: 10, description: 'Deep word analysis activities' },
+  { name: 'Discussion', duration_minutes: 10, description: 'Structured academic discussion' },
+  { name: 'Writing', duration_minutes: 8, description: 'Writing using target vocabulary' },
+  { name: 'Wrap-Up', duration_minutes: 2, description: 'Summarize and preview next day' }
 ];
 
 // Helper functions

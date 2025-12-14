@@ -341,15 +341,7 @@ export default function SessionPage({
                   <ul className="space-y-1">
                     {session.planned_practice_items?.map((item, i) => (
                       <li key={i} className="flex items-center gap-2 text-sm">
-                        <Badge
-                          variant={
-                            item.type === 'new'
-                              ? 'default'
-                              : item.type === 'review'
-                              ? 'secondary'
-                              : 'outline'
-                          }
-                        >
+                        <Badge variant="default">
                           {item.type}
                         </Badge>
                         {item.item}
@@ -364,7 +356,7 @@ export default function SessionPage({
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {session.planned_response_formats?.map((format) => (
-                      <Badge key={format} variant="secondary">
+                      <Badge key={format} variant="default">
                         {format}
                       </Badge>
                     ))}
@@ -675,7 +667,7 @@ export default function SessionPage({
                       </div>
                     ) : (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => setShowNewErrorForm(true)}
                         className="w-full"

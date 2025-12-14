@@ -67,11 +67,6 @@ export default function CalendarPage() {
     router.push(`/groups/${groupId}/session/${sessionId}`);
   };
 
-  const handleDateClick = (info: any) => {
-    // Could open a dialog to create a new session on this date
-    console.log('Date clicked:', info.dateStr);
-  };
-
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -143,7 +138,6 @@ export default function CalendarPage() {
               }}
               events={events}
               eventClick={handleEventClick}
-              dateClick={handleDateClick}
               height="auto"
               eventTimeFormat={{
                 hour: '2-digit',

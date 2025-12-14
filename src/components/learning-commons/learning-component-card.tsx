@@ -42,7 +42,7 @@ export function LearningComponentCard({
         </div>
         <div className="flex gap-1">
           {component.gradeLevel?.map((grade) => (
-            <Badge key={grade} variant="secondary" className="text-xs">
+            <Badge key={grade} variant="default" className="text-xs">
               Grade {grade}
             </Badge>
           ))}

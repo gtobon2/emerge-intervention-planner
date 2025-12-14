@@ -28,8 +28,11 @@ module.exports = {
         tier3: '#EF4444',            // Red
       },
       fontFamily: {
-        brand: ['Plus Jakarta Sans', 'sans-serif'],
-        student: ['Atkinson Hyperlegible', 'sans-serif'],
+        // System fonts (network-independent)
+        // Plus Jakarta Sans fallback: modern sans-serif stack
+        brand: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Atkinson Hyperlegible fallback: legible sans-serif stack
+        student: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
     },
   },

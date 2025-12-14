@@ -82,7 +82,7 @@ export function ContentEvaluator({
             Content to Evaluate
           </span>
           {targetGradeLevel && (
-            <Badge variant="secondary" className="ml-2">
+            <Badge variant="default" className="ml-2">
               Target: Grade {targetGradeLevel}
             </Badge>
           )}

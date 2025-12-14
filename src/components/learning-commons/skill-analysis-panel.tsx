@@ -139,7 +139,7 @@ export function SkillAnalysisPanel({
         {/* Skills summary */}
         <div className="mt-4 flex flex-wrap gap-2">
           {analysis.standard.skills.map((skill) => (
-            <Badge key={skill} variant="secondary">
+            <Badge key={skill} variant="default">
               {skill}
             </Badge>
           ))}
