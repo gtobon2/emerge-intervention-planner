@@ -1,18 +1,46 @@
-// @ts-nocheck
 import { create } from 'zustand';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { db } from '@/lib/local-db';
+import {
+  createProgressRecord,
+  updateProgressRecord as updateProgressRecordDB,
+  deleteProgressRecord as deleteProgressRecordDB
+} from '@/lib/local-db/hooks';
 import { validateProgressMonitoring } from '@/lib/supabase/validation';
+import type {
+  LocalProgressMonitoring,
+  LocalProgressMonitoringInsert,
+  LocalStudent,
+} from '@/lib/local-db';
 import type {
   ProgressMonitoring,
   ProgressMonitoringInsert,
   ProgressMonitoringWithStudent,
 } from '@/lib/supabase/types';
-import {
-  MOCK_PROGRESS,
-  MOCK_STUDENTS,
-  getProgressForGroup,
-  getProgressForStudent,
-} from '@/lib/mock-data';
+
+// Map LocalProgressMonitoring to ProgressMonitoring
+function mapLocalToProgress(local: LocalProgressMonitoring): ProgressMonitoring {
+  return {
+    ...local,
+    id: String(local.id),
+    group_id: String(local.group_id),
+    student_id: local.student_id !== null ? String(local.student_id) : null,
+  } as ProgressMonitoring;
+}
+
+// Map with student
+function mapLocalToProgressWithStudent(
+  local: LocalProgressMonitoring,
+  student: LocalStudent | null
+): ProgressMonitoringWithStudent {
+  return {
+    ...mapLocalToProgress(local),
+    student: student ? {
+      ...student,
+      id: String(student.id),
+      group_id: String(student.group_id),
+    } as any : null,
+  } as ProgressMonitoringWithStudent;
+}
 
 interface ProgressState {
   data: ProgressMonitoring[];
@@ -37,72 +65,66 @@ export const useProgressStore = create<ProgressState>((set) => ({
   fetchProgressForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      const mockData = getProgressForGroup(groupId);
-      const formattedData = mockData.map((item) => ({
-        ...item,
-        student: MOCK_STUDENTS.find(s => s.id === item.student_id),
-      }));
-      set({
-        data: mockData,
-        dataWithStudents: formattedData as ProgressMonitoringWithStudent[],
-        isLoading: false,
-      });
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('progress_monitoring')
-        .select(`
-          *,
-          students (*)
-        `)
-        .eq('group_id', groupId)
-        .order('date', { ascending: true });
+      const numericGroupId = parseInt(groupId, 10);
+      if (isNaN(numericGroupId)) {
+        throw new Error('Invalid group ID');
+      }
 
-      if (error) throw error;
+      const localData = await db.progressMonitoring
+        .where('group_id')
+        .equals(numericGroupId)
+        .sortBy('date');
 
-      const formattedData = (data || []).map((item: any) => ({
-        ...item,
-        student: item.students,
-      }));
+      // Fetch students for the data with student info
+      const dataWithStudents: ProgressMonitoringWithStudent[] = [];
+      for (const pm of localData) {
+        let student: LocalStudent | null = null;
+        if (pm.student_id !== null) {
+          student = (await db.students.get(pm.student_id)) || null;
+        }
+        dataWithStudents.push(mapLocalToProgressWithStudent(pm, student));
+      }
+
+      const data = localData.map(mapLocalToProgress);
 
       set({
-        data: data || [],
-        dataWithStudents: formattedData,
+        data,
+        dataWithStudents,
         isLoading: false,
       });
     } catch (err) {
-      // Fall back to mock data
-      const mockData = getProgressForGroup(groupId);
-      set({ data: mockData, isLoading: false });
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        data: [],
+        dataWithStudents: []
+      });
     }
   },
 
   fetchProgressForStudent: async (studentId: string) => {
     set({ isLoading: true, error: null });
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      const mockData = getProgressForStudent(studentId);
-      set({ data: mockData, isLoading: false });
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('progress_monitoring')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('date', { ascending: true });
+      const numericStudentId = parseInt(studentId, 10);
+      if (isNaN(numericStudentId)) {
+        throw new Error('Invalid student ID');
+      }
 
-      if (error) throw error;
-      set({ data: data || [], isLoading: false });
+      const localData = await db.progressMonitoring
+        .where('student_id')
+        .equals(numericStudentId)
+        .sortBy('date');
+
+      const data = localData.map(mapLocalToProgress);
+      set({ data, isLoading: false });
     } catch (err) {
-      const mockData = getProgressForStudent(studentId);
-      set({ data: mockData, isLoading: false });
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        data: []
+      });
     }
   },
 
@@ -117,37 +139,46 @@ export const useProgressStore = create<ProgressState>((set) => ({
       return null;
     }
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      const newDataPoint: ProgressMonitoring = {
-        ...dataPoint,
-        id: `pm-${Date.now()}`,
-        created_at: new Date().toISOString(),
+    try {
+      const numericGroupId = parseInt(dataPoint.group_id, 10);
+      if (isNaN(numericGroupId)) {
+        throw new Error('Invalid group ID');
+      }
+
+      const numericStudentId = dataPoint.student_id !== null
+        ? parseInt(dataPoint.student_id, 10)
+        : null;
+
+      if (dataPoint.student_id !== null && (numericStudentId === null || isNaN(numericStudentId))) {
+        throw new Error('Invalid student ID');
+      }
+
+      const localDataPoint: LocalProgressMonitoringInsert = {
+        group_id: numericGroupId,
+        student_id: numericStudentId,
+        date: dataPoint.date,
+        measure_type: dataPoint.measure_type,
+        score: dataPoint.score,
+        benchmark: dataPoint.benchmark || null,
+        goal: dataPoint.goal || null,
+        notes: dataPoint.notes || null,
       };
 
+      const id = await createProgressRecord(localDataPoint);
+      const newDataPoint = await db.progressMonitoring.get(id);
+
+      if (!newDataPoint) {
+        throw new Error('Failed to retrieve created progress record');
+      }
+
+      const mappedDataPoint = mapLocalToProgress(newDataPoint);
+
       set((state) => ({
-        data: [...state.data, newDataPoint],
+        data: [...state.data, mappedDataPoint],
         isLoading: false,
       }));
 
-      return newDataPoint;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('progress_monitoring')
-        .insert(dataPoint)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      set((state) => ({
-        data: [...state.data, data],
-        isLoading: false,
-      }));
-
-      return data;
+      return mappedDataPoint;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -157,23 +188,13 @@ export const useProgressStore = create<ProgressState>((set) => ({
   deleteDataPoint: async (id: string) => {
     set({ isLoading: true, error: null });
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      set((state) => ({
-        data: state.data.filter((d) => d.id !== id),
-        dataWithStudents: state.dataWithStudents.filter((d) => d.id !== id),
-        isLoading: false,
-      }));
-      return;
-    }
-
     try {
-      const { error } = await supabase
-        .from('progress_monitoring')
-        .delete()
-        .eq('id', id);
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId)) {
+        throw new Error('Invalid progress monitoring ID');
+      }
 
-      if (error) throw error;
+      await deleteProgressRecordDB(numericId);
 
       set((state) => ({
         data: state.data.filter((d) => d.id !== id),

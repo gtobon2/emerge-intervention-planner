@@ -1,15 +1,32 @@
-// @ts-nocheck
 import { create } from 'zustand';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { db } from '@/lib/local-db';
+import {
+  createErrorBankEntry as createErrorBankEntryDB,
+  updateErrorBankEntry as updateErrorBankEntryDB,
+  incrementErrorEffectiveness,
+  incrementErrorOccurrence
+} from '@/lib/local-db/hooks';
 import { validateErrorBankEntry } from '@/lib/supabase/validation';
+import type {
+  LocalErrorBankEntry,
+  LocalErrorBankInsert,
+  LocalErrorBankUpdate,
+  Curriculum,
+  CurriculumPosition,
+} from '@/lib/local-db';
 import type {
   ErrorBankEntry,
   ErrorBankInsert,
   ErrorBankUpdate,
-  Curriculum,
-  CurriculumPosition,
 } from '@/lib/supabase/types';
-import { MOCK_ERROR_ENTRIES, getErrorsForCurriculum } from '@/lib/mock-data';
+
+// Map LocalErrorBankEntry to ErrorBankEntry
+function mapLocalToError(local: LocalErrorBankEntry): ErrorBankEntry {
+  return {
+    ...local,
+    id: String(local.id),
+  } as ErrorBankEntry;
+}
 
 interface ErrorsState {
   errors: ErrorBankEntry[];
@@ -40,26 +57,21 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   fetchErrorsForCurriculum: async (curriculum: Curriculum) => {
     set({ isLoading: true, error: null });
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      const mockErrors = getErrorsForCurriculum(curriculum);
-      set({ errors: mockErrors, isLoading: false });
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('error_bank')
-        .select('*')
-        .eq('curriculum', curriculum)
-        .order('occurrence_count', { ascending: false });
+      const localErrors = await db.errorBank
+        .where('curriculum')
+        .equals(curriculum)
+        .reverse()
+        .sortBy('occurrence_count');
 
-      if (error) throw error;
-      set({ errors: data || [], isLoading: false });
+      const errors = localErrors.map(mapLocalToError);
+      set({ errors, isLoading: false });
     } catch (err) {
-      // Fall back to mock data
-      const mockErrors = getErrorsForCurriculum(curriculum);
-      set({ errors: mockErrors, isLoading: false });
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        errors: []
+      });
     }
   },
 
@@ -68,27 +80,30 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
     position: CurriculumPosition
   ) => {
     set({ isLoading: true, error: null });
-    try {
-      // Fetch all errors for the curriculum, then filter by position
-      const { data, error } = await supabase
-        .from('error_bank')
-        .select('*')
-        .eq('curriculum', curriculum);
 
-      if (error) throw error;
+    try {
+      const allErrors = await db.errorBank
+        .where('curriculum')
+        .equals(curriculum)
+        .toArray();
 
       // Filter errors that match the position or are universal (null position)
-      const filteredErrors = (data || []).filter((e) => {
+      const filteredErrors = allErrors.filter((e) => {
         if (!e.curriculum_position) return true; // Universal error
         return matchPosition(curriculum, e.curriculum_position, position);
       });
 
+      const errors = filteredErrors.map(mapLocalToError);
       set({
-        suggestedErrors: filteredErrors,
+        suggestedErrors: errors,
         isLoading: false,
       });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        suggestedErrors: []
+      });
     }
   },
 
@@ -103,40 +118,36 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
       return null;
     }
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      const newError: ErrorBankEntry = {
-        ...errorData,
-        id: `error-${Date.now()}`,
+    try {
+      const localError: LocalErrorBankInsert = {
+        curriculum: errorData.curriculum,
+        curriculum_position: errorData.curriculum_position || null,
+        error_pattern: errorData.error_pattern,
+        underlying_gap: errorData.underlying_gap || null,
+        correction_protocol: errorData.correction_protocol,
+        correction_prompts: errorData.correction_prompts || null,
+        visual_cues: errorData.visual_cues || null,
+        kinesthetic_cues: errorData.kinesthetic_cues || null,
         is_custom: true,
         effectiveness_count: errorData.effectiveness_count || 0,
         occurrence_count: errorData.occurrence_count || 1,
-        created_at: new Date().toISOString(),
       };
 
+      const id = await createErrorBankEntryDB(localError);
+      const newError = await db.errorBank.get(id);
+
+      if (!newError) {
+        throw new Error('Failed to retrieve created error bank entry');
+      }
+
+      const mappedError = mapLocalToError(newError);
+
       set((state) => ({
-        errors: [...state.errors, newError],
+        errors: [...state.errors, mappedError],
         isLoading: false,
       }));
 
-      return newError;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('error_bank')
-        .insert({ ...errorData, is_custom: true })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      set((state) => ({
-        errors: [...state.errors, data],
-        isLoading: false,
-      }));
-
-      return data;
+      return mappedError;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -146,28 +157,39 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   updateError: async (id: string, updates: ErrorBankUpdate) => {
     set({ isLoading: true, error: null });
 
-    // Use mock data if Supabase not configured
-    if (!isSupabaseConfigured()) {
-      set((state) => ({
-        errors: state.errors.map((e) =>
-          e.id === id ? { ...e, ...updates } : e
-        ),
-        isLoading: false,
-      }));
-      return;
-    }
-
     try {
-      const { error } = await supabase
-        .from('error_bank')
-        .update(updates)
-        .eq('id', id);
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId)) {
+        throw new Error('Invalid error bank entry ID');
+      }
 
-      if (error) throw error;
+      // Convert updates to LocalErrorBankUpdate
+      const localUpdates: LocalErrorBankUpdate = {};
+
+      if (updates.curriculum !== undefined) localUpdates.curriculum = updates.curriculum;
+      if (updates.curriculum_position !== undefined) localUpdates.curriculum_position = updates.curriculum_position;
+      if (updates.error_pattern !== undefined) localUpdates.error_pattern = updates.error_pattern;
+      if (updates.underlying_gap !== undefined) localUpdates.underlying_gap = updates.underlying_gap;
+      if (updates.correction_protocol !== undefined) localUpdates.correction_protocol = updates.correction_protocol;
+      if (updates.correction_prompts !== undefined) localUpdates.correction_prompts = updates.correction_prompts;
+      if (updates.visual_cues !== undefined) localUpdates.visual_cues = updates.visual_cues;
+      if (updates.kinesthetic_cues !== undefined) localUpdates.kinesthetic_cues = updates.kinesthetic_cues;
+      if (updates.effectiveness_count !== undefined) localUpdates.effectiveness_count = updates.effectiveness_count;
+      if (updates.occurrence_count !== undefined) localUpdates.occurrence_count = updates.occurrence_count;
+
+      await updateErrorBankEntryDB(numericId, localUpdates);
+
+      // Fetch updated error
+      const updatedError = await db.errorBank.get(numericId);
+      if (!updatedError) {
+        throw new Error('Error bank entry not found after update');
+      }
+
+      const mappedError = mapLocalToError(updatedError);
 
       set((state) => ({
         errors: state.errors.map((e) =>
-          e.id === id ? { ...e, ...updates } : e
+          e.id === id ? mappedError : e
         ),
         isLoading: false,
       }));
@@ -177,21 +199,47 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   },
 
   incrementEffectiveness: async (id: string) => {
-    const errorEntry = get().errors.find((e) => e.id === id);
-    if (!errorEntry) return;
+    try {
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId)) {
+        throw new Error('Invalid error bank entry ID');
+      }
 
-    await get().updateError(id, {
-      effectiveness_count: errorEntry.effectiveness_count + 1,
-    });
+      await incrementErrorEffectiveness(numericId);
+
+      // Fetch updated error
+      const updatedError = await db.errorBank.get(numericId);
+      if (updatedError) {
+        const mappedError = mapLocalToError(updatedError);
+        set((state) => ({
+          errors: state.errors.map((e) => (e.id === id ? mappedError : e)),
+        }));
+      }
+    } catch (err) {
+      set({ error: (err as Error).message });
+    }
   },
 
   incrementOccurrence: async (id: string) => {
-    const errorEntry = get().errors.find((e) => e.id === id);
-    if (!errorEntry) return;
+    try {
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId)) {
+        throw new Error('Invalid error bank entry ID');
+      }
 
-    await get().updateError(id, {
-      occurrence_count: errorEntry.occurrence_count + 1,
-    });
+      await incrementErrorOccurrence(numericId);
+
+      // Fetch updated error
+      const updatedError = await db.errorBank.get(numericId);
+      if (updatedError) {
+        const mappedError = mapLocalToError(updatedError);
+        set((state) => ({
+          errors: state.errors.map((e) => (e.id === id ? mappedError : e)),
+        }));
+      }
+    } catch (err) {
+      set({ error: (err as Error).message });
+    }
   },
 
   setSuggestedErrors: (errors: ErrorBankEntry[]) => {
@@ -209,29 +257,40 @@ function matchPosition(
   errorPosition: CurriculumPosition,
   currentPosition: CurriculumPosition
 ): boolean {
-  switch (curriculum) {
-    case 'wilson': {
-      const errPos = errorPosition as { step: number; substep?: number };
-      const curPos = currentPosition as { step: number; substep: string };
-      return errPos.step === curPos.step;
-    }
-    case 'delta_math': {
-      const errPos = errorPosition as { standard: string };
-      const curPos = currentPosition as { standard: string };
-      return errPos.standard === curPos.standard;
-    }
-    case 'camino': {
-      const errPos = errorPosition as { lesson?: number; lesson_range?: [number, number] };
-      const curPos = currentPosition as { lesson: number };
-      if (errPos.lesson) {
-        return errPos.lesson === curPos.lesson;
+  try {
+    switch (curriculum) {
+      case 'wilson': {
+        const errPos = errorPosition as any;
+        const curPos = currentPosition as any;
+        if (errPos.step !== undefined && curPos.step !== undefined) {
+          return errPos.step === curPos.step;
+        }
+        return false;
       }
-      if (errPos.lesson_range) {
-        return curPos.lesson >= errPos.lesson_range[0] && curPos.lesson <= errPos.lesson_range[1];
+      case 'delta_math': {
+        const errPos = errorPosition as any;
+        const curPos = currentPosition as any;
+        if (errPos.standard !== undefined && curPos.standard !== undefined) {
+          return errPos.standard === curPos.standard;
+        }
+        return false;
       }
-      return false;
+      case 'camino': {
+        const errPos = errorPosition as any;
+        const curPos = currentPosition as any;
+        if (errPos.lesson && curPos.lesson) {
+          return errPos.lesson === curPos.lesson;
+        }
+        if (errPos.lesson_range && curPos.lesson) {
+          return curPos.lesson >= errPos.lesson_range[0] && curPos.lesson <= errPos.lesson_range[1];
+        }
+        return false;
+      }
+      default:
+        return false;
     }
-    default:
-      return false;
+  } catch (err) {
+    console.error('[matchPosition] Error matching positions:', err);
+    return false;
   }
 }

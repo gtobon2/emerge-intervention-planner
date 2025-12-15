@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { exportToFile, clearAllData as clearDatabase } from '@/lib/local-db/backup';
 
 export type UserRole = 'interventionist' | 'coach' | 'admin';
 export type Theme = 'light' | 'dark' | 'system';
@@ -171,28 +172,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       exportData: async () => {
         try {
-          // Export all data as JSON
-          const data = {
-            settings: {
-              profile: get().profile,
-              sessionDefaults: get().sessionDefaults,
-              displayPreferences: get().displayPreferences,
-              notificationPreferences: get().notificationPreferences,
-            },
-            exportDate: new Date().toISOString(),
-          };
-
-          const blob = new Blob([JSON.stringify(data, null, 2)], {
-            type: 'application/json',
-          });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `emerge-settings-${new Date().toISOString().split('T')[0]}.json`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+          // Export all data from IndexedDB and settings
+          await exportToFile(`emerge-backup-${new Date().toISOString().split('T')[0]}.json`);
         } catch (error) {
           console.error('Failed to export data:', error);
           throw error;
@@ -201,13 +182,13 @@ export const useSettingsStore = create<SettingsState>()(
 
       clearAllData: async () => {
         try {
-          // In a real app, this would clear data from Supabase
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          // Clear all data from IndexedDB
+          await clearDatabase();
 
-          // Clear local storage
+          // Clear local storage (settings, help state, etc.)
           localStorage.clear();
 
-          // Reset to defaults
+          // Reset settings to defaults
           get().resetToDefaults();
         } catch (error) {
           console.error('Failed to clear data:', error);
