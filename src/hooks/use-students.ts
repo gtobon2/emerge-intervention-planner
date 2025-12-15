@@ -5,48 +5,55 @@ import { useStudentsStore } from '@/stores/students';
 import type { StudentInsert, StudentUpdate } from '@/lib/supabase/types';
 
 export function useStudents(groupId: string) {
-  const store = useStudentsStore();
+  const students = useStudentsStore((state) => state.students);
+  const isLoading = useStudentsStore((state) => state.isLoading);
+  const error = useStudentsStore((state) => state.error);
+  const fetchStudentsForGroup = useStudentsStore((state) => state.fetchStudentsForGroup);
+  const createStudent = useStudentsStore((state) => state.createStudent);
+  const updateStudentStore = useStudentsStore((state) => state.updateStudent);
+  const deleteStudentStore = useStudentsStore((state) => state.deleteStudent);
+  const clearError = useStudentsStore((state) => state.clearError);
 
   useEffect(() => {
     if (groupId) {
-      store.fetchStudentsForGroup(groupId);
+      fetchStudentsForGroup(groupId);
     }
-  }, [groupId, store]);
+  }, [groupId, fetchStudentsForGroup]);
 
   const addStudent = useCallback(
     async (data: Omit<StudentInsert, 'group_id'>) => {
-      return store.createStudent({
+      return createStudent({
         ...data,
         group_id: groupId,
       });
     },
-    [groupId, store]
+    [groupId, createStudent]
   );
 
   const updateStudent = useCallback(
     async (id: string, data: StudentUpdate) => {
-      await store.updateStudent(id, data);
+      await updateStudentStore(id, data);
       return true;
     },
-    [store]
+    [updateStudentStore]
   );
 
   const deleteStudent = useCallback(
     async (id: string) => {
-      await store.deleteStudent(id);
+      await deleteStudentStore(id);
       return true;
     },
-    [store]
+    [deleteStudentStore]
   );
 
   return {
-    students: store.students,
-    isLoading: store.isLoading,
-    error: store.error,
+    students,
+    isLoading,
+    error,
     addStudent,
     updateStudent,
     deleteStudent,
-    clearError: store.clearError,
-    refetch: () => store.fetchStudentsForGroup(groupId),
+    clearError,
+    refetch: () => fetchStudentsForGroup(groupId),
   };
 }
