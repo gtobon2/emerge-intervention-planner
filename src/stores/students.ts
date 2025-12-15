@@ -1,22 +1,19 @@
 // @ts-nocheck
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { validateStudent } from '@/lib/supabase/validation';
 import type { Student, StudentInsert, StudentUpdate } from '@/lib/supabase/types';
-import { getStudentsForGroup } from '@/lib/mock-data';
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return url && !url.includes('placeholder');
-};
+import { getStudentsForGroup, MOCK_STUDENTS } from '@/lib/mock-data';
 
 interface StudentsState {
   students: Student[];
+  allStudents: Student[];
   isLoading: boolean;
   error: string | null;
 
   // Actions
   fetchStudentsForGroup: (groupId: string) => Promise<void>;
+  fetchAllStudents: () => Promise<void>;
   createStudent: (student: StudentInsert) => Promise<Student | null>;
   updateStudent: (id: string, updates: StudentUpdate) => Promise<void>;
   deleteStudent: (id: string) => Promise<void>;
@@ -25,6 +22,7 @@ interface StudentsState {
 
 export const useStudentsStore = create<StudentsState>((set) => ({
   students: [],
+  allStudents: [],
   isLoading: false,
   error: null,
 
@@ -54,8 +52,57 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     }
   },
 
+  fetchAllStudents: async () => {
+    set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set({ allStudents: MOCK_STUDENTS, isLoading: false });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      set({ allStudents: data || [], isLoading: false });
+    } catch (err) {
+      // Fall back to mock data
+      set({ allStudents: MOCK_STUDENTS, isLoading: false });
+    }
+  },
+
   createStudent: async (student: StudentInsert) => {
     set({ isLoading: true, error: null });
+
+    // Validate student data
+    const validation = validateStudent(student);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const newStudent: Student = {
+        ...student,
+        id: `student-${Date.now()}`,
+        created_at: new Date().toISOString(),
+      };
+
+      set((state) => ({
+        students: [...state.students, newStudent],
+        allStudents: [...state.allStudents, newStudent],
+        isLoading: false,
+      }));
+
+      return newStudent;
+    }
+
     try {
       const { data, error } = await supabase
         .from('students')
@@ -67,6 +114,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
       set((state) => ({
         students: [...state.students, data],
+        allStudents: [...state.allStudents, data],
         isLoading: false,
       }));
 
@@ -79,6 +127,17 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
   updateStudent: async (id: string, updates: StudentUpdate) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        students: state.students.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+        allStudents: state.allStudents.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('students')
@@ -91,6 +150,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
       set((state) => ({
         students: state.students.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+        allStudents: state.allStudents.map((s) => (s.id === id ? { ...s, ...updates } : s)),
         isLoading: false,
       }));
     } catch (err) {
@@ -100,6 +160,17 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
   deleteStudent: async (id: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        students: state.students.filter((s) => s.id !== id),
+        allStudents: state.allStudents.filter((s) => s.id !== id),
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { error } = await supabase.from('students').delete().eq('id', id);
 
@@ -107,6 +178,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
       set((state) => ({
         students: state.students.filter((s) => s.id !== id),
+        allStudents: state.allStudents.filter((s) => s.id !== id),
         isLoading: false,
       }));
     } catch (err) {

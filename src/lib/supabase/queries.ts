@@ -923,3 +923,133 @@ export async function fetchUpcomingSessions(
     return { data: [], error: err as Error };
   }
 }
+
+/**
+ * Complete a session with all collected data
+ * This updates the session with all the data collected during the session,
+ * including OTRs, errors, duration, notes, etc.
+ */
+export async function completeSession(
+  id: string,
+  completionData: {
+    actual_otr_estimate?: number | null;
+    pacing?: 'too_slow' | 'just_right' | 'too_fast' | null;
+    components_completed?: string[] | null;
+    exit_ticket_correct?: number | null;
+    exit_ticket_total?: number | null;
+    mastery_demonstrated?: 'yes' | 'no' | 'partial' | null;
+    errors_observed?: any[] | null;
+    unexpected_errors?: any[] | null;
+    pm_score?: number | null;
+    pm_trend?: 'improving' | 'flat' | 'declining' | null;
+    dbi_adaptation_notes?: string | null;
+    notes?: string | null;
+    next_session_notes?: string | null;
+    fidelity_checklist?: any[] | null;
+  }
+): Promise<QueryResult<Session>> {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .update({
+        ...completionData,
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Save errors from a session to the error bank
+ * This function processes errors observed during a session and either:
+ * 1. Creates new error bank entries for new errors
+ * 2. Increments occurrence/effectiveness counts for existing errors
+ */
+export async function saveSessionErrors(
+  sessionId: string,
+  curriculum: Curriculum,
+  curriculumPosition: CurriculumPosition,
+  errorsObserved: Array<{
+    error_pattern: string;
+    correction_used: string;
+    correction_worked: boolean;
+    add_to_bank?: boolean;
+  }>
+): Promise<{ error: Error | null }> {
+  try {
+    // Get all errors from the session that should be added to the bank
+    const errorsToAdd = errorsObserved.filter((e) => e.add_to_bank);
+
+    for (const error of errorsToAdd) {
+      // Check if this error pattern already exists in the error bank
+      const { data: existingErrors } = await supabase
+        .from('error_bank')
+        .select('*')
+        .eq('curriculum', curriculum)
+        .eq('error_pattern', error.error_pattern);
+
+      if (existingErrors && existingErrors.length > 0) {
+        // Error exists - increment counters
+        const existingError = existingErrors[0];
+        const updates: any = {
+          occurrence_count: existingError.occurrence_count + 1,
+        };
+
+        if (error.correction_worked) {
+          updates.effectiveness_count = existingError.effectiveness_count + 1;
+        }
+
+        await supabase
+          .from('error_bank')
+          .update(updates)
+          .eq('id', existingError.id);
+      } else {
+        // New error - create entry
+        await supabase.from('error_bank').insert({
+          curriculum,
+          curriculum_position: curriculumPosition,
+          error_pattern: error.error_pattern,
+          correction_protocol: error.correction_used,
+          correction_prompts: [error.correction_used],
+          is_custom: true,
+          effectiveness_count: error.correction_worked ? 1 : 0,
+          occurrence_count: 1,
+        });
+      }
+    }
+
+    return { error: null };
+  } catch (err) {
+    return { error: err as Error };
+  }
+}
+
+/**
+ * Record student OTR data for a session
+ * This is helpful for tracking individual student participation
+ */
+export async function recordStudentOTRs(
+  sessionId: string,
+  studentOTRs: Array<{
+    student_id: string;
+    otr_count: number;
+  }>
+): Promise<{ error: Error | null }> {
+  // Note: This would require a session_student_data table
+  // For now, we can store this in the session notes or a JSONB field
+  // This is a placeholder for future implementation
+  try {
+    // Future: Insert into session_student_data table
+    return { error: null };
+  } catch (err) {
+    return { error: err as Error };
+  }
+}

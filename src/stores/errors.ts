@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { validateErrorBankEntry } from '@/lib/supabase/validation';
 import type {
   ErrorBankEntry,
   ErrorBankInsert,
@@ -9,12 +10,6 @@ import type {
   CurriculumPosition,
 } from '@/lib/supabase/types';
 import { MOCK_ERROR_ENTRIES, getErrorsForCurriculum } from '@/lib/mock-data';
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return url && !url.includes('placeholder');
-};
 
 interface ErrorsState {
   errors: ErrorBankEntry[];
@@ -99,6 +94,34 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   createError: async (errorData: ErrorBankInsert) => {
     set({ isLoading: true, error: null });
+
+    // Validate error data
+    const validation = validateErrorBankEntry(errorData);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const newError: ErrorBankEntry = {
+        ...errorData,
+        id: `error-${Date.now()}`,
+        is_custom: true,
+        effectiveness_count: errorData.effectiveness_count || 0,
+        occurrence_count: errorData.occurrence_count || 1,
+        created_at: new Date().toISOString(),
+      };
+
+      set((state) => ({
+        errors: [...state.errors, newError],
+        isLoading: false,
+      }));
+
+      return newError;
+    }
+
     try {
       const { data, error } = await supabase
         .from('error_bank')
@@ -122,6 +145,18 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   updateError: async (id: string, updates: ErrorBankUpdate) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        errors: state.errors.map((e) =>
+          e.id === id ? { ...e, ...updates } : e
+        ),
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('error_bank')

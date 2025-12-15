@@ -1,12 +1,21 @@
 // @ts-nocheck
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import {
+  completeSession as completeSessionQuery,
+  saveSessionErrors,
+} from '@/lib/supabase/queries';
+import { validateSession } from '@/lib/supabase/validation';
 import type {
   Session,
   SessionInsert,
   SessionUpdate,
   SessionWithGroup,
   TodaySession,
+  ObservedError,
+  Pacing,
+  MasteryLevel,
+  PMTrend,
 } from '@/lib/supabase/types';
 import {
   MOCK_SESSIONS,
@@ -14,12 +23,6 @@ import {
   getTodaysSessions,
   getSessionsForGroup,
 } from '@/lib/mock-data';
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return url && !url.includes('placeholder');
-};
 
 interface SessionsState {
   sessions: Session[];
@@ -36,6 +39,26 @@ interface SessionsState {
   fetchSessionById: (id: string) => Promise<void>;
   createSession: (session: SessionInsert) => Promise<Session | null>;
   updateSession: (id: string, updates: SessionUpdate) => Promise<void>;
+  completeSession: (
+    id: string,
+    completionData: {
+      actual_otr_estimate?: number | null;
+      pacing?: Pacing | null;
+      components_completed?: string[] | null;
+      exit_ticket_correct?: number | null;
+      exit_ticket_total?: number | null;
+      mastery_demonstrated?: MasteryLevel | null;
+      errors_observed?: ObservedError[] | null;
+      unexpected_errors?: ObservedError[] | null;
+      pm_score?: number | null;
+      pm_trend?: PMTrend | null;
+      dbi_adaptation_notes?: string | null;
+      notes?: string | null;
+      next_session_notes?: string | null;
+      fidelity_checklist?: any[] | null;
+    },
+    saveErrors?: boolean
+  ) => Promise<Session | null>;
   deleteSession: (id: string) => Promise<void>;
   setSelectedSession: (session: SessionWithGroup | null) => void;
   clearError: () => void;
@@ -220,6 +243,14 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   createSession: async (session: SessionInsert) => {
     set({ isLoading: true, error: null });
 
+    // Validate session data
+    const validation = validateSession(session);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
     // Use mock data if Supabase not configured
     if (!isSupabaseConfigured()) {
       const newSession: Session = {
@@ -276,6 +307,22 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   updateSession: async (id: string, updates: SessionUpdate) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s
+        ),
+        selectedSession:
+          state.selectedSession?.id === id
+            ? { ...state.selectedSession, ...updates, updated_at: new Date().toISOString() }
+            : state.selectedSession,
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('sessions')
@@ -296,6 +343,91 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       }));
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
+    }
+  },
+
+  completeSession: async (id, completionData, saveErrors = true) => {
+    set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const updatedSession = {
+        ...completionData,
+        status: 'completed' as const,
+        updated_at: new Date().toISOString(),
+      };
+
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, ...updatedSession } : s
+        ),
+        selectedSession:
+          state.selectedSession?.id === id
+            ? { ...state.selectedSession, ...updatedSession }
+            : state.selectedSession,
+        isLoading: false,
+      }));
+
+      // Return mock session
+      const session = get().sessions.find((s) => s.id === id);
+      return session || null;
+    }
+
+    try {
+      // Complete the session using the query helper
+      const { data: completedSession, error: completeError } =
+        await completeSessionQuery(id, completionData);
+
+      if (completeError) throw completeError;
+
+      if (!completedSession) {
+        throw new Error('Failed to complete session');
+      }
+
+      // Save errors to error bank if requested and errors were observed
+      if (saveErrors && completionData.errors_observed && completionData.errors_observed.length > 0) {
+        // Get the session to access group info
+        const { data: sessionWithGroup } = await supabase
+          .from('sessions')
+          .select(`
+            *,
+            groups (curriculum)
+          `)
+          .eq('id', id)
+          .single();
+
+        if (sessionWithGroup && sessionWithGroup.groups) {
+          const curriculum = (sessionWithGroup.groups as any).curriculum;
+          const { error: saveErrorsError } = await saveSessionErrors(
+            id,
+            curriculum,
+            completedSession.curriculum_position,
+            completionData.errors_observed
+          );
+
+          if (saveErrorsError) {
+            console.error('Error saving session errors:', saveErrorsError);
+            // Don't fail the whole operation if error saving fails
+          }
+        }
+      }
+
+      // Update local state
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === id ? completedSession : s
+        ),
+        selectedSession:
+          state.selectedSession?.id === id
+            ? { ...state.selectedSession, ...completedSession }
+            : state.selectedSession,
+        isLoading: false,
+      }));
+
+      return completedSession;
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false });
+      return null;
     }
   },
 

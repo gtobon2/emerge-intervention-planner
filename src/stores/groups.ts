@@ -1,14 +1,9 @@
 // @ts-nocheck
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { validateGroup } from '@/lib/supabase/validation';
 import type { Group, GroupInsert, GroupUpdate, Curriculum, GroupWithStudents } from '@/lib/supabase/types';
 import { MOCK_GROUPS, MOCK_GROUPS_WITH_STUDENTS, getGroupWithStudents } from '@/lib/mock-data';
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return url && !url.includes('placeholder');
-};
 
 interface GroupsState {
   groups: Group[];
@@ -110,6 +105,32 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
 
   createGroup: async (group: GroupInsert) => {
     set({ isLoading: true, error: null });
+
+    // Validate group data
+    const validation = validateGroup(group);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const newGroup: Group = {
+        ...group,
+        id: `group-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      set((state) => ({
+        groups: [...state.groups, newGroup],
+        isLoading: false,
+      }));
+
+      return newGroup;
+    }
+
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -133,6 +154,23 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
 
   updateGroup: async (id: string, updates: GroupUpdate) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const updatedAt = new Date().toISOString();
+      set((state) => ({
+        groups: state.groups.map((g) =>
+          g.id === id ? { ...g, ...updates, updated_at: updatedAt } : g
+        ),
+        selectedGroup:
+          state.selectedGroup?.id === id
+            ? { ...state.selectedGroup, ...updates, updated_at: updatedAt }
+            : state.selectedGroup,
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('groups')
@@ -158,6 +196,18 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
 
   deleteGroup: async (id: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        groups: state.groups.filter((g) => g.id !== id),
+        selectedGroup:
+          state.selectedGroup?.id === id ? null : state.selectedGroup,
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { error } = await supabase.from('groups').delete().eq('id', id);
 

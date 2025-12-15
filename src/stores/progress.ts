@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { validateProgressMonitoring } from '@/lib/supabase/validation';
 import type {
   ProgressMonitoring,
   ProgressMonitoringInsert,
@@ -12,12 +13,6 @@ import {
   getProgressForGroup,
   getProgressForStudent,
 } from '@/lib/mock-data';
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return url && !url.includes('placeholder');
-};
 
 interface ProgressState {
   data: ProgressMonitoring[];
@@ -113,6 +108,31 @@ export const useProgressStore = create<ProgressState>((set) => ({
 
   addDataPoint: async (dataPoint: ProgressMonitoringInsert) => {
     set({ isLoading: true, error: null });
+
+    // Validate progress monitoring data
+    const validation = validateProgressMonitoring(dataPoint);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const newDataPoint: ProgressMonitoring = {
+        ...dataPoint,
+        id: `pm-${Date.now()}`,
+        created_at: new Date().toISOString(),
+      };
+
+      set((state) => ({
+        data: [...state.data, newDataPoint],
+        isLoading: false,
+      }));
+
+      return newDataPoint;
+    }
+
     try {
       const { data, error } = await supabase
         .from('progress_monitoring')
@@ -136,6 +156,17 @@ export const useProgressStore = create<ProgressState>((set) => ({
 
   deleteDataPoint: async (id: string) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        data: state.data.filter((d) => d.id !== id),
+        dataWithStudents: state.dataWithStudents.filter((d) => d.id !== id),
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('progress_monitoring')

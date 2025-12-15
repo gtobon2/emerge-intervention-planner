@@ -7,3 +7,6 @@ export type { StudentFormModalProps } from './student-form-modal';
 
 export { DeleteStudentModal } from './delete-student-modal';
 export type { DeleteStudentModalProps } from './delete-student-modal';
+
+export { StudentModal } from './student-modal';
+export type { StudentModalProps } from './student-modal';
