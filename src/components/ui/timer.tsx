@@ -54,11 +54,11 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
       {/* Timer display */}
       <div className={`
         font-mono text-2xl font-bold
-        ${isOvertime ? 'text-tier3' : 'text-text-primary'}
+        ${isOvertime ? 'text-red-500' : 'text-gray-900'}
       `}>
         {formatElapsedTime(elapsedMs)}
         {targetMinutes && (
-          <span className="text-text-muted text-sm font-normal ml-2">
+          <span className="text-gray-400 text-sm font-normal ml-2">
             / {targetMinutes}:00
           </span>
         )}
