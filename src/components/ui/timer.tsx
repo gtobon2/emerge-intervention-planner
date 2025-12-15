@@ -3,7 +3,6 @@
 import { useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { useUIStore, formatElapsedTime } from '@/stores/ui';
-import { Button } from './button';
 
 export interface TimerProps {
   component?: string;
@@ -98,27 +97,31 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
       )}
 
       {/* Controls */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
+      <div className="flex items-center gap-1">
+        <button
           onClick={handleStartStop}
-          className="p-2"
+          className={`
+            p-2 rounded-lg transition-colors
+            ${isRunning
+              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+              : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+            }
+          `}
+          title={isRunning ? 'Pause timer' : 'Start timer'}
         >
           {isRunning ? (
-            <Pause className="w-4 h-4" />
+            <Pause className="w-5 h-5" />
           ) : (
-            <Play className="w-4 h-4" />
+            <Play className="w-5 h-5" />
           )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
+        </button>
+        <button
           onClick={resetTimer}
-          className="p-2"
+          className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          title="Reset timer"
         >
-          <RotateCcw className="w-4 h-4" />
-        </Button>
+          <RotateCcw className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Current component label */}
