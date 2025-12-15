@@ -750,11 +750,11 @@ export default function SessionPage({
                             className="mt-1"
                           />
                           <div className="flex-1">
-                            <p className="font-medium text-sm">
+                            <p className="font-medium text-sm text-gray-900">
                               {error.error_pattern}
                             </p>
-                            <p className="text-xs text-gray-600 mt-1">
-                              {error.correction_protocol}
+                            <p className="text-xs text-gray-500 mt-1">
+                              <span className="font-medium">Correction:</span> {error.correction_protocol}
                             </p>
                           </div>
                         </label>
