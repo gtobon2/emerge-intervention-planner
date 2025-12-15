@@ -18,6 +18,7 @@ import {
   CheckCircle,
   X,
   Mic,
+  Save,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,13 @@ import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/typ
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { getStudentsForGroup, MOCK_GROUPS, MOCK_SESSIONS, MOCK_STUDENTS } from '@/lib/mock-data';
+import { useErrorsStore } from '@/stores';
+
+// Extended ObservedError type with id for local tracking
+interface ObservedErrorWithId extends ObservedError {
+  id: string;
+  student_id?: string;
+}
 
 // Get initials from student name
 function getInitials(name: string): string {
@@ -166,7 +174,7 @@ export default function SessionPage({
   const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
   const [anticipatedErrorsChecked, setAnticipatedErrorsChecked] = useState<Record<string, boolean>>({});
   const [correctionWorked, setCorrectionWorked] = useState<Record<string, Record<string, boolean | null>>>({}); // errorId -> studentId -> worked
-  const [unexpectedErrors, setUnexpectedErrors] = useState<ObservedError[]>([]);
+  const [unexpectedErrors, setUnexpectedErrors] = useState<ObservedErrorWithId[]>([]);
   const [componentsCompleted, setComponentsCompleted] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [exitTicketCorrect, setExitTicketCorrect] = useState<number | null>(null);
@@ -185,6 +193,10 @@ export default function SessionPage({
   const [newErrorPattern, setNewErrorPattern] = useState('');
   const [newErrorCorrection, setNewErrorCorrection] = useState('');
   const [newErrorStudent, setNewErrorStudent] = useState<string>('');
+
+  // Error bank integration
+  const [savedToBank, setSavedToBank] = useState<Record<string, boolean>>({}); // errorId -> isSaved
+  const { createError } = useErrorsStore();
 
   // Voice input
   const {
@@ -354,6 +366,59 @@ export default function SessionPage({
       }
       return summary;
     });
+  };
+
+  // Save error to error bank
+  const handleSaveToBank = async (
+    errorId: string,
+    errorPattern: string,
+    correctionProtocol: string,
+    isUnexpected: boolean = false
+  ) => {
+    if (!group) return;
+
+    // Get students who made this error
+    const studentsWhoMadeError = errorStudents[errorId] || [];
+    const correctionResults = correctionWorked[errorId] || {};
+
+    // Calculate effectiveness
+    const studentResults = Object.values(correctionResults).filter(r => r !== null);
+    const workedCount = studentResults.filter(r => r === true).length;
+    const effectivenessCount = studentResults.length > 0 ? workedCount : 0;
+
+    // Get student names for metadata
+    const studentNames = studentsWhoMadeError
+      .map(id => students.find(s => s.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+
+    try {
+      const errorBankEntry = await createError({
+        curriculum: group.curriculum,
+        curriculum_position: session?.curriculum_position || null,
+        error_pattern: errorPattern,
+        correction_protocol: correctionProtocol,
+        underlying_gap: null,
+        correction_prompts: null,
+        visual_cues: null,
+        kinesthetic_cues: null,
+        is_custom: true,
+        effectiveness_count: effectivenessCount,
+        occurrence_count: 1,
+      });
+
+      if (errorBankEntry) {
+        // Mark as saved
+        setSavedToBank(prev => ({ ...prev, [errorId]: true }));
+
+        // Add to notes for context
+        const errorNote = `\n[Error saved to bank: "${errorPattern}" - Students: ${studentNames || 'All'} - Session: ${session?.date}]`;
+        setNotes(prev => prev + errorNote);
+      }
+    } catch (error) {
+      console.error('Failed to save error to bank:', error);
+      alert('Failed to save error to bank. Please try again.');
+    }
   };
 
   if (isLoading || !session || !group) {
@@ -813,6 +878,27 @@ export default function SessionPage({
                                 })}
                               </div>
                             </div>
+                            {/* Save to Error Bank button */}
+                            <div className="mt-3 ml-6">
+                              {savedToBank[error.id] ? (
+                                <div className="flex items-center gap-1 text-xs text-emerald-600">
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>Saved to Error Bank</span>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleSaveToBank(
+                                    error.id,
+                                    error.error_pattern,
+                                    error.correction_protocol
+                                  )}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+                                >
+                                  <Save className="w-3 h-3" />
+                                  <span>Save to Bank</span>
+                                </button>
+                              )}
+                            </div>
                           </>
                         )}
                       </div>
@@ -825,6 +911,7 @@ export default function SessionPage({
                           New Errors Observed
                         </h4>
                         {unexpectedErrors.map((error, i) => {
+                          const errorId = error.id;
                           const errorStudent = students.find(s => s.id === (error as any).student_id);
                           const studentIndex = students.findIndex(s => s.id === (error as any).student_id);
                           return (
@@ -845,13 +932,35 @@ export default function SessionPage({
                                     {getInitials(errorStudent.name)}
                                   </div>
                                 )}
-                                <div>
+                                <div className="flex-1">
                                   <p className="font-medium">{error.error_pattern}</p>
                                   {error.correction_used && (
                                     <p className="text-xs text-gray-600">
                                       Correction: {error.correction_used}
                                     </p>
                                   )}
+                                  {/* Save to Error Bank button */}
+                                  <div className="mt-2">
+                                    {savedToBank[errorId] ? (
+                                      <div className="flex items-center gap-1 text-xs text-emerald-600">
+                                        <CheckCircle className="w-3 h-3" />
+                                        <span>Saved to Error Bank</span>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleSaveToBank(
+                                          errorId,
+                                          error.error_pattern,
+                                          error.correction_used || 'No correction specified',
+                                          true
+                                        )}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+                                      >
+                                        <Save className="w-3 h-3" />
+                                        <span>Save to Bank</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>

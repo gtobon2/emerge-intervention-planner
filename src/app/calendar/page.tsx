@@ -1,170 +1,343 @@
 'use client';
 
-import { useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
-import { Button, Card } from '@/components/ui';
+import { Button, Card, Badge } from '@/components/ui';
 import { useAllSessions } from '@/hooks/use-sessions';
-import type { Curriculum, SessionWithGroup } from '@/lib/supabase/types';
+import type { SessionWithGroup } from '@/lib/supabase/types';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
 
-// Curriculum color mapping based on tailwind config
-const getCurriculumColorHex = (curriculum: Curriculum): string => {
-  const colors: Record<Curriculum, string> = {
-    wilson: '#4F46E5',      // Indigo
-    delta_math: '#059669',   // Emerald
-    camino: '#DC2626',       // Red
-    wordgen: '#7C3AED',      // Violet
-    amira: '#0891B2',        // Cyan
-  };
-  return colors[curriculum];
+// Status color mapping
+const getStatusColor = (status: string): string => {
+  if (status === 'completed') return 'bg-green-500 text-green-100 border-green-400';
+  if (status === 'cancelled') return 'bg-gray-500 text-gray-100 border-gray-400';
+  return 'bg-blue-500 text-blue-100 border-blue-400'; // planned
 };
 
-// Status color for event border
-const getStatusColor = (status: string): string => {
-  if (status === 'completed') return '#10B981'; // Green
-  if (status === 'cancelled') return '#EF4444'; // Red
-  return '#6B7280'; // Gray for planned
+const getStatusBadgeColor = (status: string): string => {
+  if (status === 'completed') return 'bg-green-500/20 text-green-400 border-green-500/30';
+  if (status === 'cancelled') return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+  return 'bg-blue-500/20 text-blue-400 border-blue-500/30'; // planned
 };
+
+// Month and day names
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+interface CalendarDay {
+  date: Date;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  sessions: SessionWithGroup[];
+}
 
 export default function CalendarPage() {
   const router = useRouter();
-  const calendarRef = useRef<any>(null);
   const { sessions, isLoading } = useAllSessions();
+  const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Convert sessions to FullCalendar events
-  const events = sessions.map((session: SessionWithGroup) => {
-    const startTime = session.time || '09:00';
-    const [hours, minutes] = startTime.split(':');
-    const endDate = new Date(`${session.date}T${startTime}`);
-    endDate.setMinutes(endDate.getMinutes() + 30); // Default 30 min duration
-    const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+  // Get calendar days for the current month view
+  const calendarDays = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    // First day of the month
+    const firstDay = new Date(year, month, 1);
+    const startingDayOfWeek = firstDay.getDay();
+
+    // Last day of the month
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+
+    // Previous month days to show
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+    const days: CalendarDay[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Add previous month days
+    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+      const date = new Date(year, month - 1, prevMonthLastDay - i);
+      days.push({
+        date,
+        isCurrentMonth: false,
+        isToday: false,
+        sessions: []
+      });
+    }
+
+    // Add current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = date.toISOString().split('T')[0];
+      const daySessions = sessions.filter(s => s.date === dateStr);
+
+      days.push({
+        date,
+        isCurrentMonth: true,
+        isToday: date.getTime() === today.getTime(),
+        sessions: daySessions
+      });
+    }
+
+    // Add next month days to complete the grid
+    const remainingDays = 42 - days.length; // 6 rows × 7 days
+    for (let day = 1; day <= remainingDays; day++) {
+      const date = new Date(year, month + 1, day);
+      days.push({
+        date,
+        isCurrentMonth: false,
+        isToday: false,
+        sessions: []
+      });
+    }
+
+    return days;
+  }, [currentDate, sessions]);
+
+  const goToPreviousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handleSessionClick = (session: SessionWithGroup) => {
+    router.push(`/groups/${session.group_id}/session/${session.id}`);
+  };
+
+  const currentMonthYear = `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+
+  // Count sessions by status
+  const sessionCounts = useMemo(() => {
+    const currentMonthSessions = sessions.filter(s => {
+      const sessionDate = new Date(s.date);
+      return sessionDate.getMonth() === currentDate.getMonth() &&
+             sessionDate.getFullYear() === currentDate.getFullYear();
+    });
 
     return {
-      id: session.id,
-      title: session.group.name,
-      start: `${session.date}T${startTime}`,
-      end: `${session.date}T${endTime}`,
-      backgroundColor: getCurriculumColorHex(session.group.curriculum),
-      borderColor: getStatusColor(session.status),
-      extendedProps: {
-        session,
-        groupId: session.group_id,
-        curriculum: session.group.curriculum,
-        status: session.status,
-        position: formatCurriculumPosition(session.group.curriculum, session.curriculum_position),
-      },
+      total: currentMonthSessions.length,
+      planned: currentMonthSessions.filter(s => s.status === 'planned').length,
+      completed: currentMonthSessions.filter(s => s.status === 'completed').length,
     };
-  });
-
-  const handleEventClick = (info: any) => {
-    const sessionId = info.event.id;
-    const groupId = info.event.extendedProps.groupId;
-    router.push(`/groups/${groupId}/session/${sessionId}`);
-  };
+  }, [sessions, currentDate]);
 
   return (
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-text-primary">Calendar</h1>
-            <p className="text-text-muted">
-              Schedule and manage your intervention sessions
+            <p className="text-text-muted mt-1">
+              View and manage your intervention sessions
             </p>
           </div>
-          <Button className="gap-2" onClick={() => router.push('/groups')}>
-            <Plus className="w-4 h-4" />
-            Schedule Session
-          </Button>
+
+          {/* Month Stats */}
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+              <span className="text-text-muted">{sessionCounts.planned} Planned</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <span className="text-text-muted">{sessionCounts.completed} Completed</span>
+            </div>
+          </div>
         </div>
+
+        {/* Calendar Navigation */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-text-primary">
+              {currentMonthYear}
+            </h2>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={goToToday}
+                className="gap-2"
+              >
+                <CalendarIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Today</span>
+              </Button>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goToPreviousMonth}
+                  className="w-9 h-9 p-0"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goToNextMonth}
+                  className="w-9 h-9 p-0"
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Loading State */}
+          {isLoading ? (
+            <div className="text-center py-16 text-text-muted">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-movement border-t-transparent rounded-full animate-spin"></div>
+                <p>Loading sessions...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Day Names Header */}
+              <div className="grid grid-cols-7 gap-2 mb-2">
+                {DAY_NAMES.map((day) => (
+                  <div
+                    key={day}
+                    className="text-center text-sm font-semibold text-text-muted py-2"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Calendar Grid */}
+              <div className="grid grid-cols-7 gap-2">
+                {calendarDays.map((day, index) => (
+                  <div
+                    key={index}
+                    className={`
+                      min-h-[100px] sm:min-h-[120px] p-2 rounded-lg border transition-colors
+                      ${day.isCurrentMonth
+                        ? 'bg-surface/50 border-text-muted/10'
+                        : 'bg-foundation border-text-muted/5'
+                      }
+                      ${day.isToday
+                        ? 'ring-2 ring-movement'
+                        : ''
+                      }
+                    `}
+                  >
+                    {/* Day Number */}
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className={`
+                          text-sm font-medium
+                          ${day.isCurrentMonth
+                            ? day.isToday
+                              ? 'text-movement font-bold'
+                              : 'text-text-primary'
+                            : 'text-text-muted'
+                          }
+                        `}
+                      >
+                        {day.date.getDate()}
+                      </span>
+
+                      {day.sessions.length > 0 && (
+                        <span className="text-xs bg-movement/20 text-movement px-1.5 py-0.5 rounded-full font-medium">
+                          {day.sessions.length}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Sessions */}
+                    <div className="space-y-1">
+                      {day.sessions.slice(0, 3).map((session) => (
+                        <button
+                          key={session.id}
+                          onClick={() => handleSessionClick(session)}
+                          className={`
+                            w-full text-left px-2 py-1 rounded text-xs font-medium
+                            border transition-all hover:scale-105 hover:shadow-md
+                            ${getStatusColor(session.status)}
+                          `}
+                        >
+                          <div className="truncate font-semibold">
+                            {session.group.name}
+                          </div>
+                          {session.time && (
+                            <div className="text-xs opacity-90 truncate">
+                              {session.time}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+
+                      {day.sessions.length > 3 && (
+                        <div className="text-xs text-center text-text-muted pt-1">
+                          +{day.sessions.length - 3} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </Card>
 
         {/* Legend */}
         <Card className="p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-3">Session Status</h3>
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#4F46E5' }}></div>
-              <span className="text-text-muted">Wilson</span>
+              <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('planned')}`}></div>
+              <span className="text-text-muted">Planned</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#059669' }}></div>
-              <span className="text-text-muted">Delta Math</span>
+              <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('completed')}`}></div>
+              <span className="text-text-muted">Completed</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#DC2626' }}></div>
-              <span className="text-text-muted">Camino</span>
+              <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('cancelled')}`}></div>
+              <span className="text-text-muted">Cancelled</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#7C3AED' }}></div>
-              <span className="text-text-muted">WordGen</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#0891B2' }}></div>
-              <span className="text-text-muted">Amira</span>
-            </div>
-            <div className="ml-auto flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded border-2" style={{ borderColor: '#6B7280' }}></div>
-                <span className="text-text-muted">Planned</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded border-2" style={{ borderColor: '#10B981' }}></div>
-                <span className="text-text-muted">Completed</span>
-              </div>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg border-2 border-movement"></div>
+              <span className="text-text-muted">Today</span>
             </div>
           </div>
         </Card>
 
-        {/* Calendar */}
-        <Card className="p-4 calendar-container">
-          {isLoading ? (
-            <div className="text-center py-16 text-text-muted">
-              <p>Loading sessions...</p>
-            </div>
-          ) : (
-            <FullCalendar
-              ref={calendarRef}
-              plugins={[dayGridPlugin, timeGridPlugin]}
-              initialView="dayGridMonth"
-              headerToolbar={{
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-              }}
-              events={events}
-              eventClick={handleEventClick}
-              height="auto"
-              eventTimeFormat={{
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-              }}
-              slotLabelFormat={{
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-              }}
-              nowIndicator={true}
-              eventContent={(eventInfo) => {
-                const { status } = eventInfo.event.extendedProps;
-                return (
-                  <div className="fc-event-main-content p-1">
-                    <div className="font-medium text-xs truncate">{eventInfo.event.title}</div>
-                    <div className="text-xs opacity-90 truncate">{eventInfo.timeText}</div>
-                    {status === 'completed' && (
-                      <div className="text-xs opacity-75">✓ Completed</div>
-                    )}
-                  </div>
-                );
-              }}
-            />
-          )}
-        </Card>
+        {/* Empty State */}
+        {!isLoading && sessions.length === 0 && (
+          <Card className="p-8 text-center">
+            <CalendarIcon className="w-16 h-16 mx-auto text-text-muted/30 mb-4" />
+            <h3 className="text-lg font-semibold text-text-primary mb-2">
+              No Sessions Scheduled
+            </h3>
+            <p className="text-text-muted mb-4">
+              Start by creating a group and scheduling your first intervention session
+            </p>
+            <Button onClick={() => router.push('/groups')} className="gap-2">
+              <CalendarIcon className="w-4 h-4" />
+              Go to Groups
+            </Button>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );

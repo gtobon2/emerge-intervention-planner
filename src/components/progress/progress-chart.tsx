@@ -1,193 +1,384 @@
 'use client';
 
 import { useMemo } from 'react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine,
-  ResponsiveContainer,
-  TooltipProps,
-} from 'recharts';
-import type { ProgressMonitoring } from '@/lib/supabase/types';
+import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
 
 export interface ProgressChartProps {
-  data: ProgressMonitoring[];
-  benchmark?: number;
-  goal?: number;
-  showAimline?: boolean;
+  students: Student[];
+  progressData: ProgressMonitoring[];
+  groupId: string;
+  title?: string;
 }
 
-interface ChartDataPoint {
+interface DataPoint {
   date: string;
   score: number;
-  benchmark?: number;
-  aimline?: number;
   formattedDate: string;
 }
 
-function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
-  if (!active || !payload || !payload.length) {
-    return null;
-  }
-
-  const data = payload[0].payload as ChartDataPoint;
-
-  return (
-    <div className="bg-surface border border-text-muted/20 rounded-lg p-3 shadow-lg">
-      <p className="text-sm font-medium text-text-primary mb-2">{data.formattedDate}</p>
-      <div className="space-y-1">
-        {payload.map((entry, index) => (
-          <div key={index} className="flex items-center gap-2 text-sm">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-text-muted">{entry.name}:</span>
-            <span className="font-medium text-text-primary">{entry.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+interface StudentLine {
+  studentId: string;
+  studentName: string;
+  color: string;
+  dataPoints: DataPoint[];
 }
 
-export function ProgressChart({ data, benchmark, goal, showAimline = true }: ProgressChartProps) {
+// Color palette for student lines - using EMERGE brand colors and variations
+const STUDENT_COLORS = [
+  '#FF006E', // movement (hot magenta)
+  '#059669', // delta (emerald)
+  '#E9FF7A', // breakthrough (citrus yellow)
+  '#4F46E5', // wilson (indigo)
+  '#7C3AED', // wordgen (violet)
+  '#0891B2', // amira (cyan)
+  '#F59E0B', // tier2 (amber)
+  '#DC2626', // camino (red)
+];
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function ProgressChart({ students, progressData, groupId, title }: ProgressChartProps) {
   const chartData = useMemo(() => {
-    if (data.length === 0) return [];
+    // Filter progress data for this group
+    const groupProgress = progressData.filter(p => p.group_id === groupId);
 
-    // Sort data by date
-    const sortedData = [...data].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    // Calculate aimline if goal is provided and we have data
-    let aimlineData: number[] = [];
-    if (goal && sortedData.length > 0 && showAimline) {
-      const firstScore = sortedData[0].score;
-      const increment = (goal - firstScore) / (sortedData.length - 1 || 1);
-      aimlineData = sortedData.map((_, index) => firstScore + increment * index);
-    }
-
-    return sortedData.map((point, index) => {
-      const date = new Date(point.date);
-      const formattedDate = date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
+    // Create a line for each student
+    const studentLines: StudentLine[] = students.map((student, index) => {
+      const studentProgress = groupProgress
+        .filter(p => p.student_id === student.id)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       return {
-        date: point.date,
-        score: point.score,
-        benchmark: benchmark,
-        aimline: aimlineData[index],
-        formattedDate,
+        studentId: student.id,
+        studentName: student.name,
+        color: STUDENT_COLORS[index % STUDENT_COLORS.length],
+        dataPoints: studentProgress.map(p => ({
+          date: p.date,
+          score: p.score,
+          formattedDate: formatDate(p.date),
+        })),
       };
+    }).filter(line => line.dataPoints.length > 0); // Only include students with data
+
+    return studentLines;
+  }, [students, progressData, groupId]);
+
+  // Get all dates across all students for X-axis
+  const allDates = useMemo(() => {
+    const dates = new Set<string>();
+    chartData.forEach(line => {
+      line.dataPoints.forEach(point => dates.add(point.date));
     });
-  }, [data, benchmark, goal, showAimline]);
+    return Array.from(dates).sort();
+  }, [chartData]);
+
+  // Calculate Y-axis domain
+  const { minScore, maxScore } = useMemo(() => {
+    let min = Infinity;
+    let max = -Infinity;
+
+    chartData.forEach(line => {
+      line.dataPoints.forEach(point => {
+        min = Math.min(min, point.score);
+        max = Math.max(max, point.score);
+      });
+    });
+
+    // Add padding
+    const padding = (max - min) * 0.1 || 5;
+    return {
+      minScore: Math.max(0, Math.floor(min - padding)),
+      maxScore: Math.ceil(max + padding),
+    };
+  }, [chartData]);
 
   if (chartData.length === 0) {
     return (
-      <div className="h-[400px] flex items-center justify-center text-text-muted">
-        No progress data available. Add data points to see the chart.
+      <div className="w-full">
+        {title && (
+          <h3 className="text-lg font-semibold text-text-primary mb-4">{title}</h3>
+        )}
+        <div className="h-[400px] flex items-center justify-center bg-surface rounded-lg border border-text-muted/20">
+          <p className="text-text-muted">No progress data available. Add data points to see the chart.</p>
+        </div>
       </div>
     );
   }
 
-  // Calculate Y-axis domain
-  const scores = chartData.map((d) => d.score);
-  const minScore = Math.min(...scores, benchmark || 0, goal || 0);
-  const maxScore = Math.max(...scores, benchmark || 0, goal || 0);
-  const padding = (maxScore - minScore) * 0.1 || 5;
-  const yMin = Math.max(0, Math.floor(minScore - padding));
-  const yMax = Math.ceil(maxScore + padding);
+  // Chart dimensions
+  const width = 100; // percentage
+  const height = 400;
+  const padding = { top: 20, right: 20, bottom: 60, left: 60 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // Scale functions
+  const xScale = (dateIndex: number) => {
+    return (dateIndex / Math.max(1, allDates.length - 1)) * chartWidth;
+  };
+
+  const yScale = (score: number) => {
+    const range = maxScore - minScore;
+    return chartHeight - ((score - minScore) / range) * chartHeight;
+  };
+
+  // Generate Y-axis ticks
+  const yTicks = useMemo(() => {
+    const tickCount = 5;
+    const range = maxScore - minScore;
+    const step = Math.ceil(range / (tickCount - 1));
+    const ticks: number[] = [];
+
+    for (let i = 0; i < tickCount; i++) {
+      ticks.push(minScore + step * i);
+    }
+
+    return ticks;
+  }, [minScore, maxScore]);
+
+  // Generate path for each student line
+  const generatePath = (line: StudentLine): string => {
+    if (line.dataPoints.length === 0) return '';
+
+    const points = line.dataPoints.map(point => {
+      const dateIndex = allDates.indexOf(point.date);
+      const x = xScale(dateIndex);
+      const y = yScale(point.score);
+      return { x, y };
+    });
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      path += ` L ${points[i].x} ${points[i].y}`;
+    }
+
+    return path;
+  };
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
-      <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-        <XAxis
-          dataKey="formattedDate"
-          stroke="#9CA3AF"
-          style={{ fontSize: '12px' }}
-          angle={-45}
-          textAnchor="end"
-          height={80}
-        />
-        <YAxis
-          domain={[yMin, yMax]}
-          stroke="#9CA3AF"
-          style={{ fontSize: '12px' }}
-          label={{ value: 'Score', angle: -90, position: 'insideLeft', style: { fill: '#9CA3AF' } }}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend
-          wrapperStyle={{ paddingTop: '20px' }}
-          iconType="line"
-          formatter={(value) => (
-            <span className="text-text-primary text-sm">{value}</span>
-          )}
-        />
+    <div className="w-full">
+      {title && (
+        <h3 className="text-lg font-semibold text-text-primary mb-4">{title}</h3>
+      )}
 
-        {/* Benchmark line */}
-        {benchmark && (
-          <ReferenceLine
-            y={benchmark}
-            stroke="#6B7280"
-            strokeDasharray="5 5"
-            strokeWidth={2}
-            label={{
-              value: 'Benchmark',
-              position: 'right',
-              style: { fill: '#6B7280', fontSize: '12px' },
-            }}
-          />
-        )}
+      {/* Chart Container */}
+      <div className="bg-surface rounded-lg border border-text-muted/20 p-4">
+        {/* SVG Chart */}
+        <div className="w-full overflow-x-auto">
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            className="w-full"
+            style={{ minWidth: '600px', height: 'auto' }}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {/* Grid lines */}
+            <g transform={`translate(${padding.left}, ${padding.top})`}>
+              {/* Horizontal grid lines */}
+              {yTicks.map((tick, i) => (
+                <line
+                  key={`grid-h-${i}`}
+                  x1={0}
+                  y1={yScale(tick)}
+                  x2={chartWidth}
+                  y2={yScale(tick)}
+                  stroke="#374151"
+                  strokeWidth="0.5"
+                  strokeDasharray="3 3"
+                  opacity={0.3}
+                />
+              ))}
 
-        {/* Goal line */}
-        {goal && (
-          <ReferenceLine
-            y={goal}
-            stroke="#10B981"
-            strokeDasharray="5 5"
-            strokeWidth={2}
-            label={{
-              value: 'Goal',
-              position: 'right',
-              style: { fill: '#10B981', fontSize: '12px' },
-            }}
-          />
-        )}
+              {/* Vertical grid lines */}
+              {allDates.map((date, i) => (
+                <line
+                  key={`grid-v-${i}`}
+                  x1={xScale(i)}
+                  y1={0}
+                  x2={xScale(i)}
+                  y2={chartHeight}
+                  stroke="#374151"
+                  strokeWidth="0.5"
+                  strokeDasharray="3 3"
+                  opacity={0.3}
+                />
+              ))}
 
-        {/* Aimline (projected path to goal) */}
-        {showAimline && goal && chartData.some((d) => d.aimline !== undefined) && (
-          <Line
-            type="monotone"
-            dataKey="aimline"
-            stroke="#22C55E"
-            strokeDasharray="3 3"
-            strokeWidth={2}
-            dot={false}
-            name="Aimline"
-          />
-        )}
+              {/* Y-axis */}
+              <line
+                x1={0}
+                y1={0}
+                x2={0}
+                y2={chartHeight}
+                stroke="#9CA3AF"
+                strokeWidth="2"
+              />
 
-        {/* Actual progress line */}
-        <Line
-          type="monotone"
-          dataKey="score"
-          stroke="#FF006E"
-          strokeWidth={3}
-          dot={{ r: 5, fill: '#FF006E', strokeWidth: 2, stroke: '#1F2937' }}
-          activeDot={{ r: 7 }}
-          name="Score"
-        />
-      </LineChart>
-    </ResponsiveContainer>
+              {/* X-axis */}
+              <line
+                x1={0}
+                y1={chartHeight}
+                x2={chartWidth}
+                y2={chartHeight}
+                stroke="#9CA3AF"
+                strokeWidth="2"
+              />
+
+              {/* Y-axis ticks and labels */}
+              {yTicks.map((tick, i) => (
+                <g key={`y-tick-${i}`}>
+                  <line
+                    x1={-5}
+                    y1={yScale(tick)}
+                    x2={0}
+                    y2={yScale(tick)}
+                    stroke="#9CA3AF"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={-10}
+                    y={yScale(tick)}
+                    textAnchor="end"
+                    dominantBaseline="middle"
+                    className="text-xs fill-text-muted"
+                  >
+                    {tick}
+                  </text>
+                </g>
+              ))}
+
+              {/* Y-axis label */}
+              <text
+                x={-padding.left + 15}
+                y={chartHeight / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                transform={`rotate(-90, ${-padding.left + 15}, ${chartHeight / 2})`}
+                className="text-sm fill-text-muted font-medium"
+              >
+                Score
+              </text>
+
+              {/* X-axis ticks and labels */}
+              {allDates.map((date, i) => (
+                <g key={`x-tick-${i}`}>
+                  <line
+                    x1={xScale(i)}
+                    y1={chartHeight}
+                    x2={xScale(i)}
+                    y2={chartHeight + 5}
+                    stroke="#9CA3AF"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={xScale(i)}
+                    y={chartHeight + 20}
+                    textAnchor="end"
+                    dominantBaseline="middle"
+                    transform={`rotate(-45, ${xScale(i)}, ${chartHeight + 20})`}
+                    className="text-xs fill-text-muted"
+                  >
+                    {formatDate(date)}
+                  </text>
+                </g>
+              ))}
+
+              {/* X-axis label */}
+              <text
+                x={chartWidth / 2}
+                y={chartHeight + padding.bottom - 5}
+                textAnchor="middle"
+                className="text-sm fill-text-muted font-medium"
+              >
+                Date
+              </text>
+
+              {/* Plot lines for each student */}
+              {chartData.map((line) => (
+                <g key={line.studentId}>
+                  {/* Line path */}
+                  <path
+                    d={generatePath(line)}
+                    fill="none"
+                    stroke={line.color}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Data point dots */}
+                  {line.dataPoints.map((point, i) => {
+                    const dateIndex = allDates.indexOf(point.date);
+                    return (
+                      <g key={`${line.studentId}-point-${i}`}>
+                        <circle
+                          cx={xScale(dateIndex)}
+                          cy={yScale(point.score)}
+                          r="5"
+                          fill={line.color}
+                          stroke="#1F2937"
+                          strokeWidth="2"
+                        />
+                        {/* Tooltip group - shown on hover */}
+                        <g className="opacity-0 hover:opacity-100 transition-opacity">
+                          <rect
+                            x={xScale(dateIndex) - 60}
+                            y={yScale(point.score) - 35}
+                            width="120"
+                            height="30"
+                            fill="#2D2D30"
+                            stroke={line.color}
+                            strokeWidth="1"
+                            rx="4"
+                          />
+                          <text
+                            x={xScale(dateIndex)}
+                            y={yScale(point.score) - 25}
+                            textAnchor="middle"
+                            className="text-xs fill-text-primary font-medium"
+                          >
+                            {line.studentName}
+                          </text>
+                          <text
+                            x={xScale(dateIndex)}
+                            y={yScale(point.score) - 12}
+                            textAnchor="middle"
+                            className="text-xs fill-text-muted"
+                          >
+                            {point.formattedDate}: {point.score}
+                          </text>
+                        </g>
+                      </g>
+                    );
+                  })}
+                </g>
+              ))}
+            </g>
+          </svg>
+        </div>
+
+        {/* Legend */}
+        <div className="mt-6 pt-4 border-t border-text-muted/20">
+          <div className="flex flex-wrap gap-4">
+            {chartData.map((line) => (
+              <div key={line.studentId} className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded-full border-2 border-foundation"
+                  style={{ backgroundColor: line.color }}
+                />
+                <span className="text-sm text-text-primary">
+                  {line.studentName}
+                  <span className="text-text-muted ml-1">
+                    ({line.dataPoints.length} data points)
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

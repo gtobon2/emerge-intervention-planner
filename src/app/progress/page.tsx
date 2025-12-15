@@ -247,10 +247,9 @@ export default function ProgressPage() {
                       </div>
                     ) : (
                       <ProgressChart
-                        data={filteredData}
-                        benchmark={benchmark}
-                        goal={goal}
-                        showAimline={true}
+                        students={students}
+                        progressData={filteredData}
+                        groupId={selectedGroupId}
                       />
                     )}
                   </CardContent>
