@@ -28,3 +28,6 @@ export type { OTRCounterProps } from './otr-counter';
 
 export { VoiceInput, VoiceButton } from './voice-input';
 export type { VoiceInputProps } from './voice-input';
+
+export { Switch } from './switch';
+export type { SwitchProps } from './switch';

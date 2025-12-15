@@ -133,8 +133,11 @@ export function Sidebar() {
             href="/settings"
             className={`
               flex items-center gap-3 px-3 py-2.5 rounded-lg
-              text-text-muted hover:text-text-primary hover:bg-foundation
               transition-colors min-h-[44px]
+              ${pathname === '/settings'
+                ? 'bg-movement/10 text-movement'
+                : 'text-text-muted hover:text-text-primary hover:bg-foundation'
+              }
             `}
           >
             <Settings className="w-5 h-5 flex-shrink-0" />

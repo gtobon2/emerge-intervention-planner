@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Users, Search } from 'lucide-react';
+import { Plus, Users, Search, Upload } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { StudentFormModal, DeleteStudentModal, StudentModal } from '@/components/students';
+import { StudentFormModal, DeleteStudentModal, StudentModal, ImportStudentsModal } from '@/components/students';
 import { useAllStudents, type StudentWithGroup } from '@/hooks/use-all-students';
 import { useStudentsStore } from '@/stores/students';
 import { useProgressStore } from '@/stores/progress';
+import { useGroupsStore } from '@/stores/groups';
 import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
 import { getCurriculumLabel, getTierLabel } from '@/lib/supabase/types';
 import { MOCK_PROGRESS } from '@/lib/mock-data';
+import type { ValidatedStudent } from '@/lib/import-utils';
 
 export default function StudentsPage() {
   const { students, isLoading, error, clearError, refetch } = useAllStudents();
@@ -20,6 +22,9 @@ export default function StudentsPage() {
   const updateStudent = useStudentsStore((state) => state.updateStudent);
   const deleteStudent = useStudentsStore((state) => state.deleteStudent);
   const studentsLoading = useStudentsStore((state) => state.isLoading);
+
+  const groups = useGroupsStore((state) => state.groups);
+  const fetchGroups = useGroupsStore((state) => state.fetchGroups);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<StudentWithGroup | null>(null);
@@ -43,7 +48,13 @@ export default function StudentsPage() {
   });
 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Fetch groups on mount
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
 
   // Filter students by search query
   const filteredStudents = useMemo(() => {
@@ -140,6 +151,30 @@ export default function StudentsPage() {
     }
   };
 
+  const handleImportStudents = async (validatedStudents: ValidatedStudent[], groupId: string) => {
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Import students one by one
+    for (const validatedStudent of validatedStudents) {
+      const result = await createStudent(validatedStudent.data);
+      if (result) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      setSuccessMessage(`Successfully imported ${successCount} student${successCount !== 1 ? 's' : ''}`);
+      refetch();
+    }
+
+    if (errorCount > 0) {
+      console.error(`Failed to import ${errorCount} students`);
+    }
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -162,10 +197,16 @@ export default function StudentsPage() {
               Manage students across all intervention groups
             </p>
           </div>
-          <Button onClick={handleAddStudent} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add Student
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setImportModalOpen(true)} variant="secondary" className="gap-2">
+              <Upload className="w-4 h-4" />
+              Import Students
+            </Button>
+            <Button onClick={handleAddStudent} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Add Student
+            </Button>
+          </div>
         </div>
 
         {/* Success Message */}
@@ -310,6 +351,15 @@ export default function StudentsPage() {
         progressData={progressData}
         onEdit={handleEditStudent}
         onDelete={handleDeleteStudent}
+      />
+
+      <ImportStudentsModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={handleImportStudents}
+        groups={groups}
+        existingStudents={students}
+        isLoading={studentsLoading}
       />
     </AppLayout>
   );

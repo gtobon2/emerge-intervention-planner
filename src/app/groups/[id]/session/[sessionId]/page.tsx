@@ -19,6 +19,8 @@ import {
   X,
   Mic,
   Save,
+  Edit,
+  XCircle,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,9 +39,10 @@ import type {
 } from '@/lib/supabase/types';
 import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
+import { EditSessionModal, CancelSessionModal, PlanSessionModal, SessionPlanData } from '@/components/sessions';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { getStudentsForGroup, MOCK_GROUPS, MOCK_SESSIONS, MOCK_STUDENTS } from '@/lib/mock-data';
-import { useErrorsStore } from '@/stores';
+import { useErrorsStore, useSessionsStore } from '@/stores';
 
 // Extended ObservedError type with id for local tracking
 interface ObservedErrorWithId extends ObservedError {
@@ -169,6 +172,14 @@ export default function SessionPage({
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSessionActive, setIsSessionActive] = useState(false);
+
+  // Modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+
+  // Store actions
+  const { updateSession, cancelSession } = useSessionsStore();
 
   // Session tracking state
   const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
@@ -369,6 +380,33 @@ export default function SessionPage({
   };
 
   // Save error to error bank
+  const handleEditSession = async (sessionId: string, updates: any) => {
+    await updateSession(sessionId, updates);
+    // Refresh session data
+    if (session) {
+      setSession({ ...session, ...updates });
+    }
+  };
+
+  const handleCancelSession = async (sessionId: string, reason?: string) => {
+    await cancelSession(sessionId, reason);
+    // Navigate back to group page
+    router.push(`/groups/${params.id}`);
+  };
+
+  const handleRescheduleSession = async (sessionId: string, reason?: string) => {
+    // First cancel the current session
+    await cancelSession(sessionId, reason);
+    // Then open the plan session modal with pre-filled data
+    setShowRescheduleModal(true);
+  };
+
+  const handleCreateRescheduledSession = async (data: SessionPlanData) => {
+    // In production, create a new session with the data
+    // For now, just navigate back to group page
+    router.push(`/groups/${params.id}`);
+  };
+
   const handleSaveToBank = async (
     errorId: string,
     errorPattern: string,
@@ -468,6 +506,28 @@ export default function SessionPage({
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              {!isSessionActive && session.status === 'planned' && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowEditModal(true)}
+                    className="gap-1 min-h-[44px]"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCancelModal(true)}
+                    className="gap-1 min-h-[44px] text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span className="hidden sm:inline">Cancel</span>
+                  </Button>
+                </>
+              )}
               {isSessionActive ? (
                 <>
                   <Timer targetMinutes={group.schedule?.duration || 45} />
@@ -1143,6 +1203,39 @@ export default function SessionPage({
           </div>
         )}
       </div>
+
+      {/* Edit Session Modal */}
+      {session && group && (
+        <EditSessionModal
+          session={session}
+          group={group}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSave={handleEditSession}
+        />
+      )}
+
+      {/* Cancel Session Modal */}
+      {session && group && (
+        <CancelSessionModal
+          session={session}
+          group={group}
+          isOpen={showCancelModal}
+          onClose={() => setShowCancelModal(false)}
+          onCancel={handleCancelSession}
+          onReschedule={handleRescheduleSession}
+        />
+      )}
+
+      {/* Reschedule Modal (Plan Session with pre-filled data) */}
+      {session && group && (
+        <PlanSessionModal
+          group={group}
+          isOpen={showRescheduleModal}
+          onClose={() => setShowRescheduleModal(false)}
+          onSave={handleCreateRescheduledSession}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -11,22 +11,36 @@ import {
   Settings,
   TrendingUp,
   Clock,
-  BookOpen
+  BookOpen,
+  Trash2,
+  Edit,
+  XCircle,
+  MoreVertical
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
-import { PlanSessionModal, SessionPlanData } from '@/components/sessions';
+import { PlanSessionModal, EditSessionModal, CancelSessionModal, SessionPlanData } from '@/components/sessions';
+import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
+import type { Session } from '@/lib/supabase/types';
 
 export default function GroupDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const groupId = params.id as string;
 
-  const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
-  const { sessions, fetchSessionsForGroup, createSession, isLoading: sessionsLoading } = useSessionsStore();
+  const { selectedGroup, fetchGroupById, updateGroup, deleteGroup, isLoading: groupLoading } = useGroupsStore();
+  const { sessions, fetchSessionsForGroup, createSession, updateSession, cancelSession, isLoading: sessionsLoading } = useSessionsStore();
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditSessionModal, setShowEditSessionModal] = useState(false);
+  const [showCancelSessionModal, setShowCancelSessionModal] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (groupId) {
@@ -65,6 +79,58 @@ export default function GroupDetailPage() {
     });
     // Refresh sessions list
     fetchSessionsForGroup(groupId);
+  };
+
+  const handleEditGroup = async (id: string, updates: any) => {
+    setIsSaving(true);
+    try {
+      await updateGroup(id, updates);
+      // Refresh group data
+      await fetchGroupById(groupId);
+      setShowEditGroupModal(false);
+    } catch (err) {
+      console.error('Failed to update group:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditSession = async (sessionId: string, updates: any) => {
+    await updateSession(sessionId, updates);
+    fetchSessionsForGroup(groupId);
+    setShowEditSessionModal(false);
+    setSelectedSession(null);
+  };
+
+  const handleCancelSession = async (sessionId: string, reason?: string) => {
+    await cancelSession(sessionId, reason);
+    fetchSessionsForGroup(groupId);
+    setShowCancelSessionModal(false);
+    setSelectedSession(null);
+  };
+
+  const handleOpenEditSessionModal = (session: Session) => {
+    setSelectedSession(session);
+    setShowEditSessionModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleOpenCancelSessionModal = (session: Session) => {
+    setSelectedSession(session);
+    setShowCancelSessionModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleDeleteGroup = async () => {
+    setIsSaving(true);
+    try {
+      await deleteGroup(groupId);
+      // Redirect to groups page after successful deletion
+      router.push('/groups');
+    } catch (err) {
+      console.error('Failed to delete group:', err);
+      setIsSaving(false);
+    }
   };
 
   if (groupLoading || !selectedGroup) {
@@ -116,9 +182,21 @@ export default function GroupDetailPage() {
             </div>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="secondary" className="gap-2 flex-1 md:flex-initial min-h-[44px]">
+            <Button
+              variant="secondary"
+              className="gap-2 flex-1 md:flex-initial min-h-[44px]"
+              onClick={() => setShowEditGroupModal(true)}
+            >
               <Settings className="w-4 h-4" />
               <span>Edit</span>
+            </Button>
+            <Button
+              variant="secondary"
+              className="gap-2 min-h-[44px]"
+              onClick={() => setShowDeleteModal(true)}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden md:inline">Delete</span>
             </Button>
             <Button
               className="gap-2 flex-1 md:flex-initial min-h-[44px]"
@@ -200,25 +278,67 @@ export default function GroupDetailPage() {
                 ) : (
                   <div className="space-y-3">
                     {recentSessions.map((session) => (
-                      <Link
+                      <div
                         key={session.id}
-                        href={`/groups/${groupId}/session/${session.id}`}
-                        className="block p-3 md:p-4 bg-foundation rounded-lg hover:bg-foundation/80 transition-colors min-h-[60px]"
+                        className="relative p-3 md:p-4 bg-foundation rounded-lg hover:bg-foundation/80 transition-colors min-h-[60px]"
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-sm md:text-base text-text-primary">
-                            {new Date(session.date).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </span>
-                          <StatusBadge status={session.status} />
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/groups/${groupId}/session/${session.id}`}
+                            className="flex-1 min-w-0"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm md:text-base text-text-primary">
+                                {new Date(session.date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </span>
+                              <StatusBadge status={session.status} />
+                            </div>
+                            <p className="text-xs md:text-sm text-text-muted truncate">
+                              {formatCurriculumPosition(selectedGroup.curriculum, session.curriculum_position)}
+                            </p>
+                          </Link>
+
+                          {session.status === 'planned' && (
+                            <div className="relative flex-shrink-0">
+                              <button
+                                onClick={() => setOpenDropdownId(openDropdownId === session.id ? null : session.id)}
+                                className="p-2 hover:bg-surface rounded-lg transition-colors"
+                              >
+                                <MoreVertical className="w-4 h-4 text-text-muted" />
+                              </button>
+
+                              {openDropdownId === session.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setOpenDropdownId(null)}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[140px] z-20">
+                                    <button
+                                      onClick={() => handleOpenEditSessionModal(session)}
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleOpenCancelSessionModal(session)}
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs md:text-sm text-text-muted truncate">
-                          {formatCurriculumPosition(selectedGroup.curriculum, session.curriculum_position)}
-                        </p>
-                      </Link>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -298,6 +418,53 @@ export default function GroupDetailPage() {
         onClose={() => setShowPlanModal(false)}
         onSave={handlePlanSession}
       />
+
+      {/* Edit Group Modal */}
+      <EditGroupModal
+        isOpen={showEditGroupModal}
+        onClose={() => setShowEditGroupModal(false)}
+        onSave={handleEditGroup}
+        group={selectedGroup}
+        isLoading={isSaving}
+      />
+
+      {/* Delete Group Modal */}
+      <DeleteGroupModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteGroup}
+        group={selectedGroup}
+        sessionCount={sessions.length}
+        isLoading={isSaving}
+      />
+
+      {/* Edit Session Modal */}
+      {selectedSession && selectedGroup && (
+        <EditSessionModal
+          session={selectedSession}
+          group={selectedGroup}
+          isOpen={showEditSessionModal}
+          onClose={() => {
+            setShowEditSessionModal(false);
+            setSelectedSession(null);
+          }}
+          onSave={handleEditSession}
+        />
+      )}
+
+      {/* Cancel Session Modal */}
+      {selectedSession && selectedGroup && (
+        <CancelSessionModal
+          session={selectedSession}
+          group={selectedGroup}
+          isOpen={showCancelSessionModal}
+          onClose={() => {
+            setShowCancelSessionModal(false);
+            setSelectedSession(null);
+          }}
+          onCancel={handleCancelSession}
+        />
+      )}
     </AppLayout>
   );
 }

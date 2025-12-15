@@ -10,3 +10,6 @@ export type { DeleteStudentModalProps } from './delete-student-modal';
 
 export { StudentModal } from './student-modal';
 export type { StudentModalProps } from './student-modal';
+
+export { ImportStudentsModal } from './import-students-modal';
+export type { ImportStudentsModalProps } from './import-students-modal';

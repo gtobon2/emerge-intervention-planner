@@ -60,6 +60,7 @@ interface SessionsState {
     saveErrors?: boolean
   ) => Promise<Session | null>;
   deleteSession: (id: string) => Promise<void>;
+  cancelSession: (id: string, reason?: string) => Promise<void>;
   setSelectedSession: (session: SessionWithGroup | null) => void;
   clearError: () => void;
 }
@@ -442,6 +443,58 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         sessions: state.sessions.filter((s) => s.id !== id),
         selectedSession:
           state.selectedSession?.id === id ? null : state.selectedSession,
+        isLoading: false,
+      }));
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false });
+    }
+  },
+
+  cancelSession: async (id: string, reason?: string) => {
+    set({ isLoading: true, error: null });
+
+    const updates: SessionUpdate = {
+      status: 'cancelled',
+      notes: reason ? `Cancelled: ${reason}` : 'Cancelled',
+    };
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s
+        ),
+        selectedSession:
+          state.selectedSession?.id === id
+            ? { ...state.selectedSession, ...updates, updated_at: new Date().toISOString() }
+            : state.selectedSession,
+        allSessions: state.allSessions.map((s) =>
+          s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s
+        ),
+        isLoading: false,
+      }));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, ...updates } : s
+        ),
+        selectedSession:
+          state.selectedSession?.id === id
+            ? { ...state.selectedSession, ...updates }
+            : state.selectedSession,
+        allSessions: state.allSessions.map((s) =>
+          s.id === id ? { ...s, ...updates } : s
+        ),
         isLoading: false,
       }));
     } catch (err) {
