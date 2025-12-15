@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
+import { PlanSessionModal, SessionPlanData } from '@/components/sessions';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
@@ -24,7 +25,8 @@ export default function GroupDetailPage() {
   const groupId = params.id as string;
 
   const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
-  const { sessions, fetchSessionsForGroup, isLoading: sessionsLoading } = useSessionsStore();
+  const { sessions, fetchSessionsForGroup, createSession, isLoading: sessionsLoading } = useSessionsStore();
+  const [showPlanModal, setShowPlanModal] = useState(false);
 
   useEffect(() => {
     if (groupId) {
@@ -32,6 +34,38 @@ export default function GroupDetailPage() {
       fetchSessionsForGroup(groupId);
     }
   }, [groupId, fetchGroupById, fetchSessionsForGroup]);
+
+  const handlePlanSession = async (data: SessionPlanData) => {
+    await createSession({
+      group_id: groupId,
+      date: data.date,
+      time: data.time,
+      status: 'planned',
+      curriculum_position: data.curriculum_position,
+      advance_after: false,
+      planned_otr_target: data.planned_otr_target,
+      planned_practice_items: data.planned_practice_items,
+      planned_response_formats: data.planned_response_formats,
+      cumulative_review_items: null,
+      anticipated_errors: data.anticipated_errors,
+      actual_otr_estimate: null,
+      pacing: null,
+      components_completed: null,
+      exit_ticket_correct: null,
+      exit_ticket_total: null,
+      mastery_demonstrated: null,
+      errors_observed: null,
+      unexpected_errors: null,
+      pm_score: null,
+      pm_trend: null,
+      dbi_adaptation_notes: null,
+      notes: data.notes || null,
+      next_session_notes: null,
+      fidelity_checklist: null,
+    });
+    // Refresh sessions list
+    fetchSessionsForGroup(groupId);
+  };
 
   if (groupLoading || !selectedGroup) {
     return (
@@ -86,7 +120,10 @@ export default function GroupDetailPage() {
               <Settings className="w-4 h-4" />
               <span>Edit</span>
             </Button>
-            <Button className="gap-2 flex-1 md:flex-initial min-h-[44px]">
+            <Button
+              className="gap-2 flex-1 md:flex-initial min-h-[44px]"
+              onClick={() => setShowPlanModal(true)}
+            >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Plan Session</span>
               <span className="sm:hidden">Plan</span>
@@ -253,6 +290,14 @@ export default function GroupDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Plan Session Modal */}
+      <PlanSessionModal
+        group={selectedGroup}
+        isOpen={showPlanModal}
+        onClose={() => setShowPlanModal(false)}
+        onSave={handlePlanSession}
+      />
     </AppLayout>
   );
 }

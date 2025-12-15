@@ -219,6 +219,40 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   createSession: async (session: SessionInsert) => {
     set({ isLoading: true, error: null });
+
+    // Use mock data if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      const newSession: Session = {
+        ...session,
+        id: `session-${Date.now()}`,
+        status: session.status || 'planned',
+        advance_after: session.advance_after || false,
+        actual_otr_estimate: null,
+        pacing: null,
+        components_completed: null,
+        exit_ticket_correct: null,
+        exit_ticket_total: null,
+        mastery_demonstrated: null,
+        errors_observed: null,
+        unexpected_errors: null,
+        pm_score: null,
+        pm_trend: null,
+        dbi_adaptation_notes: null,
+        next_session_notes: null,
+        fidelity_checklist: null,
+        cumulative_review_items: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as Session;
+
+      set((state) => ({
+        sessions: [newSession, ...state.sessions],
+        isLoading: false,
+      }));
+
+      return newSession;
+    }
+
     try {
       const { data, error } = await supabase
         .from('sessions')
