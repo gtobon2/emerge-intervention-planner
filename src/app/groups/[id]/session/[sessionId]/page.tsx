@@ -165,7 +165,7 @@ export default function SessionPage({
   // Session tracking state
   const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
   const [anticipatedErrorsChecked, setAnticipatedErrorsChecked] = useState<Record<string, boolean>>({});
-  const [correctionWorked, setCorrectionWorked] = useState<Record<string, boolean | null>>({});
+  const [correctionWorked, setCorrectionWorked] = useState<Record<string, Record<string, boolean | null>>>({}); // errorId -> studentId -> worked
   const [unexpectedErrors, setUnexpectedErrors] = useState<ObservedError[]>([]);
   const [componentsCompleted, setComponentsCompleted] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
@@ -268,10 +268,13 @@ export default function SessionPage({
     }));
   };
 
-  const handleCorrectionWorked = (errorId: string, worked: boolean) => {
+  const handleCorrectionWorked = (errorId: string, studentId: string, worked: boolean) => {
     setCorrectionWorked((prev) => ({
       ...prev,
-      [errorId]: worked,
+      [errorId]: {
+        ...(prev[errorId] || {}),
+        [studentId]: worked,
+      },
     }));
   };
 
@@ -415,11 +418,18 @@ export default function SessionPage({
                         mastery_demonstrated: mastery,
                         errors_observed: anticipatedErrors
                           .filter((e) => anticipatedErrorsChecked[e.id])
-                          .map((e) => ({
-                            error_pattern: e.error_pattern,
-                            correction_used: e.correction_protocol,
-                            correction_worked: correctionWorked[e.id] ?? true,
-                          })),
+                          .map((e) => {
+                            // Calculate if correction worked overall (majority of students)
+                            const studentResults = correctionWorked[e.id] || {};
+                            const results = Object.values(studentResults).filter(r => r !== null);
+                            const workedCount = results.filter(r => r === true).length;
+                            const overallWorked = results.length === 0 ? true : workedCount >= results.length / 2;
+                            return {
+                              error_pattern: e.error_pattern,
+                              correction_used: e.correction_protocol,
+                              correction_worked: overallWorked,
+                            };
+                          }),
                         unexpected_errors: unexpectedErrors,
                         notes,
                       }}
@@ -751,57 +761,57 @@ export default function SessionPage({
 
                         {anticipatedErrorsChecked[error.id] && (
                           <>
-                            {/* Who made this error? */}
+                            {/* Who made this error + did correction work? */}
                             <div className="mt-2 ml-6">
-                              <p className="text-xs text-gray-500 mb-2">Who made this error?</p>
-                              <div className="flex flex-wrap gap-1">
+                              <p className="text-xs text-gray-500 mb-2">Who made this error? Did correction work?</p>
+                              <div className="space-y-2">
                                 {students.map((student, index) => {
                                   const isSelected = (errorStudents[error.id] || []).includes(student.id);
+                                  const studentCorrectionResult = correctionWorked[error.id]?.[student.id];
                                   return (
-                                    <button
-                                      key={student.id}
-                                      onClick={() => handleToggleErrorStudent(error.id, student.id)}
-                                      className={`
-                                        w-8 h-8 rounded-full flex items-center justify-center
-                                        text-xs font-bold transition-all
-                                        ${isSelected
-                                          ? STUDENT_COLORS[index % STUDENT_COLORS.length]
-                                          : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                                        }
-                                      `}
-                                      title={student.name}
-                                    >
-                                      {getInitials(student.name)}
-                                    </button>
+                                    <div key={student.id} className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleToggleErrorStudent(error.id, student.id)}
+                                        className={`
+                                          w-8 h-8 rounded-full flex items-center justify-center
+                                          text-xs font-bold transition-all flex-shrink-0
+                                          ${isSelected
+                                            ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                          }
+                                        `}
+                                        title={`${student.name} - click to toggle`}
+                                      >
+                                        {getInitials(student.name)}
+                                      </button>
+                                      {isSelected && (
+                                        <div className="flex gap-1">
+                                          <button
+                                            onClick={() => handleCorrectionWorked(error.id, student.id, true)}
+                                            className={`px-2 py-1 rounded text-xs ${
+                                              studentCorrectionResult === true
+                                                ? 'bg-emerald-500 text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            onClick={() => handleCorrectionWorked(error.id, student.id, false)}
+                                            className={`px-2 py-1 rounded text-xs ${
+                                              studentCorrectionResult === false
+                                                ? 'bg-red-500 text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                          >
+                                            ✗
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                   );
                                 })}
                               </div>
-                            </div>
-                            <div className="mt-2 ml-6 flex gap-2">
-                              <button
-                                onClick={() =>
-                                  handleCorrectionWorked(error.id, true)
-                                }
-                                className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
-                                  correctionWorked[error.id] === true
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                Worked
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleCorrectionWorked(error.id, false)
-                                }
-                                className={`px-3 py-2 rounded text-xs min-h-[44px] flex-1 ${
-                                  correctionWorked[error.id] === false
-                                    ? 'bg-red-500 text-white'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                Didn&apos;t Work
-                              </button>
                             </div>
                           </>
                         )}
