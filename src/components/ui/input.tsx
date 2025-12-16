@@ -17,7 +17,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-text-primary mb-1.5"
+            className="block text-sm font-medium text-gray-700 mb-1.5"
           >
             {label}
           </label>
@@ -27,8 +27,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           className={`
             w-full px-3 py-2 rounded-lg
-            bg-foundation border border-text-muted/20
-            text-text-primary placeholder-text-muted
+            bg-white border border-gray-300
+            text-gray-900 placeholder-gray-400
             focus:outline-none focus:ring-2 focus:ring-movement focus:border-transparent
             disabled:opacity-50 disabled:cursor-not-allowed
             ${error ? 'border-red-500 focus:ring-red-500' : ''}
@@ -64,7 +64,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="block text-sm font-medium text-text-primary mb-1.5"
+            className="block text-sm font-medium text-gray-700 mb-1.5"
           >
             {label}
           </label>
@@ -74,8 +74,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           className={`
             w-full px-3 py-2 rounded-lg
-            bg-foundation border border-text-muted/20
-            text-text-primary placeholder-text-muted
+            bg-white border border-gray-300
+            text-gray-900 placeholder-gray-400
             focus:outline-none focus:ring-2 focus:ring-movement focus:border-transparent
             disabled:opacity-50 disabled:cursor-not-allowed
             resize-y min-h-[80px]
