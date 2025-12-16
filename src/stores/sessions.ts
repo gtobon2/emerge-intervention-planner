@@ -26,6 +26,10 @@ import type {
 
 // Map LocalSession to Session
 function mapLocalToSession(local: LocalSession): Session {
+  if (local.id === undefined) {
+    console.error('LocalSession has undefined id:', local);
+    throw new Error('LocalSession id is undefined');
+  }
   return {
     ...local,
     id: String(local.id),
@@ -39,6 +43,10 @@ function mapLocalToSessionWithGroup(
   local: LocalSession,
   group: LocalGroup
 ): SessionWithGroup {
+  if (group.id === undefined) {
+    console.error('LocalGroup has undefined id:', group);
+    throw new Error('LocalGroup id is undefined');
+  }
   return {
     ...mapLocalToSession(local),
     group: {
@@ -194,7 +202,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   fetchSessionById: async (id: string) => {
-    set({ isLoading: true, error: null });
+    // Clear selected session immediately to prevent stale data showing during navigation
+    set({ isLoading: true, error: null, selectedSession: null });
 
     try {
       const numericId = parseInt(id, 10);

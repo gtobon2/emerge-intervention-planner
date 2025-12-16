@@ -16,6 +16,10 @@ import type { Group, GroupInsert, GroupUpdate, GroupWithStudents } from '@/lib/s
 
 // Map LocalGroup to Group (for compatibility with existing code)
 function mapLocalToGroup(local: LocalGroup): Group {
+  if (local.id === undefined) {
+    console.error('LocalGroup has undefined id:', local);
+    throw new Error('LocalGroup id is undefined');
+  }
   return {
     ...local,
     id: String(local.id),
@@ -34,6 +38,10 @@ interface LocalGroupWithStudents extends LocalGroup {
 }
 
 function mapLocalGroupWithStudents(local: LocalGroupWithStudents): GroupWithStudents {
+  if (local.id === undefined) {
+    console.error('LocalGroupWithStudents has undefined id:', local);
+    throw new Error('LocalGroupWithStudents id is undefined');
+  }
   return {
     ...local,
     id: String(local.id),
@@ -93,7 +101,8 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   },
 
   fetchGroupById: async (id: string) => {
-    set({ isLoading: true, error: null });
+    // Clear selected group immediately to prevent stale data showing during navigation
+    set({ isLoading: true, error: null, selectedGroup: null });
 
     try {
       const numericId = parseInt(id, 10);
