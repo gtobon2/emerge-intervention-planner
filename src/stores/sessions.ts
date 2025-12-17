@@ -23,38 +23,79 @@ import type {
   Pacing,
   MasteryLevel,
   PMTrend,
+  Group,
 } from '@/lib/supabase/types';
 
-// Map LocalSession to Session
+/**
+ * Map LocalSession to Session (API type with string IDs)
+ */
 function mapLocalToSession(local: LocalSession): Session {
   if (local.id === undefined) {
-    console.error('LocalSession has undefined id:', local);
     throw new Error('LocalSession id is undefined');
   }
   return {
-    ...local,
     id: String(local.id),
     group_id: String(local.group_id),
+    date: local.date,
+    time: local.time,
+    status: local.status,
+    curriculum_position: local.curriculum_position,
+    advance_after: local.advance_after,
+    planned_otr_target: local.planned_otr_target,
+    planned_response_formats: local.planned_response_formats,
+    planned_practice_items: local.planned_practice_items,
+    cumulative_review_items: local.cumulative_review_items,
+    anticipated_errors: local.anticipated_errors,
+    actual_otr_estimate: local.actual_otr_estimate,
+    pacing: local.pacing,
+    components_completed: local.components_completed,
+    exit_ticket_correct: local.exit_ticket_correct,
+    exit_ticket_total: local.exit_ticket_total,
     mastery_demonstrated: local.mastery_demonstrated as MasteryLevel | null,
-  } as Session;
+    errors_observed: local.errors_observed,
+    unexpected_errors: local.unexpected_errors,
+    pm_score: local.pm_score,
+    pm_trend: local.pm_trend,
+    dbi_adaptation_notes: local.dbi_adaptation_notes,
+    notes: local.notes,
+    next_session_notes: local.next_session_notes,
+    fidelity_checklist: local.fidelity_checklist,
+    created_at: local.created_at,
+    updated_at: local.updated_at,
+  };
 }
 
-// Map LocalSession with LocalGroup to SessionWithGroup
+/**
+ * Map LocalGroup to Group (API type with string IDs)
+ */
+function mapLocalToGroup(local: LocalGroup): Group {
+  if (local.id === undefined) {
+    throw new Error('LocalGroup id is undefined');
+  }
+  return {
+    id: String(local.id),
+    name: local.name,
+    curriculum: local.curriculum,
+    tier: local.tier,
+    grade: local.grade,
+    current_position: local.current_position,
+    schedule: local.schedule,
+    created_at: local.created_at,
+    updated_at: local.updated_at,
+  };
+}
+
+/**
+ * Map LocalSession with LocalGroup to SessionWithGroup
+ */
 function mapLocalToSessionWithGroup(
   local: LocalSession,
   group: LocalGroup
 ): SessionWithGroup {
-  if (group.id === undefined) {
-    console.error('LocalGroup has undefined id:', group);
-    throw new Error('LocalGroup id is undefined');
-  }
   return {
     ...mapLocalToSession(local),
-    group: {
-      ...group,
-      id: String(group.id),
-    } as any,
-  } as SessionWithGroup;
+    group: mapLocalToGroup(group),
+  };
 }
 
 interface SessionsState {

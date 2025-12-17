@@ -16,31 +16,57 @@ import type {
   ProgressMonitoring,
   ProgressMonitoringInsert,
   ProgressMonitoringWithStudent,
+  Student,
 } from '@/lib/supabase/types';
 
-// Map LocalProgressMonitoring to ProgressMonitoring
+/**
+ * Map LocalProgressMonitoring to ProgressMonitoring (API type with string IDs)
+ */
 function mapLocalToProgress(local: LocalProgressMonitoring): ProgressMonitoring {
+  if (local.id === undefined) {
+    throw new Error('LocalProgressMonitoring id is undefined');
+  }
   return {
-    ...local,
     id: String(local.id),
     group_id: String(local.group_id),
     student_id: local.student_id !== null ? String(local.student_id) : null,
-  } as ProgressMonitoring;
+    date: local.date,
+    measure_type: local.measure_type,
+    score: local.score,
+    benchmark: local.benchmark,
+    goal: local.goal,
+    notes: local.notes,
+    created_at: local.created_at,
+  };
 }
 
-// Map with student
+/**
+ * Map LocalStudent to Student (API type with string IDs)
+ */
+function mapLocalStudent(student: LocalStudent): Student {
+  if (student.id === undefined) {
+    throw new Error('LocalStudent id is undefined');
+  }
+  return {
+    id: String(student.id),
+    group_id: String(student.group_id),
+    name: student.name,
+    notes: student.notes,
+    created_at: student.created_at,
+  };
+}
+
+/**
+ * Map LocalProgressMonitoring with student to ProgressMonitoringWithStudent
+ */
 function mapLocalToProgressWithStudent(
   local: LocalProgressMonitoring,
   student: LocalStudent | null
 ): ProgressMonitoringWithStudent {
   return {
     ...mapLocalToProgress(local),
-    student: student ? {
-      ...student,
-      id: String(student.id),
-      group_id: String(student.group_id),
-    } as any : null,
-  } as ProgressMonitoringWithStudent;
+    student: student ? mapLocalStudent(student) : null,
+  };
 }
 
 interface ProgressState {

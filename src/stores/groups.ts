@@ -13,45 +13,69 @@ import type {
   LocalGroupUpdate,
   Curriculum
 } from '@/lib/local-db';
-import type { Group, GroupInsert, GroupUpdate, GroupWithStudents } from '@/lib/supabase/types';
+import type { Group, GroupInsert, GroupUpdate, GroupWithStudents, Student } from '@/lib/supabase/types';
 
-// Map LocalGroup to Group (for compatibility with existing code)
+/**
+ * Map LocalGroup to Group (API type with string IDs)
+ *
+ * The local-first architecture uses numeric auto-increment IDs in IndexedDB,
+ * while the API/UI layer uses string IDs for compatibility with Supabase UUIDs.
+ */
 function mapLocalToGroup(local: LocalGroup): Group {
   if (local.id === undefined) {
-    console.error('LocalGroup has undefined id:', local);
     throw new Error('LocalGroup id is undefined');
   }
   return {
-    ...local,
     id: String(local.id),
-  } as Group;
+    name: local.name,
+    curriculum: local.curriculum,
+    tier: local.tier,
+    grade: local.grade,
+    current_position: local.current_position,
+    schedule: local.schedule,
+    created_at: local.created_at,
+    updated_at: local.updated_at,
+  };
+}
+
+// Local student type from IndexedDB
+interface LocalStudentData {
+  id?: number;
+  group_id: number;
+  name: string;
+  notes: string | null;
+  created_at: string;
 }
 
 // Map Group with students
 interface LocalGroupWithStudents extends LocalGroup {
-  students: Array<{
-    id?: number;
-    group_id: number;
-    name: string;
-    notes: string | null;
-    created_at: string;
-  }>;
+  students: LocalStudentData[];
+}
+
+/**
+ * Map LocalStudent to Student (API type with string IDs)
+ */
+function mapLocalStudent(s: LocalStudentData): Student {
+  if (s.id === undefined) {
+    throw new Error('LocalStudent id is undefined');
+  }
+  return {
+    id: String(s.id),
+    group_id: String(s.group_id),
+    name: s.name,
+    notes: s.notes,
+    created_at: s.created_at,
+  };
 }
 
 function mapLocalGroupWithStudents(local: LocalGroupWithStudents): GroupWithStudents {
   if (local.id === undefined) {
-    console.error('LocalGroupWithStudents has undefined id:', local);
     throw new Error('LocalGroupWithStudents id is undefined');
   }
   return {
-    ...local,
-    id: String(local.id),
-    students: local.students.map(s => ({
-      ...s,
-      id: String(s.id),
-      group_id: String(s.group_id),
-    })) as any,
-  } as GroupWithStudents;
+    ...mapLocalToGroup(local),
+    students: local.students.map(mapLocalStudent),
+  };
 }
 
 interface GroupsState {
