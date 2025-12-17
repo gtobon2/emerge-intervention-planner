@@ -6,6 +6,7 @@ import {
   deleteProgressRecord as deleteProgressRecordDB
 } from '@/lib/local-db/hooks';
 import { validateProgressMonitoring } from '@/lib/supabase/validation';
+import { toNumericId } from '@/lib/utils/id';
 import type {
   LocalProgressMonitoring,
   LocalProgressMonitoringInsert,
@@ -66,8 +67,8 @@ export const useProgressStore = create<ProgressState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericGroupId = parseInt(groupId, 10);
-      if (isNaN(numericGroupId)) {
+      const numericGroupId = toNumericId(groupId);
+      if (numericGroupId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -107,8 +108,8 @@ export const useProgressStore = create<ProgressState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericStudentId = parseInt(studentId, 10);
-      if (isNaN(numericStudentId)) {
+      const numericStudentId = toNumericId(studentId);
+      if (numericStudentId === null) {
         throw new Error('Invalid student ID');
       }
 
@@ -140,16 +141,16 @@ export const useProgressStore = create<ProgressState>((set) => ({
     }
 
     try {
-      const numericGroupId = parseInt(dataPoint.group_id, 10);
-      if (isNaN(numericGroupId)) {
+      const numericGroupId = toNumericId(dataPoint.group_id);
+      if (numericGroupId === null) {
         throw new Error('Invalid group ID');
       }
 
       const numericStudentId = dataPoint.student_id !== null
-        ? parseInt(dataPoint.student_id, 10)
+        ? toNumericId(dataPoint.student_id)
         : null;
 
-      if (dataPoint.student_id !== null && (numericStudentId === null || isNaN(numericStudentId))) {
+      if (dataPoint.student_id !== null && numericStudentId === null) {
         throw new Error('Invalid student ID');
       }
 
@@ -189,8 +190,8 @@ export const useProgressStore = create<ProgressState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid progress monitoring ID');
       }
 

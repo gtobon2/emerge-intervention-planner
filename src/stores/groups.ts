@@ -6,6 +6,7 @@ import {
   deleteGroup as deleteGroupDB
 } from '@/lib/local-db/hooks';
 import { validateGroup } from '@/lib/supabase/validation';
+import { toNumericId } from '@/lib/utils/id';
 import type {
   LocalGroup,
   LocalGroupInsert,
@@ -107,8 +108,8 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
     set({ isLoading: true, error: null, selectedGroup: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -184,8 +185,8 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -228,8 +229,8 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid group ID');
       }
 

@@ -6,6 +6,7 @@ import {
   deleteSession as deleteSessionDB
 } from '@/lib/local-db/hooks';
 import { validateSession } from '@/lib/supabase/validation';
+import { toNumericId } from '@/lib/utils/id';
 import type {
   LocalSession,
   LocalSessionInsert,
@@ -133,8 +134,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericGroupId = parseInt(groupId, 10);
-      if (isNaN(numericGroupId)) {
+      const numericGroupId = toNumericId(groupId);
+      if (numericGroupId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -206,8 +207,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null, selectedSession: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid session ID');
       }
 
@@ -248,8 +249,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
 
     try {
-      const numericGroupId = parseInt(session.group_id, 10);
-      if (isNaN(numericGroupId)) {
+      const numericGroupId = toNumericId(session.group_id);
+      if (numericGroupId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -307,8 +308,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid session ID');
       }
 
@@ -367,8 +368,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid session ID');
       }
 
@@ -456,8 +457,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid session ID');
       }
 

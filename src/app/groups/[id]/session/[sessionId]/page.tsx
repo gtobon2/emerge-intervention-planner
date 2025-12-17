@@ -43,6 +43,7 @@ import { EditSessionModal, CancelSessionModal, PlanSessionModal, SessionPlanData
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
+import { toNumericId } from '@/lib/utils/id';
 
 // Extended ObservedError type with id for local tracking
 interface ObservedErrorWithId extends ObservedError {
@@ -297,17 +298,20 @@ export default function SessionPage({
             }
           });
 
+          const numericStudentId = toNumericId(student.id);
+          if (numericStudentId === null) return null;
+
           return {
-            studentId: parseInt(student.id, 10),
+            studentId: numericStudentId,
             otrCount: studentOTRs[student.id] || 0,
             errorsExhibited: studentErrors,
             correctionEffectiveness: studentCorrections,
           };
-        });
+        }).filter((data): data is NonNullable<typeof data> => data !== null);
 
         // Save per-student tracking data
-        const numericSessionId = parseInt(session.id, 10);
-        if (!isNaN(numericSessionId) && studentTrackingData.length > 0) {
+        const numericSessionId = toNumericId(session.id);
+        if (numericSessionId !== null && studentTrackingData.length > 0) {
           await saveStudentSessionTracking(numericSessionId, studentTrackingData);
         }
 

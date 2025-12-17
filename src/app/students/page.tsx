@@ -12,6 +12,7 @@ import { useStudentsStore } from '@/stores/students';
 import { useProgressStore } from '@/stores/progress';
 import { useGroupsStore } from '@/stores/groups';
 import { db } from '@/lib/local-db';
+import { toNumericId } from '@/lib/utils/id';
 import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
 import { getCurriculumLabel, getTierLabel } from '@/lib/supabase/types';
 import type { ValidatedStudent } from '@/lib/import-utils';
@@ -94,8 +95,8 @@ export default function StudentsPage() {
       if (!selectedStudent) return;
 
       try {
-        const numericStudentId = parseInt(selectedStudent.id, 10);
-        if (isNaN(numericStudentId)) return;
+        const numericStudentId = toNumericId(selectedStudent.id);
+        if (numericStudentId === null) return;
 
         const pmRecords = await db.progressMonitoring
           .where('student_id')

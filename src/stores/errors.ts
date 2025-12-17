@@ -7,6 +7,7 @@ import {
   incrementErrorOccurrence
 } from '@/lib/local-db/hooks';
 import { validateErrorBankEntry } from '@/lib/supabase/validation';
+import { toNumericId } from '@/lib/utils/id';
 import type {
   LocalErrorBankEntry,
   LocalErrorBankInsert,
@@ -158,8 +159,8 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid error bank entry ID');
       }
 
@@ -200,8 +201,8 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   incrementEffectiveness: async (id: string) => {
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid error bank entry ID');
       }
 
@@ -222,8 +223,8 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   incrementOccurrence: async (id: string) => {
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid error bank entry ID');
       }
 

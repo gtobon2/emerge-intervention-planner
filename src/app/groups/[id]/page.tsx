@@ -25,6 +25,7 @@ import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
 import { db } from '@/lib/local-db';
+import { toNumericId } from '@/lib/utils/id';
 import type { Session, PMTrend } from '@/lib/supabase/types';
 
 export default function GroupDetailPage() {
@@ -65,8 +66,8 @@ export default function GroupDetailPage() {
       if (!groupId) return;
 
       try {
-        const numericGroupId = parseInt(groupId, 10);
-        if (isNaN(numericGroupId)) return;
+        const numericGroupId = toNumericId(groupId);
+        if (numericGroupId === null) return;
 
         // Get PM records for this group, sorted by date descending
         const pmRecords = await db.progressMonitoring

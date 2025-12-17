@@ -6,6 +6,7 @@ import {
   deleteStudent as deleteStudentDB
 } from '@/lib/local-db/hooks';
 import { validateStudent } from '@/lib/supabase/validation';
+import { toNumericId } from '@/lib/utils/id';
 import type { LocalStudent, LocalStudentInsert, LocalStudentUpdate } from '@/lib/local-db';
 import type { Student, StudentInsert, StudentUpdate } from '@/lib/supabase/types';
 
@@ -43,8 +44,8 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericGroupId = parseInt(groupId, 10);
-      if (isNaN(numericGroupId)) {
+      const numericGroupId = toNumericId(groupId);
+      if (numericGroupId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -93,8 +94,8 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
     try {
       // Convert StudentInsert to LocalStudentInsert
-      const numericGroupId = parseInt(student.group_id, 10);
-      if (isNaN(numericGroupId)) {
+      const numericGroupId = toNumericId(student.group_id);
+      if (numericGroupId === null) {
         throw new Error('Invalid group ID');
       }
 
@@ -130,16 +131,17 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid student ID');
       }
 
       // Convert updates to LocalStudentUpdate
+      const numericGroupId = updates.group_id !== undefined ? toNumericId(updates.group_id) : undefined;
       const localUpdates: LocalStudentUpdate = {
         ...(updates.name !== undefined && { name: updates.name }),
         ...(updates.notes !== undefined && { notes: updates.notes }),
-        ...(updates.group_id !== undefined && { group_id: parseInt(updates.group_id, 10) }),
+        ...(numericGroupId !== undefined && numericGroupId !== null && { group_id: numericGroupId }),
       };
 
       await updateStudentDB(numericId, localUpdates);
@@ -166,8 +168,8 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
         throw new Error('Invalid student ID');
       }
 
