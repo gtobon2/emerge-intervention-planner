@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { useUIStore, formatElapsedTime } from '@/stores/ui';
 import { Button } from './button';
@@ -111,13 +111,38 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
 }
 
 // Simple countdown timer
-export function CountdownTimer({ seconds, onComplete }: { seconds: number; onComplete?: () => void }) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+export function CountdownTimer({ seconds: initialSeconds, onComplete }: { seconds: number; onComplete?: () => void }) {
+  const [remainingTime, setRemainingTime] = useState(initialSeconds);
+
+  useEffect(() => {
+    setRemainingTime(initialSeconds);
+  }, [initialSeconds]);
+
+  useEffect(() => {
+    if (remainingTime <= 0) {
+      onComplete?.();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setRemainingTime(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [remainingTime, onComplete]);
+
+  const minutes = Math.floor(remainingTime / 60);
+  const seconds = remainingTime % 60;
 
   return (
-    <span className="font-mono">
-      {minutes}:{remainingSeconds.toString().padStart(2, '0')}
+    <span className={`font-mono ${remainingTime <= 10 ? 'text-tier3' : ''}`}>
+      {minutes}:{seconds.toString().padStart(2, '0')}
     </span>
   );
 }

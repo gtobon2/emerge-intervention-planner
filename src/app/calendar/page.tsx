@@ -13,6 +13,8 @@ export default function CalendarPage() {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
       const newDate = new Date(prev);
@@ -52,8 +54,20 @@ export default function CalendarPage() {
             </Button>
           </div>
 
+          {/* Weekday Headers */}
+          <div className="grid grid-cols-7 gap-1 mb-4">
+            {weekDays.map((day) => (
+              <div
+                key={day}
+                className="py-2 text-center text-sm font-medium text-text-muted"
+              >
+                {day}
+              </div>
+            ))}
+          </div>
+
           {/* Calendar Grid Placeholder */}
-          <div className="text-center py-16 text-text-muted">
+          <div className="text-center py-12 text-text-muted border-t border-border">
             <p className="mb-4">
               FullCalendar integration will be implemented here.
             </p>
