@@ -42,3 +42,8 @@ next-env.d.ts
 
 # OS
 Thumbs.db
+
+# SQLite database
+*.db
+*.db-journal
+*.db-wal

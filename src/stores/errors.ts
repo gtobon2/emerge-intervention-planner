@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
 import type {
   ErrorBankEntry,
   ErrorBankInsert,
@@ -37,13 +36,9 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   fetchErrorsForCurriculum: async (curriculum: Curriculum) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('error_bank')
-        .select('*')
-        .eq('curriculum', curriculum)
-        .order('occurrence_count', { ascending: false });
-
-      if (error) throw error;
+      const response = await fetch(`/api/error-bank?curriculum=${curriculum}`);
+      if (!response.ok) throw new Error('Failed to fetch errors');
+      const data = await response.json();
       set({ errors: data || [], isLoading: false });
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
@@ -56,16 +51,12 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   ) => {
     set({ isLoading: true, error: null });
     try {
-      // Fetch all errors for the curriculum, then filter by position
-      const { data, error } = await supabase
-        .from('error_bank')
-        .select('*')
-        .eq('curriculum', curriculum);
-
-      if (error) throw error;
+      const response = await fetch(`/api/error-bank?curriculum=${curriculum}`);
+      if (!response.ok) throw new Error('Failed to fetch errors');
+      const data = await response.json();
 
       // Filter errors that match the position or are universal (null position)
-      const filteredErrors = (data || []).filter((e) => {
+      const filteredErrors = (data || []).filter((e: ErrorBankEntry) => {
         if (!e.curriculum_position) return true; // Universal error
         return matchPosition(curriculum, e.curriculum_position, position);
       });
@@ -82,13 +73,13 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   createError: async (errorData: ErrorBankInsert) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('error_bank')
-        .insert({ ...errorData, is_custom: true })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const response = await fetch('/api/error-bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...errorData, is_custom: true }),
+      });
+      if (!response.ok) throw new Error('Failed to create error');
+      const data = await response.json();
 
       set((state) => ({
         errors: [...state.errors, data],
@@ -105,12 +96,12 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   updateError: async (id: string, updates: ErrorBankUpdate) => {
     set({ isLoading: true, error: null });
     try {
-      const { error } = await supabase
-        .from('error_bank')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/error-bank/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Failed to update error');
 
       set((state) => ({
         errors: state.errors.map((e) =>

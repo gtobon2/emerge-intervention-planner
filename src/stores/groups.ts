@@ -1,9 +1,8 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
 import type { Group, GroupInsert, GroupUpdate, Curriculum, GroupWithStudents } from '@/lib/supabase/types';
 
 interface GroupsState {
-  groups: Group[];
+  groups: GroupWithStudents[];
   selectedGroup: GroupWithStudents | null;
   isLoading: boolean;
   error: string | null;
@@ -36,12 +35,9 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   fetchGroups: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('groups')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
+      const response = await fetch('/api/groups?include=students');
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      const data = await response.json();
       set({ groups: data || [], isLoading: false });
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
@@ -51,26 +47,10 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   fetchGroupById: async (id: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { data: group, error: groupError } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (groupError) throw groupError;
-
-      const { data: students, error: studentsError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('group_id', id)
-        .order('name');
-
-      if (studentsError) throw studentsError;
-
-      set({
-        selectedGroup: { ...group, students: students || [] },
-        isLoading: false,
-      });
+      const response = await fetch(`/api/groups/${id}`);
+      if (!response.ok) throw new Error('Failed to fetch group');
+      const data = await response.json();
+      set({ selectedGroup: data, isLoading: false });
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
     }
@@ -79,16 +59,16 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   createGroup: async (group: GroupInsert) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('groups')
-        .insert(group)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const response = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(group),
+      });
+      if (!response.ok) throw new Error('Failed to create group');
+      const data = await response.json();
 
       set((state) => ({
-        groups: [...state.groups, data],
+        groups: [{ ...data, students: [] }, ...state.groups],
         isLoading: false,
       }));
 
@@ -102,12 +82,12 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   updateGroup: async (id: string, updates: GroupUpdate) => {
     set({ isLoading: true, error: null });
     try {
-      const { error } = await supabase
-        .from('groups')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/groups/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Failed to update group');
 
       set((state) => ({
         groups: state.groups.map((g) =>
@@ -127,9 +107,8 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   deleteGroup: async (id: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { error } = await supabase.from('groups').delete().eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/groups/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete group');
 
       set((state) => ({
         groups: state.groups.filter((g) => g.id !== id),

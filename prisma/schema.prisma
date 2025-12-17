@@ -1,0 +1,163 @@
+// EMERGE Intervention Planner - Prisma Schema
+// Local SQLite Database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id               String    @id @default(cuid())
+  name             String
+  curriculum       String    // wilson, delta_math, camino, wordgen, amira
+  tier             Int       // 2 or 3
+  grade            Int
+  currentPosition  String    // JSON string for curriculum position
+  schedule         String?   // JSON string for schedule
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  students           Student[]
+  sessions           Session[]
+  progressMonitoring ProgressMonitoring[]
+
+  @@map("groups")
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  groupId   String
+  name      String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  group              Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  progressMonitoring ProgressMonitoring[]
+  studentErrors      StudentError[]
+
+  @@map("students")
+}
+
+model Session {
+  id                 String   @id @default(cuid())
+  groupId            String
+  date               String   // YYYY-MM-DD format
+  time               String?  // HH:MM format
+  status             String   @default("planned") // planned, completed, cancelled
+  curriculumPosition String   // JSON string
+  advanceAfter       Boolean  @default(false)
+
+  // Planning fields (BEFORE session)
+  plannedOtrTarget       Int?
+  plannedResponseFormats String?  // JSON array
+  plannedPracticeItems   String?  // JSON array
+  cumulativeReviewItems  String?  // JSON array
+  anticipatedErrors      String?  // JSON array
+
+  // Logging fields (AFTER session)
+  actualOtrCount       Int?     // Actual OTR count from session
+  pacing               String?  // too_slow, just_right, too_fast
+  componentsCompleted  String?  // JSON array
+  exitTicketCorrect    Int?
+  exitTicketTotal      Int?
+  masteryDemonstrated  String?  // yes, no, partial
+
+  // Error tracking
+  errorsObserved   String?  // JSON array
+  unexpectedErrors String?  // JSON array
+
+  // Tier 3 specific
+  pmScore             Float?
+  pmTrend             String?  // improving, flat, declining
+  dbiAdaptationNotes  String?
+
+  // General
+  notes            String?
+  nextSessionNotes String?
+  fidelityChecklist String?  // JSON array
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  studentErrors StudentError[]
+
+  @@map("sessions")
+}
+
+// Per-student error tracking within a session
+model StudentError {
+  id              String  @id @default(cuid())
+  sessionId       String
+  studentId       String
+  errorPattern    String
+  correctionUsed  String?
+  correctionWorked Boolean?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("student_errors")
+}
+
+model ProgressMonitoring {
+  id          String   @id @default(cuid())
+  groupId     String
+  studentId   String?
+  date        String   // YYYY-MM-DD
+  measureType String
+  score       Float
+  benchmark   Float?
+  goal        Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  group   Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@map("progress_monitoring")
+}
+
+model ErrorBankEntry {
+  id                 String   @id @default(cuid())
+  curriculum         String
+  curriculumPosition String?  // JSON string
+  errorPattern       String
+  underlyingGap      String?
+  correctionProtocol String
+  correctionPrompts  String?  // JSON array
+  visualCues         String?
+  kinestheticCues    String?
+  isCustom           Boolean  @default(false)
+  effectivenessCount Int      @default(0)
+  occurrenceCount    Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  @@map("error_bank")
+}
+
+model CurriculumSequence {
+  id                    String   @id @default(cuid())
+  curriculum            String
+  positionKey           String
+  positionLabel         String
+  description           String?
+  skills                String?  // JSON array
+  sampleWords           String?  // JSON object
+  prerequisitePositions String?  // JSON array
+  nextPositions         String?  // JSON array
+  lessonComponents      String?  // JSON array
+  suggestedActivities   String?  // JSON array
+  materialsNeeded       String?  // JSON array
+  sortOrder             Int
+  createdAt             DateTime @default(now())
+
+  @@unique([curriculum, positionKey])
+  @@map("curriculum_sequences")
+}
