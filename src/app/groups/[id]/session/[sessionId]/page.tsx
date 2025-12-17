@@ -42,6 +42,7 @@ import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
 import { EditSessionModal, CancelSessionModal, PlanSessionModal, SessionPlanData } from '@/components/sessions';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore } from '@/stores';
+import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
 
 // Extended ObservedError type with id for local tracking
 interface ObservedErrorWithId extends ObservedError {
@@ -213,6 +214,11 @@ export default function SessionPage({
    * - errors_observed: Anticipated errors that were checked, with correction effectiveness
    * - unexpected_errors: New errors observed during session
    * - notes: Session notes including voice input
+   *
+   * Per-student tracking (saved separately):
+   * - OTR count per student
+   * - Errors exhibited by each student
+   * - Correction effectiveness per student
    */
   const handleCompleteSession = async () => {
     if (!session) return;
@@ -263,6 +269,48 @@ export default function SessionPage({
       const result = await completeSession(session.id, completionData, true);
 
       if (result) {
+        // Build per-student tracking data
+        const studentTrackingData = students.map((student) => {
+          // Get errors this student exhibited (from errorStudents state)
+          const studentErrors: string[] = [];
+          Object.entries(errorStudents).forEach(([errorId, studentIds]) => {
+            if (studentIds.includes(student.id)) {
+              // Find the error pattern
+              const anticipatedError = anticipatedErrors.find(e => e.id === errorId);
+              const unexpectedError = unexpectedErrors.find(e => e.id === errorId);
+              const errorPattern = anticipatedError?.error_pattern || unexpectedError?.error_pattern;
+              if (errorPattern) {
+                studentErrors.push(errorPattern);
+              }
+            }
+          });
+
+          // Get correction effectiveness for this student
+          const studentCorrections: Record<string, boolean> = {};
+          Object.entries(correctionWorked).forEach(([errorId, studentResults]) => {
+            const studentResult = studentResults[student.id];
+            if (studentResult !== undefined && studentResult !== null) {
+              const anticipatedError = anticipatedErrors.find(e => e.id === errorId);
+              if (anticipatedError) {
+                studentCorrections[anticipatedError.error_pattern] = studentResult;
+              }
+            }
+          });
+
+          return {
+            studentId: parseInt(student.id, 10),
+            otrCount: studentOTRs[student.id] || 0,
+            errorsExhibited: studentErrors,
+            correctionEffectiveness: studentCorrections,
+          };
+        });
+
+        // Save per-student tracking data
+        const numericSessionId = parseInt(session.id, 10);
+        if (!isNaN(numericSessionId) && studentTrackingData.length > 0) {
+          await saveStudentSessionTracking(numericSessionId, studentTrackingData);
+        }
+
         // Success - navigate back to group page
         router.push(`/groups/${params.id}`);
       } else {

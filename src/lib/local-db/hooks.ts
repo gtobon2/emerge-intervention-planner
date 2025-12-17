@@ -603,3 +603,201 @@ export function useIsDatabaseEmpty() {
     isLoading: isEmpty === undefined,
   };
 }
+
+// ============================================
+// STUDENT SESSION TRACKING HOOKS
+// ============================================
+
+/**
+ * Get per-student tracking data for a session
+ *
+ * Returns array of tracking records for each student in the session
+ */
+export function useLocalStudentSessionTracking(sessionId: number | undefined) {
+  const data = useLiveQuery(
+    async () => {
+      if (sessionId === undefined) return [];
+      return await db.studentSessionTracking
+        .where('session_id')
+        .equals(sessionId)
+        .toArray();
+    },
+    [sessionId]
+  );
+
+  return {
+    tracking: data ?? [],
+    isLoading: sessionId !== undefined && data === undefined,
+  };
+}
+
+/**
+ * Get historical session tracking for a student across all sessions
+ *
+ * Useful for viewing a student's OTR and error history over time
+ */
+export function useLocalStudentTrackingHistory(studentId: number | undefined) {
+  const data = useLiveQuery(
+    async () => {
+      if (studentId === undefined) return [];
+
+      // Get all tracking records for this student
+      const trackingRecords = await db.studentSessionTracking
+        .where('student_id')
+        .equals(studentId)
+        .toArray();
+
+      // Fetch session dates for each record
+      const recordsWithDates = await Promise.all(
+        trackingRecords.map(async (record) => {
+          const session = await db.sessions.get(record.session_id);
+          return {
+            ...record,
+            session_date: session?.date || '',
+          };
+        })
+      );
+
+      // Sort by session date descending
+      return recordsWithDates.sort((a, b) => b.session_date.localeCompare(a.session_date));
+    },
+    [studentId]
+  );
+
+  return {
+    history: data ?? [],
+    isLoading: studentId !== undefined && data === undefined,
+  };
+}
+
+/**
+ * Save per-student tracking data for a session
+ *
+ * This is a bulk operation that saves tracking data for multiple students.
+ * If records already exist for the session, they will be replaced.
+ *
+ * @param sessionId - The session ID
+ * @param studentTracking - Array of student tracking data
+ */
+export async function saveStudentSessionTracking(
+  sessionId: number,
+  studentTracking: Array<{
+    studentId: number;
+    otrCount: number;
+    errorsExhibited: string[];
+    correctionEffectiveness: Record<string, boolean>;
+    notes?: string;
+  }>
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  await db.transaction('rw', db.studentSessionTracking, async () => {
+    // Delete any existing tracking for this session
+    await db.studentSessionTracking
+      .where('session_id')
+      .equals(sessionId)
+      .delete();
+
+    // Insert new tracking records
+    const records = studentTracking.map((tracking) => ({
+      session_id: sessionId,
+      student_id: tracking.studentId,
+      otr_count: tracking.otrCount,
+      errors_exhibited: tracking.errorsExhibited,
+      correction_effectiveness: tracking.correctionEffectiveness,
+      notes: tracking.notes || null,
+      created_at: now,
+    }));
+
+    await db.studentSessionTracking.bulkAdd(records);
+  });
+}
+
+/**
+ * Get a single student's tracking for a specific session
+ */
+export async function getStudentTrackingForSession(
+  sessionId: number,
+  studentId: number
+): Promise<LocalStudentSessionTracking | undefined> {
+  return await db.studentSessionTracking
+    .where('[session_id+student_id]')
+    .equals([sessionId, studentId])
+    .first();
+}
+
+/**
+ * Calculate average OTRs per student for a group across sessions
+ *
+ * Useful for reports showing student engagement over time
+ */
+export async function getStudentOTRStats(studentId: number): Promise<{
+  totalSessions: number;
+  totalOTRs: number;
+  averageOTRs: number;
+  recentTrend: 'improving' | 'stable' | 'declining' | null;
+}> {
+  const trackingRecords = await db.studentSessionTracking
+    .where('student_id')
+    .equals(studentId)
+    .toArray();
+
+  if (trackingRecords.length === 0) {
+    return {
+      totalSessions: 0,
+      totalOTRs: 0,
+      averageOTRs: 0,
+      recentTrend: null,
+    };
+  }
+
+  const totalOTRs = trackingRecords.reduce((sum, r) => sum + r.otr_count, 0);
+  const averageOTRs = totalOTRs / trackingRecords.length;
+
+  // Calculate trend from last 3 sessions
+  if (trackingRecords.length < 3) {
+    return {
+      totalSessions: trackingRecords.length,
+      totalOTRs,
+      averageOTRs: Math.round(averageOTRs),
+      recentTrend: null,
+    };
+  }
+
+  // Get session dates to sort properly
+  const recordsWithDates = await Promise.all(
+    trackingRecords.map(async (record) => {
+      const session = await db.sessions.get(record.session_id);
+      return { ...record, date: session?.date || '' };
+    })
+  );
+
+  const sortedRecords = recordsWithDates
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 3);
+
+  const recentOTRs = sortedRecords.map((r) => r.otr_count);
+  const firstOTR = recentOTRs[recentOTRs.length - 1];
+  const lastOTR = recentOTRs[0];
+
+  const change = ((lastOTR - firstOTR) / firstOTR) * 100;
+  let recentTrend: 'improving' | 'stable' | 'declining' | null;
+
+  if (change > 10) {
+    recentTrend = 'improving';
+  } else if (change < -10) {
+    recentTrend = 'declining';
+  } else {
+    recentTrend = 'stable';
+  }
+
+  return {
+    totalSessions: trackingRecords.length,
+    totalOTRs,
+    averageOTRs: Math.round(averageOTRs),
+    recentTrend,
+  };
+}
+
+// Import the type for export
+import type { LocalStudentSessionTracking } from './index';

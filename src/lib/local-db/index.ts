@@ -114,6 +114,28 @@ export interface LocalErrorBankEntry {
   created_at: string;
 }
 
+/**
+ * Per-student session tracking data
+ *
+ * Stores individual student performance within a session:
+ * - OTR count: How many opportunities to respond the student received
+ * - Errors: Which errors the student exhibited during the session
+ * - Correction effectiveness: Whether corrections worked for this student
+ */
+export interface LocalStudentSessionTracking {
+  id?: number;
+  session_id: number;
+  student_id: number;
+  otr_count: number;
+  /** Array of error patterns the student exhibited */
+  errors_exhibited: string[];
+  /** Map of error pattern -> whether correction worked for this student */
+  correction_effectiveness: Record<string, boolean>;
+  /** Additional notes specific to this student for this session */
+  notes: string | null;
+  created_at: string;
+}
+
 // ============================================
 // DEXIE DATABASE CLASS
 // ============================================
@@ -124,18 +146,30 @@ export class EmergeDatabase extends Dexie {
   sessions!: Table<LocalSession, number>;
   progressMonitoring!: Table<LocalProgressMonitoring, number>;
   errorBank!: Table<LocalErrorBankEntry, number>;
+  studentSessionTracking!: Table<LocalStudentSessionTracking, number>;
 
   constructor() {
     super('emerge-intervention-planner');
 
     // Define database schema
     // Note: Only indexed fields are listed in the schema
+    // Version 1: Initial schema
     this.version(1).stores({
       groups: '++id, name, curriculum, tier, grade, created_at, updated_at',
       students: '++id, name, group_id, created_at',
       sessions: '++id, group_id, date, status, created_at, updated_at',
       progressMonitoring: '++id, student_id, group_id, date, created_at',
       errorBank: '++id, curriculum, error_pattern, created_at',
+    });
+
+    // Version 2: Add per-student session tracking
+    this.version(2).stores({
+      groups: '++id, name, curriculum, tier, grade, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
     });
   }
 }
@@ -155,6 +189,7 @@ export type LocalStudentInsert = Omit<LocalStudent, 'id' | 'created_at'>;
 export type LocalSessionInsert = Omit<LocalSession, 'id' | 'created_at' | 'updated_at'>;
 export type LocalProgressMonitoringInsert = Omit<LocalProgressMonitoring, 'id' | 'created_at'>;
 export type LocalErrorBankInsert = Omit<LocalErrorBankEntry, 'id' | 'created_at'>;
+export type LocalStudentSessionTrackingInsert = Omit<LocalStudentSessionTracking, 'id' | 'created_at'>;
 
 // ============================================
 // UPDATE TYPES (for updating records)
@@ -165,6 +200,7 @@ export type LocalStudentUpdate = Partial<LocalStudentInsert>;
 export type LocalSessionUpdate = Partial<LocalSessionInsert>;
 export type LocalProgressMonitoringUpdate = Partial<LocalProgressMonitoringInsert>;
 export type LocalErrorBankUpdate = Partial<LocalErrorBankInsert>;
+export type LocalStudentSessionTrackingUpdate = Partial<LocalStudentSessionTrackingInsert>;
 
 // ============================================
 // JOINED/ENRICHED TYPES
