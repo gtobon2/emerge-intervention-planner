@@ -40,6 +40,32 @@ export type CurriculumPosition =
   | WordGenPosition
   | AmiraPosition;
 
+/**
+ * Type guards for CurriculumPosition variants
+ *
+ * These functions enable type-safe access to curriculum-specific position properties
+ * without requiring 'as any' casts.
+ */
+export function isWilsonPosition(pos: CurriculumPosition): pos is WilsonPosition {
+  return 'step' in pos && 'substep' in pos;
+}
+
+export function isDeltaMathPosition(pos: CurriculumPosition): pos is DeltaMathPosition {
+  return 'standard' in pos;
+}
+
+export function isCaminoPosition(pos: CurriculumPosition): pos is CaminoPosition {
+  return 'lesson' in pos;
+}
+
+export function isWordGenPosition(pos: CurriculumPosition): pos is WordGenPosition {
+  return 'unit' in pos && 'day' in pos;
+}
+
+export function isAmiraPosition(pos: CurriculumPosition): pos is AmiraPosition {
+  return 'level' in pos && typeof (pos as AmiraPosition).level === 'string';
+}
+
 // Schedule type
 export interface GroupSchedule {
   days?: string[]; // e.g., ['monday', 'wednesday', 'friday']

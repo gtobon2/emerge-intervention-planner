@@ -20,6 +20,11 @@ import type {
   ErrorBankInsert,
   ErrorBankUpdate,
 } from '@/lib/supabase/types';
+import {
+  isWilsonPosition,
+  isDeltaMathPosition,
+  isCaminoPosition,
+} from '@/lib/supabase/types';
 
 // Map LocalErrorBankEntry to ErrorBankEntry
 function mapLocalToError(local: LocalErrorBankEntry): ErrorBankEntry {
@@ -252,7 +257,15 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
   },
 }));
 
-// Helper function to match curriculum positions
+/**
+ * Helper function to match curriculum positions using type guards
+ *
+ * Compares error bank position with current session position based on
+ * curriculum-specific matching logic:
+ * - Wilson: Match by step number
+ * - Delta Math: Match by standard
+ * - Camino: Match by lesson number
+ */
 function matchPosition(
   curriculum: Curriculum,
   errorPosition: CurriculumPosition,
@@ -261,29 +274,20 @@ function matchPosition(
   try {
     switch (curriculum) {
       case 'wilson': {
-        const errPos = errorPosition as any;
-        const curPos = currentPosition as any;
-        if (errPos.step !== undefined && curPos.step !== undefined) {
-          return errPos.step === curPos.step;
+        if (isWilsonPosition(errorPosition) && isWilsonPosition(currentPosition)) {
+          return errorPosition.step === currentPosition.step;
         }
         return false;
       }
       case 'delta_math': {
-        const errPos = errorPosition as any;
-        const curPos = currentPosition as any;
-        if (errPos.standard !== undefined && curPos.standard !== undefined) {
-          return errPos.standard === curPos.standard;
+        if (isDeltaMathPosition(errorPosition) && isDeltaMathPosition(currentPosition)) {
+          return errorPosition.standard === currentPosition.standard;
         }
         return false;
       }
       case 'camino': {
-        const errPos = errorPosition as any;
-        const curPos = currentPosition as any;
-        if (errPos.lesson && curPos.lesson) {
-          return errPos.lesson === curPos.lesson;
-        }
-        if (errPos.lesson_range && curPos.lesson) {
-          return curPos.lesson >= errPos.lesson_range[0] && curPos.lesson <= errPos.lesson_range[1];
+        if (isCaminoPosition(errorPosition) && isCaminoPosition(currentPosition)) {
+          return errorPosition.lesson === currentPosition.lesson;
         }
         return false;
       }
