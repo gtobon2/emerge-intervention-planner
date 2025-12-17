@@ -41,8 +41,7 @@ import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/typ
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
 import { EditSessionModal, CancelSessionModal, PlanSessionModal, SessionPlanData } from '@/components/sessions';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
-import { getStudentsForGroup, MOCK_GROUPS, MOCK_SESSIONS, MOCK_STUDENTS } from '@/lib/mock-data';
-import { useErrorsStore, useSessionsStore } from '@/stores';
+import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore } from '@/stores';
 
 // Extended ObservedError type with id for local tracking
 interface ObservedErrorWithId extends ObservedError {
@@ -69,97 +68,6 @@ const STUDENT_COLORS = [
   'bg-amber-500 text-white',
 ];
 
-// Mock data for demonstration - in production, fetch from API/Supabase
-function getMockSession(sessionId: string, groupId: string): Session {
-  // Try to find actual session from mock data first
-  const existingSession = MOCK_SESSIONS.find(s => s.id === sessionId);
-  if (existingSession) {
-    return {
-      ...existingSession,
-      anticipated_errors: existingSession.anticipated_errors || [
-        {
-          id: '1',
-          error_pattern: 'Confuses b/d in reading',
-          correction_protocol: 'Use sky writing and tactile letter cards',
-        },
-        {
-          id: '2',
-          error_pattern: 'Omits final consonant in blends',
-          correction_protocol: 'Tap each phoneme, use finger spelling',
-        },
-      ],
-    };
-  }
-
-  // Default session if not found
-  return {
-    id: sessionId,
-    group_id: groupId,
-    date: new Date().toISOString().split('T')[0],
-    time: '09:00',
-    status: 'planned',
-    curriculum_position: { step: 2, substep: '2.1' },
-    advance_after: false,
-    planned_otr_target: 40,
-    planned_response_formats: ['choral', 'individual', 'written'],
-    planned_practice_items: [
-      { item: 'Sound-symbol correspondence', type: 'review' },
-      { item: 'Blending CVC words', type: 'new' },
-    ],
-    cumulative_review_items: [
-      { item: 'Short vowel sounds', type: 'cumulative' },
-    ],
-    anticipated_errors: [
-      {
-        id: '1',
-        error_pattern: 'Confuses b/d in reading',
-        correction_protocol: 'Use sky writing and tactile letter cards',
-      },
-      {
-        id: '2',
-        error_pattern: 'Omits final consonant in blends',
-        correction_protocol: 'Tap each phoneme, use finger spelling',
-      },
-    ],
-    actual_otr_estimate: null,
-    pacing: null,
-    components_completed: null,
-    exit_ticket_correct: null,
-    exit_ticket_total: null,
-    mastery_demonstrated: null,
-    errors_observed: null,
-    unexpected_errors: null,
-    pm_score: null,
-    pm_trend: null,
-    dbi_adaptation_notes: null,
-    notes: null,
-    next_session_notes: null,
-    fidelity_checklist: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-}
-
-function getMockGroup(groupId: string): Group {
-  // Try to find actual group from mock data first
-  const existingGroup = MOCK_GROUPS.find(g => g.id === groupId);
-  if (existingGroup) {
-    return existingGroup;
-  }
-
-  // Default group if not found
-  return {
-    id: groupId,
-    name: 'Group A - Reading Foundations',
-    curriculum: 'wilson' as Curriculum,
-    tier: 2,
-    grade: 3,
-    current_position: { step: 2, substep: '2.1' },
-    schedule: { days: ['monday', 'wednesday', 'friday'], time: '09:00', duration: 45 },
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-}
 
 export default function SessionPage({
   params,
@@ -172,6 +80,7 @@ export default function SessionPage({
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Modal states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -179,7 +88,16 @@ export default function SessionPage({
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
 
   // Store actions
-  const { updateSession, cancelSession } = useSessionsStore();
+  const {
+    selectedSession,
+    fetchSessionById,
+    updateSession,
+    cancelSession,
+    completeSession,
+    isLoading: sessionLoading
+  } = useSessionsStore();
+  const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
+  const { students: storeStudents, fetchStudentsForGroup } = useStudentsStore();
 
   // Session tracking state
   const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
@@ -231,57 +149,131 @@ export default function SessionPage({
     },
   });
 
+  // Fetch session, group, and students from IndexedDB
   useEffect(() => {
-    // In production, fetch from Supabase
-    const mockSession = getMockSession(params.sessionId, params.id);
-    const mockGroup = getMockGroup(params.id);
-
-    // Try to get students for this group ID
-    let mockStudents = getStudentsForGroup(params.id);
-
-    // Fallback: if no students found, try the session's group_id
-    if (mockStudents.length === 0 && mockSession.group_id) {
-      mockStudents = getStudentsForGroup(mockSession.group_id);
-    }
-
-    // Fallback: if still no students, try to find by group name
-    if (mockStudents.length === 0 && mockGroup.name) {
-      const matchingGroup = MOCK_GROUPS.find(g =>
-        g.name.toLowerCase().includes(mockGroup.name.toLowerCase().split(' ')[0])
-      );
-      if (matchingGroup) {
-        mockStudents = getStudentsForGroup(matchingGroup.id);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch session, group, and students in parallel
+        await Promise.all([
+          fetchSessionById(params.sessionId),
+          fetchGroupById(params.id),
+          fetchStudentsForGroup(params.id),
+        ]);
+      } catch (error) {
+        console.error('Error loading session data:', error);
       }
+    };
+    loadData();
+  }, [params.id, params.sessionId, fetchSessionById, fetchGroupById, fetchStudentsForGroup]);
+
+  // Update local state when store data changes
+  useEffect(() => {
+    if (selectedSession) {
+      setSession(selectedSession);
+      setAnticipatedErrors(selectedSession.anticipated_errors || []);
     }
+  }, [selectedSession]);
 
-    // Last fallback: use first group's students for demo
-    if (mockStudents.length === 0) {
-      mockStudents = MOCK_STUDENTS.filter(s => s.group_id === 'group-1');
+  useEffect(() => {
+    if (selectedGroup) {
+      setGroup(selectedGroup);
     }
+  }, [selectedGroup]);
 
-    setSession(mockSession);
-    setGroup(mockGroup);
-    setStudents(mockStudents);
-    setAnticipatedErrors(mockSession.anticipated_errors || []);
-
-    // Initialize per-student OTR tracking
-    const initialOTRs: Record<string, number> = {};
-    mockStudents.forEach((s) => {
-      initialOTRs[s.id] = 0;
-    });
-    setStudentOTRs(initialOTRs);
-
-    setIsLoading(false);
-  }, [params.id, params.sessionId]);
+  useEffect(() => {
+    if (storeStudents && storeStudents.length > 0) {
+      setStudents(storeStudents);
+      // Initialize per-student OTR tracking
+      const initialOTRs: Record<string, number> = {};
+      storeStudents.forEach((s) => {
+        initialOTRs[s.id] = 0;
+      });
+      setStudentOTRs(initialOTRs);
+    }
+    // Set loading to false once we have all required data
+    if (selectedSession && selectedGroup) {
+      setIsLoading(false);
+    }
+  }, [storeStudents, selectedSession, selectedGroup]);
 
   const handleStartSession = () => {
     setIsSessionActive(true);
   };
 
-  const handleCompleteSession = () => {
-    // In production, save to Supabase
-    alert('Session completed! Data would be saved.');
-    router.push(`/groups/${params.id}`);
+  /**
+   * Complete the session and save all tracking data to IndexedDB
+   *
+   * Data saved:
+   * - actual_otr_estimate: Total OTRs from all students
+   * - pacing: Pacing assessment (too_slow, just_right, too_fast)
+   * - mastery_demonstrated: Mastery level (yes, partial, no)
+   * - components_completed: Array of completed lesson components
+   * - exit_ticket_correct/total: Exit ticket scores
+   * - errors_observed: Anticipated errors that were checked, with correction effectiveness
+   * - unexpected_errors: New errors observed during session
+   * - notes: Session notes including voice input
+   */
+  const handleCompleteSession = async () => {
+    if (!session) return;
+
+    setIsSaving(true);
+
+    try {
+      // Calculate total OTRs from student tracking
+      const totalOTRs = getTotalOTRs();
+
+      // Build errors_observed from anticipated errors that were checked
+      const errorsObserved: ObservedError[] = anticipatedErrors
+        .filter((e) => anticipatedErrorsChecked[e.id])
+        .map((e) => {
+          // Calculate if correction worked overall (majority of students)
+          const studentResults = correctionWorked[e.id] || {};
+          const results = Object.values(studentResults).filter(r => r !== null);
+          const workedCount = results.filter(r => r === true).length;
+          const overallWorked = results.length === 0 ? true : workedCount >= results.length / 2;
+
+          return {
+            error_pattern: e.error_pattern,
+            correction_used: e.correction_protocol,
+            correction_worked: overallWorked,
+            add_to_bank: savedToBank[e.id] || false,
+          };
+        });
+
+      // Build completion data
+      const completionData = {
+        actual_otr_estimate: totalOTRs,
+        pacing,
+        mastery_demonstrated: mastery,
+        components_completed: componentsCompleted.length > 0 ? componentsCompleted : null,
+        exit_ticket_correct: exitTicketCorrect,
+        exit_ticket_total: exitTicketTotal,
+        errors_observed: errorsObserved.length > 0 ? errorsObserved : null,
+        unexpected_errors: unexpectedErrors.length > 0 ? unexpectedErrors.map(e => ({
+          error_pattern: e.error_pattern,
+          correction_used: e.correction_used,
+          correction_worked: e.correction_worked,
+          add_to_bank: e.add_to_bank,
+        })) : null,
+        notes: notes || null,
+      };
+
+      // Save to IndexedDB via the sessions store
+      const result = await completeSession(session.id, completionData, true);
+
+      if (result) {
+        // Success - navigate back to group page
+        router.push(`/groups/${params.id}`);
+      } else {
+        throw new Error('Failed to complete session');
+      }
+    } catch (error) {
+      console.error('Error completing session:', error);
+      alert('Failed to save session data. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAnticipatedErrorToggle = (errorId: string) => {
@@ -562,10 +554,25 @@ export default function SessionPage({
                       onSaveToNotes={handleSaveSummaryToNotes}
                     />
                   </div>
-                  <Button variant="primary" onClick={handleCompleteSession} className="min-h-[44px] flex-1 sm:flex-initial">
-                    <Check className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Complete Session</span>
-                    <span className="sm:hidden">Complete</span>
+                  <Button
+                    variant="primary"
+                    onClick={handleCompleteSession}
+                    disabled={isSaving}
+                    className="min-h-[44px] flex-1 sm:flex-initial"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin sm:mr-1" />
+                        <span className="hidden sm:inline">Saving...</span>
+                        <span className="sm:hidden">Saving</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Complete Session</span>
+                        <span className="sm:hidden">Complete</span>
+                      </>
+                    )}
                   </Button>
                 </>
               ) : (

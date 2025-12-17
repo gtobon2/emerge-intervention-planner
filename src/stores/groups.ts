@@ -60,6 +60,7 @@ interface GroupsState {
   error: string | null;
   filter: {
     curriculum: Curriculum | 'all';
+    tier: 2 | 3 | 'all';
     searchQuery: string;
   };
 
@@ -81,6 +82,7 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   error: null,
   filter: {
     curriculum: 'all',
+    tier: 'all',
     searchQuery: '',
   },
 
@@ -260,13 +262,25 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   },
 }));
 
-// Selector for filtered groups
+/**
+ * Selector for filtered groups
+ *
+ * Filters groups by:
+ * - curriculum: Filter by specific curriculum or 'all'
+ * - tier: Filter by tier 2, tier 3, or 'all'
+ * - searchQuery: Case-insensitive search on group name
+ */
 export const useFilteredGroups = () => {
   const { groups, filter } = useGroupsStore();
 
   return groups.filter((group) => {
     // Filter by curriculum
     if (filter.curriculum !== 'all' && group.curriculum !== filter.curriculum) {
+      return false;
+    }
+
+    // Filter by tier
+    if (filter.tier !== 'all' && group.tier !== filter.tier) {
       return false;
     }
 

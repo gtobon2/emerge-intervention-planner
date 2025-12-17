@@ -125,8 +125,13 @@ export default function GroupsPage() {
             />
             <Select
               options={tierOptions}
-              value="all"
-              onChange={() => {}}
+              value={filter.tier === 'all' ? 'all' : String(filter.tier)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFilter({
+                  tier: value === 'all' ? 'all' : (parseInt(value) as 2 | 3)
+                });
+              }}
               className="flex-1 sm:w-32 min-h-[44px]"
             />
           </div>
@@ -142,7 +147,7 @@ export default function GroupsPage() {
         ) : filteredGroups.length === 0 ? (
           <div className="text-center py-12 md:py-16 bg-surface rounded-xl px-4">
             <p className="text-text-muted mb-4">
-              {filter.searchQuery || filter.curriculum !== 'all'
+              {filter.searchQuery || filter.curriculum !== 'all' || filter.tier !== 'all'
                 ? 'No groups match your filters'
                 : 'No groups yet'}
             </p>

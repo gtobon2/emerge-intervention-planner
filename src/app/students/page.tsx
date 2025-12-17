@@ -11,9 +11,9 @@ import { useAllStudents, type StudentWithGroup } from '@/hooks/use-all-students'
 import { useStudentsStore } from '@/stores/students';
 import { useProgressStore } from '@/stores/progress';
 import { useGroupsStore } from '@/stores/groups';
+import { db } from '@/lib/local-db';
 import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
 import { getCurriculumLabel, getTierLabel } from '@/lib/supabase/types';
-import { MOCK_PROGRESS } from '@/lib/mock-data';
 import type { ValidatedStudent } from '@/lib/import-utils';
 
 export default function StudentsPage() {
@@ -83,15 +83,47 @@ export default function StudentsPage() {
     }
   }, [error, clearError]);
 
-  // Load progress data when student is selected
+  /**
+   * Load progress monitoring data from IndexedDB when student is selected
+   *
+   * Fetches PM records for the selected student and converts them
+   * to the ProgressMonitoring type for display.
+   */
   useEffect(() => {
-    if (selectedStudent) {
-      // In a real app, fetch from API. For now, use mock data
-      const studentProgress = MOCK_PROGRESS.filter(
-        (pm) => pm.student_id === selectedStudent.id
-      );
-      setProgressData(studentProgress);
+    async function loadProgressData() {
+      if (!selectedStudent) return;
+
+      try {
+        const numericStudentId = parseInt(selectedStudent.id, 10);
+        if (isNaN(numericStudentId)) return;
+
+        const pmRecords = await db.progressMonitoring
+          .where('student_id')
+          .equals(numericStudentId)
+          .toArray();
+
+        // Convert to ProgressMonitoring type
+        const studentProgress: ProgressMonitoring[] = pmRecords.map(pm => ({
+          id: String(pm.id),
+          student_id: pm.student_id ? String(pm.student_id) : null,
+          group_id: String(pm.group_id),
+          date: pm.date,
+          measure_type: pm.measure_type,
+          score: pm.score,
+          benchmark: pm.benchmark,
+          goal: pm.goal,
+          notes: pm.notes,
+          created_at: pm.created_at,
+        }));
+
+        setProgressData(studentProgress);
+      } catch (error) {
+        console.error('Error loading progress data:', error);
+        setProgressData([]);
+      }
     }
+
+    loadProgressData();
   }, [selectedStudent]);
 
   const handleAddStudent = () => {

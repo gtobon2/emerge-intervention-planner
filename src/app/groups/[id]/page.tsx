@@ -24,7 +24,8 @@ import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
-import type { Session } from '@/lib/supabase/types';
+import { db } from '@/lib/local-db';
+import type { Session, PMTrend } from '@/lib/supabase/types';
 
 export default function GroupDetailPage() {
   const params = useParams();
@@ -41,6 +42,7 @@ export default function GroupDetailPage() {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [pmTrend, setPmTrend] = useState<PMTrend | null>(null);
 
   useEffect(() => {
     if (groupId) {
@@ -48,6 +50,62 @@ export default function GroupDetailPage() {
       fetchSessionsForGroup(groupId);
     }
   }, [groupId, fetchGroupById, fetchSessionsForGroup]);
+
+  /**
+   * Calculate PM Trend for the group
+   *
+   * Uses last 3 PM data points to determine trend:
+   * - 'improving': Most recent scores show upward movement (>5% increase)
+   * - 'flat': Scores relatively stable (within 5% variance)
+   * - 'declining': Most recent scores show downward movement (>5% decrease)
+   * - null: Not enough data points (less than 2)
+   */
+  useEffect(() => {
+    async function calculatePMTrend() {
+      if (!groupId) return;
+
+      try {
+        const numericGroupId = parseInt(groupId, 10);
+        if (isNaN(numericGroupId)) return;
+
+        // Get PM records for this group, sorted by date descending
+        const pmRecords = await db.progressMonitoring
+          .where('group_id')
+          .equals(numericGroupId)
+          .toArray();
+
+        if (pmRecords.length < 2) {
+          setPmTrend(null);
+          return;
+        }
+
+        // Sort by date descending (most recent first)
+        const sortedRecords = pmRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+        // Take last 3 records (or all if less than 3)
+        const recentRecords = sortedRecords.slice(0, 3);
+
+        // Calculate trend based on score changes
+        // Compare most recent to oldest in the sample
+        const mostRecent = recentRecords[0].score;
+        const oldest = recentRecords[recentRecords.length - 1].score;
+        const percentChange = ((mostRecent - oldest) / oldest) * 100;
+
+        if (percentChange > 5) {
+          setPmTrend('improving');
+        } else if (percentChange < -5) {
+          setPmTrend('declining');
+        } else {
+          setPmTrend('flat');
+        }
+      } catch (error) {
+        console.error('Error calculating PM trend:', error);
+        setPmTrend(null);
+      }
+    }
+
+    calculatePMTrend();
+  }, [groupId, sessions]); // Re-calculate when sessions change (might have new PM data)
 
   const handlePlanSession = async (data: SessionPlanData) => {
     await createSession({
@@ -240,10 +298,28 @@ export default function GroupDetailPage() {
           </Card>
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-5 h-5 text-movement" />
-              <span className="text-2xl font-bold text-text-primary">--</span>
+              <TrendingUp className={`w-5 h-5 ${
+                pmTrend === 'improving' ? 'text-emerald-500' :
+                pmTrend === 'declining' ? 'text-red-500' :
+                pmTrend === 'flat' ? 'text-amber-500' :
+                'text-movement'
+              }`} />
+              <span className={`text-2xl font-bold ${
+                pmTrend === 'improving' ? 'text-emerald-600' :
+                pmTrend === 'declining' ? 'text-red-600' :
+                pmTrend === 'flat' ? 'text-amber-600' :
+                'text-text-primary'
+              }`}>
+                {pmTrend ? (
+                  pmTrend === 'improving' ? '↑' :
+                  pmTrend === 'declining' ? '↓' :
+                  '→'
+                ) : '--'}
+              </span>
             </div>
-            <p className="text-sm text-text-muted">PM Trend</p>
+            <p className="text-sm text-text-muted">
+              {pmTrend ? `PM: ${pmTrend === 'flat' ? 'Stable' : pmTrend.charAt(0).toUpperCase() + pmTrend.slice(1)}` : 'PM Trend'}
+            </p>
           </Card>
         </div>
 
