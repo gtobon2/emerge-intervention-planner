@@ -39,7 +39,16 @@ import type {
 } from '@/lib/supabase/types';
 import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
-import { EditSessionModal, CancelSessionModal, PlanSessionModal, SessionPlanData } from '@/components/sessions';
+import {
+  EditSessionModal,
+  CancelSessionModal,
+  PlanSessionModal,
+  SessionPlanData,
+  StudentOTRPanel,
+  LessonComponentsPanel,
+  SessionNotesPanel,
+  WILSON_LESSON_COMPONENTS,
+} from '@/components/sessions';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
@@ -51,7 +60,9 @@ interface ObservedErrorWithId extends ObservedError {
   student_id?: string;
 }
 
-// Get initials from student name
+/**
+ * Get initials from student name (used in error tracking UI)
+ */
 function getInitials(name: string): string {
   return name
     .split(' ')
@@ -61,7 +72,9 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-// Student circle colors (rotating palette)
+/**
+ * Student circle colors (used in error tracking UI)
+ */
 const STUDENT_COLORS = [
   'bg-movement text-white',
   'bg-emerald-500 text-white',
@@ -69,7 +82,6 @@ const STUDENT_COLORS = [
   'bg-purple-500 text-white',
   'bg-amber-500 text-white',
 ];
-
 
 export default function SessionPage({
   params,
@@ -514,16 +526,6 @@ export default function SessionPage({
     );
   }
 
-  const lessonComponents = [
-    { name: 'Quickdrill', duration: 5 },
-    { name: 'Sound Cards', duration: 3 },
-    { name: 'Word Cards', duration: 5 },
-    { name: 'Word List', duration: 5 },
-    { name: 'Sentence Reading', duration: 5 },
-    { name: 'Dictation', duration: 10 },
-    { name: 'Passage Reading', duration: 10 },
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -739,52 +741,12 @@ export default function SessionPage({
             {/* Main tracking area */}
             <div className="lg:col-span-2 space-y-6">
               {/* Student Circles - Per-student tracking */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium text-gray-700">
-                    Students in Session
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    {students.map((student, index) => (
-                      <button
-                        key={student.id}
-                        onClick={() => handleStudentOTR(student.id)}
-                        className={`
-                          flex flex-col items-center gap-1 p-2 rounded-lg transition-all
-                          hover:bg-gray-50 active:scale-95 min-w-[70px]
-                        `}
-                        title={`${student.name} - Click to add OTR`}
-                      >
-                        <div
-                          className={`
-                            w-12 h-12 rounded-full flex items-center justify-center
-                            text-lg font-bold shadow-md transition-transform
-                            hover:scale-110 cursor-pointer
-                            ${STUDENT_COLORS[index % STUDENT_COLORS.length]}
-                          `}
-                        >
-                          {getInitials(student.name)}
-                        </div>
-                        <span className="text-xs text-gray-600 font-medium truncate max-w-[70px]">
-                          {student.name.split(' ')[0]}
-                        </span>
-                        <span className="text-xs font-bold text-movement">
-                          {studentOTRs[student.id] || 0} OTRs
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-4 pt-4 border-t text-center">
-                    <p className="text-sm text-gray-500">Total OTRs</p>
-                    <p className="text-3xl font-bold text-movement">{getTotalOTRs()}</p>
-                    <p className="text-xs text-gray-400">
-                      Target: {session.planned_otr_target || 40}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <StudentOTRPanel
+                students={students}
+                studentOTRs={studentOTRs}
+                targetOTR={session.planned_otr_target || 40}
+                onStudentOTR={handleStudentOTR}
+              />
 
               {/* OTR Counter - Group level */}
               <Card>
@@ -794,100 +756,21 @@ export default function SessionPage({
               </Card>
 
               {/* Lesson Components Checklist */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-emerald-500" />
-                    Lesson Components
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {lessonComponents.map((component) => (
-                      <button
-                        key={component.name}
-                        onClick={() => handleComponentToggle(component.name)}
-                        className={`p-3 md:p-4 rounded-lg border text-left transition-all min-h-[60px] ${
-                          componentsCompleted.includes(component.name)
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                            : 'bg-white border-gray-200 hover:border-gray-300 active:scale-98'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {componentsCompleted.includes(component.name) ? (
-                            <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
-                          )}
-                          <span className="font-medium text-sm md:text-base">
-                            {component.name}
-                          </span>
-                        </div>
-                        <span className="text-xs text-gray-500 ml-7">
-                          {component.duration} min
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <LessonComponentsPanel
+                components={WILSON_LESSON_COMPONENTS}
+                completedComponents={componentsCompleted}
+                onToggle={handleComponentToggle}
+              />
 
               {/* Notes */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-blue-500" />
-                      Session Notes
-                    </CardTitle>
-                    {isVoiceSupported && (
-                      <button
-                        type="button"
-                        onClick={toggleVoiceInput}
-                        className={`
-                          flex items-center gap-2 px-3 py-2 rounded-lg transition-all
-                          ${
-                            isListening
-                              ? 'bg-red-500 text-white animate-pulse shadow-lg'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }
-                        `}
-                        title={isListening ? 'Stop voice input' : 'Click to start voice input'}
-                      >
-                        <Mic className="w-4 h-4" />
-                        {isListening && (
-                          <>
-                            <span className="w-2 h-2 bg-white rounded-full" />
-                            <span className="text-sm font-medium">Recording</span>
-                          </>
-                        )}
-                        {!isListening && <span className="text-sm">Voice Input</span>}
-                      </button>
-                    )}
-                  </div>
-                  {isListening && (
-                    <p className="text-sm text-movement mt-2 animate-pulse">
-                      Listening... speak now
-                    </p>
-                  )}
-                  {voiceError && (
-                    <p className="text-sm text-red-500 mt-2">{voiceError}</p>
-                  )}
-                  {!isVoiceSupported && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Voice input not supported in this browser. Use Chrome, Edge, or Safari for voice features.
-                    </p>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full h-32 p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-movement focus:border-movement"
-                    placeholder="Add observations, student responses, or notes for next session..."
-                  />
-                </CardContent>
-              </Card>
+              <SessionNotesPanel
+                notes={notes}
+                onNotesChange={setNotes}
+                isListening={isListening}
+                isVoiceSupported={isVoiceSupported}
+                voiceError={voiceError}
+                onToggleVoice={toggleVoiceInput}
+              />
             </div>
 
             {/* Side panel - Error tracking */}
