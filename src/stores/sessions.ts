@@ -111,14 +111,22 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
     try {
       const localSessions = await db.sessions.orderBy('date').reverse().toArray();
-      const sessionsWithGroups: SessionWithGroup[] = [];
 
-      for (const session of localSessions) {
-        const group = await db.groups.get(session.group_id);
-        if (group) {
-          sessionsWithGroups.push(mapLocalToSessionWithGroup(session, group));
-        }
-      }
+      // Batch fetch all groups to avoid N+1 queries
+      const uniqueGroupIds = [...new Set(localSessions.map(s => s.group_id))];
+      const groups = await db.groups.bulkGet(uniqueGroupIds);
+      const groupMap = new Map(
+        groups.filter((g): g is NonNullable<typeof g> => g !== undefined)
+          .map(g => [g.id!, g])
+      );
+
+      const sessionsWithGroups: SessionWithGroup[] = localSessions
+        .map(session => {
+          const group = groupMap.get(session.group_id);
+          if (!group) return null;
+          return mapLocalToSessionWithGroup(session, group);
+        })
+        .filter((s): s is SessionWithGroup => s !== null);
 
       set({ allSessions: sessionsWithGroups, isLoading: false });
     } catch (err) {
@@ -167,12 +175,19 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         .equals(today)
         .toArray();
 
-      const todaySessions: TodaySession[] = [];
+      // Batch fetch all groups to avoid N+1 queries
+      const uniqueGroupIds = [...new Set(localSessions.map(s => s.group_id))];
+      const groups = await db.groups.bulkGet(uniqueGroupIds);
+      const groupMap = new Map(
+        groups.filter((g): g is NonNullable<typeof g> => g !== undefined)
+          .map(g => [g.id!, g])
+      );
 
-      for (const session of localSessions) {
-        const group = await db.groups.get(session.group_id);
-        if (group) {
-          todaySessions.push({
+      const todaySessions: TodaySession[] = localSessions
+        .map(session => {
+          const group = groupMap.get(session.group_id);
+          if (!group) return null;
+          return {
             id: String(session.id),
             groupId: String(session.group_id),
             groupName: group.name,
@@ -181,9 +196,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
             time: session.time || '',
             status: session.status,
             position: session.curriculum_position,
-          });
-        }
-      }
+          } as TodaySession;
+        })
+        .filter((s): s is TodaySession => s !== null);
 
       // Sort by time
       todaySessions.sort((a, b) => {

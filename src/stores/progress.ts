@@ -77,15 +77,25 @@ export const useProgressStore = create<ProgressState>((set) => ({
         .equals(numericGroupId)
         .sortBy('date');
 
-      // Fetch students for the data with student info
-      const dataWithStudents: ProgressMonitoringWithStudent[] = [];
-      for (const pm of localData) {
-        let student: LocalStudent | null = null;
-        if (pm.student_id !== null) {
-          student = (await db.students.get(pm.student_id)) || null;
-        }
-        dataWithStudents.push(mapLocalToProgressWithStudent(pm, student));
-      }
+      // Batch fetch all students to avoid N+1 queries
+      const uniqueStudentIds = [...new Set(
+        localData
+          .filter(pm => pm.student_id !== null)
+          .map(pm => pm.student_id as number)
+      )];
+      const students = uniqueStudentIds.length > 0
+        ? await db.students.bulkGet(uniqueStudentIds)
+        : [];
+      const studentMap = new Map(
+        students
+          .filter((s): s is NonNullable<typeof s> => s !== undefined)
+          .map(s => [s.id!, s])
+      );
+
+      const dataWithStudents: ProgressMonitoringWithStudent[] = localData.map(pm => {
+        const student = pm.student_id !== null ? studentMap.get(pm.student_id) || null : null;
+        return mapLocalToProgressWithStudent(pm, student);
+      });
 
       const data = localData.map(mapLocalToProgress);
 
