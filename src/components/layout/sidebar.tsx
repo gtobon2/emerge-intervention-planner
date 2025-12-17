@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import {
   LayoutDashboard,
   Users,
+  UserCheck,
   Calendar,
   TrendingUp,
   Settings,
@@ -20,6 +21,7 @@ import { useUIStore } from '@/stores/ui';
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/groups', label: 'Groups', icon: Users },
+  { href: '/students', label: 'Students', icon: UserCheck },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/progress', label: 'Progress', icon: TrendingUp },
   { href: '/error-bank', label: 'Error Bank', icon: BookOpen },
