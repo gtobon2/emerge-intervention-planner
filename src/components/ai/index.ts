@@ -6,3 +6,6 @@ export type { AIErrorSuggestionsProps, ErrorSuggestion } from './ai-error-sugges
 
 export { AISessionSummary } from './ai-session-summary';
 export type { AISessionSummaryProps } from './ai-session-summary';
+
+export { AIChat } from './ai-chat';
+export type { AIChatProps } from './ai-chat';

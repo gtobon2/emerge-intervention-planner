@@ -1,11 +1,12 @@
 'use client';
 
 import { ReactNode, useState } from 'react';
-import { Menu, User, LogOut, ChevronDown, HelpCircle } from 'lucide-react';
+import { Menu, User, LogOut, ChevronDown, HelpCircle, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { GlobalSearch } from '@/components/search';
+import { AIChat } from '@/components/ai';
 import { useUIStore } from '@/stores/ui';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotificationGenerator } from '@/hooks/use-notifications';
@@ -22,6 +23,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { toggleHelpPanel, hasSeenOnboarding, startTour } = useHelpStore();
   const router = useRouter();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
 
   // Automatically generate notifications
   useNotificationGenerator();
@@ -210,6 +212,21 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Help System */}
       <HelpPanel />
       <OnboardingTour />
+
+      {/* Floating AI Assistant Button */}
+      <button
+        onClick={() => setShowAIChat(true)}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all flex items-center justify-center group"
+        aria-label="Open AI Assistant"
+      >
+        <Sparkles className="w-6 h-6 group-hover:scale-110 transition-transform" />
+      </button>
+
+      {/* AI Chat Modal */}
+      <AIChat
+        isOpen={showAIChat}
+        onClose={() => setShowAIChat(false)}
+      />
     </div>
   );
 }

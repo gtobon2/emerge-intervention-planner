@@ -21,3 +21,22 @@ export {
   generateVoiceNotePrompt,
   generatePatternAnalysisPrompt,
 } from './prompts';
+
+export {
+  createMaskingContext,
+  maskStudent,
+  maskTextContent,
+  unmaskTextContent,
+  maskStudentDataForAI,
+  createMaskingLegend,
+  serializeMaskingContext,
+  deserializeMaskingContext,
+  unmaskStudentId,
+} from './pii-mask';
+
+export type {
+  MaskedStudent,
+  PIIMaskingContext,
+  StudentDataForAI,
+  MaskedStudentData,
+} from './pii-mask';
