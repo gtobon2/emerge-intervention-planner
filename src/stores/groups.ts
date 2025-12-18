@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Group, GroupInsert, GroupUpdate, Curriculum, GroupWithStudents } from '@/lib/supabase/types';
+import type { Group, GroupInsert, GroupUpdate, Curriculum, Tier, GroupWithStudents } from '@/lib/supabase/types';
 
 interface GroupsState {
   groups: GroupWithStudents[];
@@ -8,6 +8,7 @@ interface GroupsState {
   error: string | null;
   filter: {
     curriculum: Curriculum | 'all';
+    tier: Tier | 'all';
     searchQuery: string;
   };
 
@@ -29,6 +30,7 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
   error: null,
   filter: {
     curriculum: 'all',
+    tier: 'all',
     searchQuery: '',
   },
 
@@ -143,6 +145,11 @@ export const useFilteredGroups = () => {
   return groups.filter((group) => {
     // Filter by curriculum
     if (filter.curriculum !== 'all' && group.curriculum !== filter.curriculum) {
+      return false;
+    }
+
+    // Filter by tier
+    if (filter.tier !== 'all' && group.tier !== filter.tier) {
       return false;
     }
 

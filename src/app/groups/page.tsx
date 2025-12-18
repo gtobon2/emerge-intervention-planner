@@ -7,7 +7,7 @@ import { Button, Input, Select } from '@/components/ui';
 import { GroupCard } from '@/components/dashboard';
 import { CreateGroupModal } from '@/components/forms';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
-import type { Curriculum } from '@/lib/supabase/types';
+import type { Curriculum, Tier } from '@/lib/supabase/types';
 
 const curriculumOptions = [
   { value: 'all', label: 'All Curricula' },
@@ -75,8 +75,11 @@ export default function GroupsPage() {
           />
           <Select
             options={tierOptions}
-            value="all"
-            onChange={() => {}}
+            value={filter.tier === 'all' ? 'all' : String(filter.tier)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setFilter({ tier: value === 'all' ? 'all' : (parseInt(value) as Tier) });
+            }}
             className="w-32"
           />
         </div>
@@ -91,7 +94,7 @@ export default function GroupsPage() {
         ) : filteredGroups.length === 0 ? (
           <div className="text-center py-16 bg-surface rounded-xl">
             <p className="text-text-muted mb-4">
-              {filter.searchQuery || filter.curriculum !== 'all'
+              {filter.searchQuery || filter.curriculum !== 'all' || filter.tier !== 'all'
                 ? 'No groups match your filters'
                 : 'No groups yet'}
             </p>

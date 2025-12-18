@@ -145,7 +145,7 @@ export default function SessionRunPage() {
                 <div>
                   <p className="text-sm text-text-muted">OTR Count</p>
                   <p className="text-xl font-bold text-text-primary">
-                    {selectedSession.actual_otr_estimate || '-'}
+                    {selectedSession.actual_otr_count || '-'}
                   </p>
                 </div>
                 <div>

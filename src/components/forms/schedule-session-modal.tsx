@@ -50,7 +50,7 @@ export function ScheduleSessionModal({
       cumulative_review_items: null,
       anticipated_errors: null,
       // Logging fields (filled after session)
-      actual_otr_estimate: null,
+      actual_otr_count: null,
       pacing: null,
       components_completed: null,
       exit_ticket_correct: null,

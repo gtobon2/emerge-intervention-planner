@@ -166,7 +166,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       // Update session with completion data
       const sessionUpdates: SessionUpdate = {
         status: 'completed',
-        actual_otr_estimate: data.actual_otr_count,
+        actual_otr_count: data.actual_otr_count,
         pacing: data.pacing,
         components_completed: data.components_completed,
         exit_ticket_correct: data.exit_ticket_correct,

@@ -118,7 +118,7 @@ export interface Session {
   anticipated_errors: AnticipatedError[] | null;
 
   // Logging fields (AFTER session)
-  actual_otr_estimate: number | null;
+  actual_otr_count: number | null;
   pacing: Pacing | null;
   components_completed: string[] | null;
   exit_ticket_correct: number | null;

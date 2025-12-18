@@ -52,7 +52,7 @@ ${components}
 
 PRACTICE DATA:
 - Planned OTR target: ${session.planned_otr_target || 'Not set'}
-- Actual OTR estimate: ${session.actual_otr_estimate || 'Not recorded'}
+- Actual OTR count: ${session.actual_otr_count || 'Not recorded'}
 - Pacing: ${session.pacing || 'Not recorded'}
 - Response formats used: ${session.planned_response_formats?.join(', ') || 'Not recorded'}
 
