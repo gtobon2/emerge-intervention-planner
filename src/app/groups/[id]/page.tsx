@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
+import { AddStudentModal, ScheduleSessionModal } from '@/components/forms';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
@@ -26,12 +27,23 @@ export default function GroupDetailPage() {
   const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
   const { sessions, fetchSessionsForGroup, isLoading: sessionsLoading } = useSessionsStore();
 
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [showScheduleSession, setShowScheduleSession] = useState(false);
+
   useEffect(() => {
     if (groupId) {
       fetchGroupById(groupId);
       fetchSessionsForGroup(groupId);
     }
   }, [groupId, fetchGroupById, fetchSessionsForGroup]);
+
+  const handleStudentsAdded = () => {
+    fetchGroupById(groupId); // Refresh to get new students
+  };
+
+  const handleSessionScheduled = () => {
+    fetchSessionsForGroup(groupId); // Refresh sessions
+  };
 
   if (groupLoading || !selectedGroup) {
     return (
@@ -86,7 +98,7 @@ export default function GroupDetailPage() {
               <Settings className="w-4 h-4" />
               Edit
             </Button>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => setShowScheduleSession(true)}>
               <Plus className="w-4 h-4" />
               Plan Session
             </Button>
@@ -155,7 +167,11 @@ export default function GroupDetailPage() {
                   <div className="text-center py-8 text-text-muted">
                     <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>No sessions yet</p>
-                    <Button variant="secondary" className="mt-4">
+                    <Button
+                      variant="secondary"
+                      className="mt-4"
+                      onClick={() => setShowScheduleSession(true)}
+                    >
                       Plan First Session
                     </Button>
                   </div>
@@ -194,7 +210,12 @@ export default function GroupDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Students</span>
-                  <Button variant="ghost" size="sm" className="gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => setShowAddStudent(true)}
+                  >
                     <Plus className="w-4 h-4" />
                     Add
                   </Button>
@@ -223,6 +244,23 @@ export default function GroupDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Add Student Modal */}
+      <AddStudentModal
+        isOpen={showAddStudent}
+        onClose={() => setShowAddStudent(false)}
+        groupId={groupId}
+        groupName={selectedGroup.name}
+        onStudentsAdded={handleStudentsAdded}
+      />
+
+      {/* Schedule Session Modal */}
+      <ScheduleSessionModal
+        isOpen={showScheduleSession}
+        onClose={() => setShowScheduleSession(false)}
+        group={selectedGroup}
+        onScheduled={handleSessionScheduled}
+      />
     </AppLayout>
   );
 }

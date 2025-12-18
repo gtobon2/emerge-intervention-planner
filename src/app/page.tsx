@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
-import { Plus, Filter } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Filter, Users } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select } from '@/components/ui';
 import { GroupCard, TodaySchedule, QuickStats } from '@/components/dashboard';
+import { CreateGroupModal } from '@/components/forms';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import type { Curriculum, QuickStats as QuickStatsType } from '@/lib/supabase/types';
@@ -23,10 +24,16 @@ export default function DashboardPage() {
   const { fetchTodaySessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
   const filteredGroups = useFilteredGroups();
 
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+
   useEffect(() => {
     fetchGroups();
     fetchTodaySessions();
   }, [fetchGroups, fetchTodaySessions]);
+
+  const handleGroupCreated = () => {
+    fetchGroups(); // Refresh groups list
+  };
 
   // Calculate quick stats (would be fetched from API in production)
   const stats: QuickStatsType = {
@@ -47,9 +54,9 @@ export default function DashboardPage() {
               Welcome back! Here&apos;s your intervention overview.
             </p>
           </div>
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            New Session
+          <Button className="gap-2" onClick={() => setShowCreateGroup(true)}>
+            <Users className="w-4 h-4" />
+            New Group
           </Button>
         </div>
 
@@ -82,7 +89,9 @@ export default function DashboardPage() {
             ) : filteredGroups.length === 0 ? (
               <div className="text-center py-12 bg-surface rounded-xl">
                 <p className="text-text-muted mb-4">No groups found</p>
-                <Button variant="secondary">Create Your First Group</Button>
+                <Button variant="secondary" onClick={() => setShowCreateGroup(true)}>
+                  Create Your First Group
+                </Button>
               </div>
             ) : (
               <div className="grid md:grid-cols-2 gap-4">
@@ -106,6 +115,13 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        isOpen={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onCreated={handleGroupCreated}
+      />
     </AppLayout>
   );
 }
