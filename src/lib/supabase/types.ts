@@ -3,7 +3,7 @@
 
 export type Curriculum = 'wilson' | 'delta_math' | 'camino' | 'wordgen' | 'amira';
 export type Tier = 2 | 3;
-export type SessionStatus = 'planned' | 'completed' | 'cancelled';
+export type SessionStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
 export type Pacing = 'too_slow' | 'just_right' | 'too_fast';
 export type MasteryLevel = 'yes' | 'no' | 'partial';
 export type PMTrend = 'improving' | 'flat' | 'declining';

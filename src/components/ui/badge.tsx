@@ -7,7 +7,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'curriculum' | 'tier' | 'status';
   curriculum?: Curriculum;
   tier?: Tier;
-  status?: 'planned' | 'completed' | 'cancelled';
+  status?: 'planned' | 'in_progress' | 'completed' | 'cancelled';
 }
 
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
@@ -35,6 +35,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       if (variant === 'status' && status) {
         const statusColors = {
           planned: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+          in_progress: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
           completed: 'bg-green-500/20 text-green-400 border border-green-500/30',
           cancelled: 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
         };
@@ -83,9 +84,10 @@ export const TierBadge = ({ tier }: { tier: Tier }) => {
   );
 };
 
-export const StatusBadge = ({ status }: { status: 'planned' | 'completed' | 'cancelled' }) => {
+export const StatusBadge = ({ status }: { status: 'planned' | 'in_progress' | 'completed' | 'cancelled' }) => {
   const labels = {
     planned: 'Planned',
+    in_progress: 'In Progress',
     completed: 'Completed',
     cancelled: 'Cancelled'
   };

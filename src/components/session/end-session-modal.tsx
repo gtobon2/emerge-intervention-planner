@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, Plus, Trash2, User } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Plus, Trash2, User, Mic, Sparkles } from 'lucide-react';
 import { Modal, Button, Input, Textarea, Select, Checkbox } from '@/components/ui';
+import { VoiceButton } from '@/components/ui/voice-input';
 import { useUIStore } from '@/stores/ui';
 import { useSessionsStore, type StudentErrorInput, type SessionCompletionData } from '@/stores/sessions';
 import type { Student, Pacing, MasteryLevel } from '@/lib/supabase/types';
@@ -19,6 +20,7 @@ interface EndSessionModalProps {
   sessionId: string;
   students: Student[];
   onComplete?: () => void;
+  prefilledErrors?: StudentErrorInput[];
 }
 
 const pacingOptions = [
@@ -41,6 +43,7 @@ export function EndSessionModal({
   sessionId,
   students,
   onComplete,
+  prefilledErrors = [],
 }: EndSessionModalProps) {
   const { otrCount, resetOTR } = useUIStore();
   const { completeSession, isLoading } = useSessionsStore();
@@ -52,8 +55,12 @@ export function EndSessionModal({
   const [notes, setNotes] = useState('');
   const [nextSessionNotes, setNextSessionNotes] = useState('');
 
-  // Per-student errors
-  const [studentErrors, setStudentErrors] = useState<StudentErrorInput[]>([]);
+  // AI summary
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [loadingAiSummary, setLoadingAiSummary] = useState(false);
+
+  // Per-student errors - initialize with prefilled
+  const [studentErrors, setStudentErrors] = useState<StudentErrorInput[]>(prefilledErrors);
   const [newError, setNewError] = useState({
     studentId: '',
     errorPattern: '',
@@ -71,8 +78,12 @@ export function EndSessionModal({
     if (isOpen) {
       setActualOtr(otrCount);
       setExitTickets(students.map(s => ({ studentId: s.id, correct: 0, total: 0 })));
+      // Merge prefilled errors
+      if (prefilledErrors.length > 0) {
+        setStudentErrors(prefilledErrors);
+      }
     }
-  }, [isOpen, otrCount, students]);
+  }, [isOpen, otrCount, students, prefilledErrors]);
 
   const addStudentError = () => {
     if (!newError.studentId || !newError.errorPattern) return;
@@ -103,6 +114,47 @@ export function EndSessionModal({
     setExitTickets(exitTickets.map(et =>
       et.studentId === studentId ? { ...et, [field]: value } : et
     ));
+  };
+
+  // Voice input handlers
+  const handleVoiceNotes = (text: string) => {
+    setNotes(prev => prev ? `${prev} ${text}` : text);
+  };
+
+  const handleVoiceNextNotes = (text: string) => {
+    setNextSessionNotes(prev => prev ? `${prev} ${text}` : text);
+  };
+
+  // Generate AI summary
+  const generateAiSummary = async () => {
+    setLoadingAiSummary(true);
+    try {
+      const response = await fetch('/api/ai/session-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          otrCount: actualOtr,
+          pacing,
+          mastery,
+          exitTickets,
+          studentErrors,
+          notes,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAiSummary(data.summary);
+        // Optionally append to notes
+        if (data.summary) {
+          setNotes(prev => prev ? `${prev}\n\nAI Summary: ${data.summary}` : `AI Summary: ${data.summary}`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate AI summary:', error);
+    } finally {
+      setLoadingAiSummary(false);
+    }
   };
 
   const handleComplete = async () => {
@@ -225,7 +277,7 @@ export function EndSessionModal({
         {/* Per-Student Errors */}
         <div>
           <label className="block text-sm font-medium text-text-primary mb-2">
-            Student Errors Observed
+            Student Errors Observed ({studentErrors.length})
           </label>
 
           {/* Existing errors */}
@@ -308,30 +360,49 @@ export function EndSessionModal({
           </div>
         </div>
 
-        {/* Notes */}
+        {/* Notes with Voice Input */}
         <div>
           <label className="block text-sm font-medium text-text-primary mb-2">
             Session Notes
           </label>
-          <Textarea
-            placeholder="Any observations from today's session..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-          />
+          <div className="flex gap-2">
+            <Textarea
+              placeholder="Any observations from today's session..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="flex-1"
+            />
+            <div className="flex flex-col gap-2">
+              <VoiceButton onTranscript={handleVoiceNotes} />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={generateAiSummary}
+                disabled={loadingAiSummary}
+                title="Generate AI summary"
+              >
+                <Sparkles className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Next Session Notes */}
+        {/* Next Session Notes with Voice Input */}
         <div>
           <label className="block text-sm font-medium text-text-primary mb-2">
             Notes for Next Session
           </label>
-          <Textarea
-            placeholder="What to remember or focus on next time..."
-            value={nextSessionNotes}
-            onChange={(e) => setNextSessionNotes(e.target.value)}
-            rows={2}
-          />
+          <div className="flex gap-2">
+            <Textarea
+              placeholder="What to remember or focus on next time..."
+              value={nextSessionNotes}
+              onChange={(e) => setNextSessionNotes(e.target.value)}
+              rows={2}
+              className="flex-1"
+            />
+            <VoiceButton onTranscript={handleVoiceNextNotes} />
+          </div>
         </div>
 
         {/* Actions */}
