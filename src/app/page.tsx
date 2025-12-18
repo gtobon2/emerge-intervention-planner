@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Plus, Filter, Users } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select } from '@/components/ui';
@@ -8,7 +8,7 @@ import { GroupCard, TodaySchedule, QuickStats } from '@/components/dashboard';
 import { CreateGroupModal } from '@/components/forms';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
-import type { Curriculum, QuickStats as QuickStatsType } from '@/lib/supabase/types';
+import type { Curriculum, QuickStats as QuickStatsType, Session } from '@/lib/supabase/types';
 
 const curriculumOptions = [
   { value: 'all', label: 'All Curricula' },
@@ -19,29 +19,82 @@ const curriculumOptions = [
   { value: 'amira', label: 'Amira Learning' },
 ];
 
+// Helper to get week boundaries
+function getWeekBoundaries() {
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay()); // Sunday
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+  return { weekStart, weekEnd };
+}
+
 export default function DashboardPage() {
-  const { fetchGroups, isLoading: groupsLoading, filter, setFilter } = useGroupsStore();
+  const { groups, fetchGroups, isLoading: groupsLoading, filter, setFilter } = useGroupsStore();
   const { fetchTodaySessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
   const filteredGroups = useFilteredGroups();
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [allSessions, setAllSessions] = useState<Session[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
   useEffect(() => {
     fetchGroups();
     fetchTodaySessions();
   }, [fetchGroups, fetchTodaySessions]);
 
+  // Fetch all sessions from all groups for stats
+  useEffect(() => {
+    const fetchAllSessions = async () => {
+      if (groups.length === 0) return;
+
+      setLoadingSessions(true);
+      const sessionsPromises = groups.map(async (group) => {
+        const response = await fetch(`/api/sessions?groupId=${group.id}`);
+        if (response.ok) {
+          return response.json();
+        }
+        return [];
+      });
+
+      const results = await Promise.all(sessionsPromises);
+      setAllSessions(results.flat());
+      setLoadingSessions(false);
+    };
+
+    fetchAllSessions();
+  }, [groups]);
+
   const handleGroupCreated = () => {
     fetchGroups(); // Refresh groups list
   };
 
-  // Calculate quick stats (would be fetched from API in production)
-  const stats: QuickStatsType = {
-    sessionsThisWeek: todaySessions.length * 5, // Placeholder
-    sessionsCompleted: todaySessions.filter(s => s.status === 'completed').length,
-    groupsNeedingAttention: 0,
-    pmDataPointsDue: 3,
-  };
+  // Calculate quick stats
+  const stats: QuickStatsType = useMemo(() => {
+    const { weekStart, weekEnd } = getWeekBoundaries();
+
+    const sessionsThisWeek = allSessions.filter((s) => {
+      const sessionDate = new Date(s.date);
+      return sessionDate >= weekStart && sessionDate < weekEnd;
+    }).length;
+
+    const completedThisWeek = allSessions.filter((s) => {
+      const sessionDate = new Date(s.date);
+      return (
+        sessionDate >= weekStart &&
+        sessionDate < weekEnd &&
+        s.status === 'completed'
+      );
+    }).length;
+
+    return {
+      sessionsThisWeek,
+      sessionsCompleted: completedThisWeek,
+      groupsNeedingAttention: 0, // Could be calculated based on PM trends
+      pmDataPointsDue: 0, // Could be calculated based on schedule
+    };
+  }, [allSessions]);
 
   return (
     <AppLayout>

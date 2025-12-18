@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
-import { AddStudentModal, ScheduleSessionModal } from '@/components/forms';
+import { AddStudentModal, ScheduleSessionModal, EditGroupModal } from '@/components/forms';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
@@ -29,6 +29,7 @@ export default function GroupDetailPage() {
 
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showScheduleSession, setShowScheduleSession] = useState(false);
+  const [showEditGroup, setShowEditGroup] = useState(false);
 
   useEffect(() => {
     if (groupId) {
@@ -43,6 +44,10 @@ export default function GroupDetailPage() {
 
   const handleSessionScheduled = () => {
     fetchSessionsForGroup(groupId); // Refresh sessions
+  };
+
+  const handleGroupUpdated = () => {
+    fetchGroupById(groupId); // Refresh group data
   };
 
   if (groupLoading || !selectedGroup) {
@@ -94,7 +99,7 @@ export default function GroupDetailPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" className="gap-2">
+            <Button variant="secondary" className="gap-2" onClick={() => setShowEditGroup(true)}>
               <Settings className="w-4 h-4" />
               Edit
             </Button>
@@ -260,6 +265,14 @@ export default function GroupDetailPage() {
         onClose={() => setShowScheduleSession(false)}
         group={selectedGroup}
         onScheduled={handleSessionScheduled}
+      />
+
+      {/* Edit Group Modal */}
+      <EditGroupModal
+        isOpen={showEditGroup}
+        onClose={() => setShowEditGroup(false)}
+        group={selectedGroup}
+        onUpdated={handleGroupUpdated}
       />
     </AppLayout>
   );
