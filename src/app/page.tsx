@@ -99,7 +99,7 @@ export default function DashboardPage() {
                   <GroupCard
                     key={group.id}
                     group={group}
-                    studentCount={0} // Would be fetched
+                    studentCount={group.students?.length || 0}
                   />
                 ))}
               </div>

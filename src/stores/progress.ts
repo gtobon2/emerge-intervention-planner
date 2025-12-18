@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
 import type {
   ProgressMonitoring,
   ProgressMonitoringInsert,
@@ -29,25 +28,19 @@ export const useProgressStore = create<ProgressState>((set) => ({
   fetchProgressForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('progress_monitoring')
-        .select(`
-          *,
-          students (*)
-        `)
-        .eq('group_id', groupId)
-        .order('date', { ascending: true });
+      const response = await fetch(
+        `/api/progress-monitoring?group_id=${groupId}&include=student`
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to fetch progress data');
+      }
 
-      const formattedData = (data || []).map((item: any) => ({
-        ...item,
-        student: item.students,
-      }));
+      const data = await response.json();
 
       set({
-        data: data || [],
-        dataWithStudents: formattedData,
+        data: data,
+        dataWithStudents: data,
         isLoading: false,
       });
     } catch (err) {
@@ -58,14 +51,16 @@ export const useProgressStore = create<ProgressState>((set) => ({
   fetchProgressForStudent: async (studentId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('progress_monitoring')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('date', { ascending: true });
+      const response = await fetch(
+        `/api/progress-monitoring?student_id=${studentId}`
+      );
 
-      if (error) throw error;
-      set({ data: data || [], isLoading: false });
+      if (!response.ok) {
+        throw new Error('Failed to fetch progress data');
+      }
+
+      const data = await response.json();
+      set({ data: data, isLoading: false });
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
     }
@@ -74,13 +69,17 @@ export const useProgressStore = create<ProgressState>((set) => ({
   addDataPoint: async (dataPoint: ProgressMonitoringInsert) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('progress_monitoring')
-        .insert(dataPoint)
-        .select()
-        .single();
+      const response = await fetch('/api/progress-monitoring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataPoint),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to add data point');
+      }
+
+      const data = await response.json();
 
       set((state) => ({
         data: [...state.data, data],
@@ -97,12 +96,13 @@ export const useProgressStore = create<ProgressState>((set) => ({
   deleteDataPoint: async (id: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { error } = await supabase
-        .from('progress_monitoring')
-        .delete()
-        .eq('id', id);
+      const response = await fetch(`/api/progress-monitoring/${id}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to delete data point');
+      }
 
       set((state) => ({
         data: state.data.filter((d) => d.id !== id),

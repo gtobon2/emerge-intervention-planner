@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
-import { Button, Input, Select, Modal } from '@/components/ui';
+import { Button, Input, Select } from '@/components/ui';
 import { GroupCard } from '@/components/dashboard';
+import { CreateGroupModal } from '@/components/forms';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import type { Curriculum } from '@/lib/supabase/types';
 
@@ -31,6 +32,10 @@ export default function GroupsPage() {
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
+
+  const handleGroupCreated = () => {
+    fetchGroups(); // Refresh groups list
+  };
 
   return (
     <AppLayout>
@@ -100,43 +105,18 @@ export default function GroupsPage() {
               <GroupCard
                 key={group.id}
                 group={group}
-                studentCount={0}
+                studentCount={group.students?.length || 0}
               />
             ))}
           </div>
         )}
 
         {/* Create Group Modal */}
-        <Modal
+        <CreateGroupModal
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
-          title="Create New Group"
-          size="md"
-        >
-          <div className="space-y-4">
-            <Input label="Group Name" placeholder="e.g., Wilson Group A" />
-            <Select
-              label="Curriculum"
-              options={curriculumOptions.filter(o => o.value !== 'all')}
-              placeholder="Select curriculum"
-            />
-            <Select
-              label="Tier"
-              options={[
-                { value: '2', label: 'Tier 2' },
-                { value: '3', label: 'Tier 3' },
-              ]}
-              placeholder="Select tier"
-            />
-            <Input label="Grade" type="number" placeholder="e.g., 3" />
-            <div className="flex gap-3 justify-end pt-4">
-              <Button variant="ghost" onClick={() => setIsCreateModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button>Create Group</Button>
-            </div>
-          </div>
-        </Modal>
+          onCreated={handleGroupCreated}
+        />
       </div>
     </AppLayout>
   );
