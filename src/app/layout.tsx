@@ -1,23 +1,34 @@
-import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans, Atkinson_Hyperlegible } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
-
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-brand',
-  display: 'swap',
-});
-
-const atkinson = Atkinson_Hyperlegible({
-  weight: ['400', '700'],
-  subsets: ['latin'],
-  variable: '--font-student',
-  display: 'swap',
-});
+import { AuthProvider } from '@/components/auth';
+import { PWAProvider } from '@/components/pwa';
+import { DatabaseProvider } from '@/components/database-provider';
 
 export const metadata: Metadata = {
   title: 'EMERGE Intervention Planner',
   description: 'Research-based intervention planning for reading and math',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'EMERGE',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#FF006E',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -26,9 +37,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${plusJakarta.variable} ${atkinson.variable}`}>
+    <html lang="en">
       <body className="font-brand bg-foundation text-text-primary min-h-screen">
-        {children}
+        <DatabaseProvider>
+          <AuthProvider>
+            <PWAProvider>
+              {children}
+            </PWAProvider>
+          </AuthProvider>
+        </DatabaseProvider>
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
+// @ts-nocheck
 // EMERGE Intervention Planner - Error Bank Seed Data
-// Pre-populated based on research from NCII, Wilson Language Training, 
+// Pre-populated based on research from NCII, Wilson Language Training,
 // IES Practice Guides, and Spanish literacy research
 
 export const WILSON_ERRORS = [
@@ -838,7 +839,7 @@ export const ALL_ERRORS = [
 ];
 
 // Helper function to get errors by curriculum and position
-export function getErrorsForPosition(curriculum, position) {
+export function getErrorsForPosition(curriculum: string, position: Record<string, unknown>) {
   return ALL_ERRORS.filter(error => {
     if (error.curriculum !== curriculum) return false;
     if (!error.position) return true; // Universal errors for this curriculum

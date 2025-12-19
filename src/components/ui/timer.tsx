@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { useUIStore, formatElapsedTime } from '@/stores/ui';
-import { Button } from './button';
 
 export interface TimerProps {
   component?: string;
@@ -13,38 +12,59 @@ export interface TimerProps {
 }
 
 export function Timer({ component, targetMinutes, onComplete, className = '' }: TimerProps) {
-  const { sessionTimer, startTimer, stopTimer, resetTimer, updateElapsedTime } = useUIStore();
+  // Use selectors for stable references
+  const isRunning = useUIStore((state) => state.sessionTimer.isRunning);
+  const startTime = useUIStore((state) => state.sessionTimer.startTime);
+  const elapsedTime = useUIStore((state) => state.sessionTimer.elapsedTime);
+  const timerComponent = useUIStore((state) => state.sessionTimer.component);
+  const startTimer = useUIStore((state) => state.startTimer);
+  const stopTimer = useUIStore((state) => state.stopTimer);
+  const resetTimer = useUIStore((state) => state.resetTimer);
+  const updateElapsedTime = useUIStore((state) => state.updateElapsedTime);
+
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (sessionTimer.isRunning) {
-      interval = setInterval(() => {
+    if (isRunning) {
+      // Clear any existing interval
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      // Start new interval
+      intervalRef.current = setInterval(() => {
         updateElapsedTime();
       }, 1000);
+    } else {
+      // Clear interval when stopped
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
-  }, [sessionTimer.isRunning, updateElapsedTime]);
+  }, [isRunning, updateElapsedTime]);
 
   // Check if target time reached
   useEffect(() => {
-    if (targetMinutes && sessionTimer.elapsedTime >= targetMinutes * 60 * 1000) {
+    if (targetMinutes && elapsedTime >= targetMinutes * 60 * 1000) {
       onComplete?.();
     }
-  }, [sessionTimer.elapsedTime, targetMinutes, onComplete]);
+  }, [elapsedTime, targetMinutes, onComplete]);
 
   const handleStartStop = () => {
-    if (sessionTimer.isRunning) {
+    if (isRunning) {
       stopTimer();
     } else {
       startTimer(component || 'General');
     }
   };
 
-  const elapsedMs = sessionTimer.elapsedTime;
+  const elapsedMs = elapsedTime;
   const targetMs = targetMinutes ? targetMinutes * 60 * 1000 : null;
   const progress = targetMs ? Math.min((elapsedMs / targetMs) * 100, 100) : 0;
   const isOvertime = targetMs && elapsedMs > targetMs;
@@ -54,11 +74,11 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
       {/* Timer display */}
       <div className={`
         font-mono text-2xl font-bold
-        ${isOvertime ? 'text-tier3' : 'text-text-primary'}
+        ${isOvertime ? 'text-red-500' : 'text-gray-900'}
       `}>
         {formatElapsedTime(elapsedMs)}
         {targetMinutes && (
-          <span className="text-text-muted text-sm font-normal ml-2">
+          <span className="text-gray-400 text-sm font-normal ml-2">
             / {targetMinutes}:00
           </span>
         )}
@@ -66,10 +86,10 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
 
       {/* Progress bar (if target set) */}
       {targetMinutes && (
-        <div className="flex-1 h-2 bg-foundation rounded-full overflow-hidden">
+        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
             className={`h-full transition-all duration-1000 ${
-              isOvertime ? 'bg-tier3' : 'bg-movement'
+              isOvertime ? 'bg-red-500' : 'bg-pink-500'
             }`}
             style={{ width: `${progress}%` }}
           />
@@ -77,33 +97,37 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
       )}
 
       {/* Controls */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
+      <div className="flex items-center gap-1">
+        <button
           onClick={handleStartStop}
-          className="p-2"
+          className={`
+            p-2 rounded-lg transition-colors
+            ${isRunning
+              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+              : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+            }
+          `}
+          title={isRunning ? 'Pause timer' : 'Start timer'}
         >
-          {sessionTimer.isRunning ? (
-            <Pause className="w-4 h-4" />
+          {isRunning ? (
+            <Pause className="w-5 h-5" />
           ) : (
-            <Play className="w-4 h-4" />
+            <Play className="w-5 h-5" />
           )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
+        </button>
+        <button
           onClick={resetTimer}
-          className="p-2"
+          className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          title="Reset timer"
         >
-          <RotateCcw className="w-4 h-4" />
-        </Button>
+          <RotateCcw className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Current component label */}
-      {sessionTimer.component && sessionTimer.isRunning && (
-        <span className="text-sm text-text-muted">
-          {sessionTimer.component}
+      {timerComponent && isRunning && (
+        <span className="text-sm text-gray-500">
+          {timerComponent}
         </span>
       )}
     </div>
@@ -111,38 +135,13 @@ export function Timer({ component, targetMinutes, onComplete, className = '' }: 
 }
 
 // Simple countdown timer
-export function CountdownTimer({ seconds: initialSeconds, onComplete }: { seconds: number; onComplete?: () => void }) {
-  const [remainingTime, setRemainingTime] = useState(initialSeconds);
-
-  useEffect(() => {
-    setRemainingTime(initialSeconds);
-  }, [initialSeconds]);
-
-  useEffect(() => {
-    if (remainingTime <= 0) {
-      onComplete?.();
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setRemainingTime(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [remainingTime, onComplete]);
-
-  const minutes = Math.floor(remainingTime / 60);
-  const seconds = remainingTime % 60;
+export function CountdownTimer({ seconds, onComplete }: { seconds: number; onComplete?: () => void }) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
 
   return (
-    <span className={`font-mono ${remainingTime <= 10 ? 'text-tier3' : ''}`}>
-      {minutes}:{seconds.toString().padStart(2, '0')}
+    <span className="font-mono">
+      {minutes}:{remainingSeconds.toString().padStart(2, '0')}
     </span>
   );
 }

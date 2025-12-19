@@ -1,5 +1,16 @@
 // Delta Math Intervention - Standards-based mathematics
 // CRA (Concrete-Representational-Abstract) approach
+// Integrated with Learning Commons Knowledge Graph for granular skill mapping
+
+import {
+  mapSkillToComponents,
+  buildLearningProgression,
+  getComponentsByCluster,
+  searchComponents,
+  type LearningComponent,
+  type MathSkillMapping,
+  type LearningProgression,
+} from '../learning-commons';
 
 export interface CRATools {
   concrete: string[];
@@ -321,4 +332,122 @@ export function getStandardLabel(standard: string): string {
     return `${standard}: ${data.description}`;
   }
   return standard;
+}
+
+// ============================================
+// Learning Commons Integration
+// ============================================
+
+/**
+ * Map a Delta Math standard to Learning Commons components
+ * This provides granular skill breakdown for more precise intervention planning
+ */
+export function mapStandardToLearningComponents(standardCode: string): MathSkillMapping | null {
+  const standard = getMathStandard(standardCode);
+  if (!standard) return null;
+
+  // Build search query from standard info
+  const searchQuery = `${standard.description} ${standard.skills.join(' ')}`;
+  const gradeLevel = standard.grade.toString();
+
+  return mapSkillToComponents(searchQuery, gradeLevel);
+}
+
+/**
+ * Get a learning progression for a standard's core skill
+ */
+export function getStandardProgression(standardCode: string): LearningProgression | null {
+  const mapping = mapStandardToLearningComponents(standardCode);
+  if (!mapping || mapping.learningComponents.length === 0) return null;
+
+  // Build progression from the primary learning component
+  const primaryComponent = mapping.learningComponents[0];
+  return buildLearningProgression(primaryComponent.uuid, 5);
+}
+
+/**
+ * Find prerequisite skills from Learning Commons that aren't in the standard
+ */
+export function identifySkillGaps(standardCode: string): LearningComponent[] {
+  const mapping = mapStandardToLearningComponents(standardCode);
+  if (!mapping) return [];
+
+  return mapping.prerequisites;
+}
+
+/**
+ * Get related Learning Components by skill cluster
+ */
+export function getRelatedComponentsByCluster(standardCode: string): LearningComponent[] {
+  const standard = getMathStandard(standardCode);
+  if (!standard) return [];
+
+  // Determine cluster from standard domain
+  const clusterMap: Record<string, string[]> = {
+    'NBT': ['Place Value', 'Addition', 'Subtraction', 'Multiplication'],
+    'NF': ['Fractions'],
+    'OA': ['Addition', 'Subtraction', 'Multiplication', 'Division'],
+  };
+
+  const domainPrefix = standardCode.split('.')[1]; // e.g., "NBT" from "3.NBT.1"
+  const clusters = clusterMap[domainPrefix] || [];
+
+  const components: LearningComponent[] = [];
+  for (const cluster of clusters) {
+    components.push(...getComponentsByCluster(cluster));
+  }
+
+  return components;
+}
+
+/**
+ * Search Learning Commons for skills related to a standard's error patterns
+ */
+export function findRemediationComponents(standardCode: string): LearningComponent[] {
+  const standard = getMathStandard(standardCode);
+  if (!standard) return [];
+
+  // Search for components related to common error patterns
+  const results: LearningComponent[] = [];
+
+  for (const error of standard.common_errors) {
+    const components = searchComponents(error);
+    for (const comp of components) {
+      if (!results.find(r => r.uuid === comp.uuid)) {
+        results.push(comp);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Get a comprehensive skill analysis for intervention planning
+ */
+export interface StandardSkillAnalysis {
+  standard: MathStandard & { grade: number; domainName: string };
+  learningComponents: LearningComponent[];
+  prerequisites: LearningComponent[];
+  nextSkills: LearningComponent[];
+  relatedComponents: LearningComponent[];
+  remediationComponents: LearningComponent[];
+  progression: LearningProgression | null;
+}
+
+export function analyzeStandardSkills(standardCode: string): StandardSkillAnalysis | null {
+  const standard = getMathStandard(standardCode);
+  if (!standard) return null;
+
+  const mapping = mapStandardToLearningComponents(standardCode);
+
+  return {
+    standard,
+    learningComponents: mapping?.learningComponents || [],
+    prerequisites: mapping?.prerequisites || [],
+    nextSkills: mapping?.nextSkills || [],
+    relatedComponents: getRelatedComponentsByCluster(standardCode),
+    remediationComponents: findRemediationComponents(standardCode),
+    progression: getStandardProgression(standardCode),
+  };
 }

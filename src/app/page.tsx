@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, Filter, Users } from 'lucide-react';
+import { Plus, Filter } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select } from '@/components/ui';
 import { GroupCard, TodaySchedule, QuickStats } from '@/components/dashboard';
-import { CreateGroupModal } from '@/components/forms';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
-import type { Curriculum, QuickStats as QuickStatsType, Session } from '@/lib/supabase/types';
+import { useStudentsStore } from '@/stores/students';
+import { db } from '@/lib/local-db';
+import type { Curriculum, QuickStats as QuickStatsType } from '@/lib/supabase/types';
 
 const curriculumOptions = [
   { value: 'all', label: 'All Curricula' },
@@ -19,97 +20,164 @@ const curriculumOptions = [
   { value: 'amira', label: 'Amira Learning' },
 ];
 
-// Helper to get week boundaries
-function getWeekBoundaries() {
-  const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay()); // Sunday
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 7);
-  return { weekStart, weekEnd };
+/**
+ * Get the start and end dates for the current week (Sunday to Saturday)
+ */
+function getCurrentWeekDates(): { start: string; end: string } {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - dayOfWeek);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  return {
+    start: startOfWeek.toISOString().split('T')[0],
+    end: endOfWeek.toISOString().split('T')[0],
+  };
 }
 
 export default function DashboardPage() {
   const { groups, fetchGroups, isLoading: groupsLoading, filter, setFilter } = useGroupsStore();
-  const { fetchTodaySessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
+  const { fetchTodaySessions, fetchAllSessions, allSessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
+  const { allStudents, fetchAllStudents } = useStudentsStore();
   const filteredGroups = useFilteredGroups();
 
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [allSessions, setAllSessions] = useState<Session[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
+  // Stats state
+  const [weekSessions, setWeekSessions] = useState<{ total: number; completed: number }>({ total: 0, completed: 0 });
+  const [pmDataDue, setPmDataDue] = useState(0);
 
   useEffect(() => {
     fetchGroups();
     fetchTodaySessions();
-  }, [fetchGroups, fetchTodaySessions]);
-
-  // Fetch all sessions from all groups for stats
-  useEffect(() => {
-    const fetchAllSessions = async () => {
-      if (groups.length === 0) return;
-
-      setLoadingSessions(true);
-      const sessionsPromises = groups.map(async (group) => {
-        const response = await fetch(`/api/sessions?groupId=${group.id}`);
-        if (response.ok) {
-          return response.json();
-        }
-        return [];
-      });
-
-      const results = await Promise.all(sessionsPromises);
-      setAllSessions(results.flat());
-      setLoadingSessions(false);
-    };
-
     fetchAllSessions();
-  }, [groups]);
+    fetchAllStudents();
+  }, [fetchGroups, fetchTodaySessions, fetchAllSessions, fetchAllStudents]);
 
-  const handleGroupCreated = () => {
-    fetchGroups(); // Refresh groups list
+  // Calculate sessions this week from IndexedDB
+  useEffect(() => {
+    async function calculateWeekStats() {
+      try {
+        const { start, end } = getCurrentWeekDates();
+        const sessions = await db.sessions
+          .where('date')
+          .between(start, end, true, true)
+          .toArray();
+
+        setWeekSessions({
+          total: sessions.length,
+          completed: sessions.filter(s => s.status === 'completed').length,
+        });
+      } catch (error) {
+        console.error('Error calculating week stats:', error);
+      }
+    }
+    calculateWeekStats();
+  }, [allSessions]); // Re-calculate when sessions change
+
+  // Calculate PM data points due (Tier 3 students need weekly PM, Tier 2 bi-weekly)
+  useEffect(() => {
+    async function calculatePMDue() {
+      try {
+        const now = new Date();
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        // Get all students with their group info
+        const students = await db.students.toArray();
+        const groupsData = await db.groups.toArray();
+        const pmRecords = await db.progressMonitoring.toArray();
+
+        let dueCount = 0;
+
+        for (const student of students) {
+          const group = groupsData.find(g => g.id === student.group_id);
+          if (!group) continue;
+
+          // Get most recent PM for this student
+          const studentPM = pmRecords
+            .filter(pm => pm.student_id === student.id)
+            .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+          const lastPMDate = studentPM?.date || '1970-01-01';
+
+          // Tier 3 needs weekly PM, Tier 2 needs bi-weekly
+          if (group.tier === 3 && lastPMDate < oneWeekAgo) {
+            dueCount++;
+          } else if (group.tier === 2 && lastPMDate < twoWeeksAgo) {
+            dueCount++;
+          }
+        }
+
+        setPmDataDue(dueCount);
+      } catch (error) {
+        console.error('Error calculating PM due:', error);
+      }
+    }
+    calculatePMDue();
+  }, [allStudents, groups]);
+
+  // Calculate groups needing attention (no sessions in past 7 days or mastery = 'no')
+  const groupsNeedingAttention = useMemo(() => {
+    if (!allSessions || allSessions.length === 0) return 0;
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+    const groupsWithRecentSessions = new Set<string>();
+    const groupsWithNoMastery = new Set<string>();
+
+    allSessions.forEach(session => {
+      // Check for recent sessions
+      if (session.date >= sevenDaysAgoStr) {
+        groupsWithRecentSessions.add(session.group_id);
+      }
+      // Check for no mastery
+      if (session.status === 'completed' && session.mastery_demonstrated === 'no') {
+        groupsWithNoMastery.add(session.group_id);
+      }
+    });
+
+    // Count groups without recent sessions
+    const groupsWithoutRecentSessions = groups.filter(g => !groupsWithRecentSessions.has(g.id)).length;
+
+    // Groups needing attention = no recent sessions OR recent session with no mastery
+    return groupsWithoutRecentSessions + groupsWithNoMastery.size;
+  }, [groups, allSessions]);
+
+  /**
+   * Dashboard Statistics
+   *
+   * - sessionsThisWeek: Total sessions scheduled for current week (Sun-Sat)
+   * - sessionsCompleted: Sessions marked as completed this week
+   * - groupsNeedingAttention: Groups with no sessions in 7 days OR recent 'no' mastery
+   * - pmDataPointsDue: Students needing PM data (Tier 3: weekly, Tier 2: bi-weekly)
+   */
+  const stats: QuickStatsType = {
+    sessionsThisWeek: weekSessions.total,
+    sessionsCompleted: weekSessions.completed,
+    groupsNeedingAttention,
+    pmDataPointsDue: pmDataDue,
   };
-
-  // Calculate quick stats
-  const stats: QuickStatsType = useMemo(() => {
-    const { weekStart, weekEnd } = getWeekBoundaries();
-
-    const sessionsThisWeek = allSessions.filter((s) => {
-      const sessionDate = new Date(s.date);
-      return sessionDate >= weekStart && sessionDate < weekEnd;
-    }).length;
-
-    const completedThisWeek = allSessions.filter((s) => {
-      const sessionDate = new Date(s.date);
-      return (
-        sessionDate >= weekStart &&
-        sessionDate < weekEnd &&
-        s.status === 'completed'
-      );
-    }).length;
-
-    return {
-      sessionsThisWeek,
-      sessionsCompleted: completedThisWeek,
-      groupsNeedingAttention: 0, // Could be calculated based on PM trends
-      pmDataPointsDue: 0, // Could be calculated based on schedule
-    };
-  }, [allSessions]);
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
-            <p className="text-text-muted">
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary">Dashboard</h1>
+            <p className="text-sm md:text-base text-text-muted mt-1">
               Welcome back! Here&apos;s your intervention overview.
             </p>
           </div>
-          <Button className="gap-2" onClick={() => setShowCreateGroup(true)}>
-            <Users className="w-4 h-4" />
-            New Group
+          <Button className="gap-2 w-full sm:w-auto min-h-[44px]">
+            <Plus className="w-4 h-4" />
+            <span>New Session</span>
           </Button>
         </div>
 
@@ -117,24 +185,24 @@ export default function DashboardPage() {
         <QuickStats stats={stats} isLoading={groupsLoading} />
 
         {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Groups List */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Your Groups</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-base sm:text-lg font-semibold text-text-primary">Your Groups</h2>
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-text-muted" />
+                <Filter className="w-4 h-4 text-text-muted hidden sm:block" />
                 <Select
                   options={curriculumOptions}
                   value={filter.curriculum}
                   onChange={(e) => setFilter({ curriculum: e.target.value as Curriculum | 'all' })}
-                  className="w-40"
+                  className="w-full sm:w-40"
                 />
               </div>
             </div>
 
             {groupsLoading ? (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="h-32 bg-surface rounded-xl animate-pulse" />
                 ))}
@@ -142,17 +210,15 @@ export default function DashboardPage() {
             ) : filteredGroups.length === 0 ? (
               <div className="text-center py-12 bg-surface rounded-xl">
                 <p className="text-text-muted mb-4">No groups found</p>
-                <Button variant="secondary" onClick={() => setShowCreateGroup(true)}>
-                  Create Your First Group
-                </Button>
+                <Button variant="secondary" className="min-h-[44px]">Create Your First Group</Button>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredGroups.map((group) => (
                   <GroupCard
                     key={group.id}
                     group={group}
-                    studentCount={group.students?.length || 0}
+                    studentCount={0} // Would be fetched
                   />
                 ))}
               </div>
@@ -160,7 +226,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Today's Schedule */}
-          <div>
+          <div className="order-first lg:order-last">
             <TodaySchedule
               sessions={todaySessions}
               isLoading={sessionsLoading}
@@ -168,13 +234,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Create Group Modal */}
-      <CreateGroupModal
-        isOpen={showCreateGroup}
-        onClose={() => setShowCreateGroup(false)}
-        onCreated={handleGroupCreated}
-      />
     </AppLayout>
   );
 }

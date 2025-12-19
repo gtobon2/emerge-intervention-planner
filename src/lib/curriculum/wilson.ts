@@ -273,16 +273,16 @@ export const WILSON_SYLLABLE_TYPES: WilsonSyllableType[] = [
 
 // Wilson lesson structure (10 parts, adapted to 35-40 min)
 export const WILSON_LESSON_COMPONENTS = [
-  { name: 'Sound Cards', duration: 2, description: 'Review letter-sounds' },
-  { name: 'Teach/Review Concepts', duration: 5, description: 'New skill, rules' },
-  { name: 'Word Cards', duration: 2, description: 'Decode real words' },
-  { name: 'Word List Reading', duration: 5, description: 'Real + nonsense words' },
-  { name: 'Sentence Reading', duration: 3, description: 'Apply in sentences' },
-  { name: 'Passage Reading', duration: 8, description: 'Controlled decodable' },
-  { name: 'Quick Drill', duration: 2, description: 'Rapid review' },
-  { name: 'Dictation: Sounds', duration: 2, description: 'Sound dictation' },
-  { name: 'Dictation: Words', duration: 3, description: 'Word dictation' },
-  { name: 'Dictation: Sentences', duration: 3, description: 'Sentence dictation' }
+  { name: 'Sound Cards', duration_minutes: 2, description: 'Review letter-sounds' },
+  { name: 'Teach/Review Concepts', duration_minutes: 5, description: 'New skill, rules' },
+  { name: 'Word Cards', duration_minutes: 2, description: 'Decode real words' },
+  { name: 'Word List Reading', duration_minutes: 5, description: 'Real + nonsense words' },
+  { name: 'Sentence Reading', duration_minutes: 3, description: 'Apply in sentences' },
+  { name: 'Passage Reading', duration_minutes: 8, description: 'Controlled decodable' },
+  { name: 'Quick Drill', duration_minutes: 2, description: 'Rapid review' },
+  { name: 'Dictation: Sounds', duration_minutes: 2, description: 'Sound dictation' },
+  { name: 'Dictation: Words', duration_minutes: 3, description: 'Word dictation' },
+  { name: 'Dictation: Sentences', duration_minutes: 3, description: 'Sentence dictation' }
 ];
 
 // Helper functions

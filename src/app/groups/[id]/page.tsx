@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -11,25 +11,39 @@ import {
   Settings,
   TrendingUp,
   Clock,
-  BookOpen
+  BookOpen,
+  Trash2,
+  Edit,
+  XCircle,
+  MoreVertical
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
-import { AddStudentModal, ScheduleSessionModal, EditGroupModal } from '@/components/forms';
+import { PlanSessionModal, EditSessionModal, CancelSessionModal, SessionPlanData } from '@/components/sessions';
+import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
+import { db } from '@/lib/local-db';
+import { toNumericId } from '@/lib/utils/id';
+import type { Session, PMTrend } from '@/lib/supabase/types';
 
 export default function GroupDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const groupId = params.id as string;
 
-  const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
-  const { sessions, fetchSessionsForGroup, isLoading: sessionsLoading } = useSessionsStore();
-
-  const [showAddStudent, setShowAddStudent] = useState(false);
-  const [showScheduleSession, setShowScheduleSession] = useState(false);
-  const [showEditGroup, setShowEditGroup] = useState(false);
+  const { selectedGroup, fetchGroupById, updateGroup, deleteGroup, isLoading: groupLoading } = useGroupsStore();
+  const { sessions, fetchSessionsForGroup, createSession, updateSession, cancelSession, isLoading: sessionsLoading } = useSessionsStore();
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditSessionModal, setShowEditSessionModal] = useState(false);
+  const [showCancelSessionModal, setShowCancelSessionModal] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pmTrend, setPmTrend] = useState<PMTrend | null>(null);
 
   useEffect(() => {
     if (groupId) {
@@ -38,16 +52,144 @@ export default function GroupDetailPage() {
     }
   }, [groupId, fetchGroupById, fetchSessionsForGroup]);
 
-  const handleStudentsAdded = () => {
-    fetchGroupById(groupId); // Refresh to get new students
+  /**
+   * Calculate PM Trend for the group
+   *
+   * Uses last 3 PM data points to determine trend:
+   * - 'improving': Most recent scores show upward movement (>5% increase)
+   * - 'flat': Scores relatively stable (within 5% variance)
+   * - 'declining': Most recent scores show downward movement (>5% decrease)
+   * - null: Not enough data points (less than 2)
+   */
+  useEffect(() => {
+    async function calculatePMTrend() {
+      if (!groupId) return;
+
+      try {
+        const numericGroupId = toNumericId(groupId);
+        if (numericGroupId === null) return;
+
+        // Get PM records for this group, sorted by date descending
+        const pmRecords = await db.progressMonitoring
+          .where('group_id')
+          .equals(numericGroupId)
+          .toArray();
+
+        if (pmRecords.length < 2) {
+          setPmTrend(null);
+          return;
+        }
+
+        // Sort by date descending (most recent first)
+        const sortedRecords = pmRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+        // Take last 3 records (or all if less than 3)
+        const recentRecords = sortedRecords.slice(0, 3);
+
+        // Calculate trend based on score changes
+        // Compare most recent to oldest in the sample
+        const mostRecent = recentRecords[0].score;
+        const oldest = recentRecords[recentRecords.length - 1].score;
+        const percentChange = ((mostRecent - oldest) / oldest) * 100;
+
+        if (percentChange > 5) {
+          setPmTrend('improving');
+        } else if (percentChange < -5) {
+          setPmTrend('declining');
+        } else {
+          setPmTrend('flat');
+        }
+      } catch (error) {
+        console.error('Error calculating PM trend:', error);
+        setPmTrend(null);
+      }
+    }
+
+    calculatePMTrend();
+  }, [groupId, sessions]); // Re-calculate when sessions change (might have new PM data)
+
+  const handlePlanSession = async (data: SessionPlanData) => {
+    await createSession({
+      group_id: groupId,
+      date: data.date,
+      time: data.time,
+      status: 'planned',
+      curriculum_position: data.curriculum_position,
+      advance_after: false,
+      planned_otr_target: data.planned_otr_target,
+      planned_practice_items: data.planned_practice_items,
+      planned_response_formats: data.planned_response_formats,
+      cumulative_review_items: null,
+      anticipated_errors: data.anticipated_errors,
+      actual_otr_estimate: null,
+      pacing: null,
+      components_completed: null,
+      exit_ticket_correct: null,
+      exit_ticket_total: null,
+      mastery_demonstrated: null,
+      errors_observed: null,
+      unexpected_errors: null,
+      pm_score: null,
+      pm_trend: null,
+      dbi_adaptation_notes: null,
+      notes: data.notes || null,
+      next_session_notes: null,
+      fidelity_checklist: null,
+    });
+    // Refresh sessions list
+    fetchSessionsForGroup(groupId);
   };
 
-  const handleSessionScheduled = () => {
-    fetchSessionsForGroup(groupId); // Refresh sessions
+  const handleEditGroup = async (id: string, updates: any) => {
+    setIsSaving(true);
+    try {
+      await updateGroup(id, updates);
+      // Refresh group data
+      await fetchGroupById(groupId);
+      setShowEditGroupModal(false);
+    } catch (err) {
+      console.error('Failed to update group:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleGroupUpdated = () => {
-    fetchGroupById(groupId); // Refresh group data
+  const handleEditSession = async (sessionId: string, updates: any) => {
+    await updateSession(sessionId, updates);
+    fetchSessionsForGroup(groupId);
+    setShowEditSessionModal(false);
+    setSelectedSession(null);
+  };
+
+  const handleCancelSession = async (sessionId: string, reason?: string) => {
+    await cancelSession(sessionId, reason);
+    fetchSessionsForGroup(groupId);
+    setShowCancelSessionModal(false);
+    setSelectedSession(null);
+  };
+
+  const handleOpenEditSessionModal = (session: Session) => {
+    setSelectedSession(session);
+    setShowEditSessionModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleOpenCancelSessionModal = (session: Session) => {
+    setSelectedSession(session);
+    setShowCancelSessionModal(true);
+    setOpenDropdownId(null);
+  };
+
+  const handleDeleteGroup = async () => {
+    setIsSaving(true);
+    try {
+      await deleteGroup(groupId);
+      // Redirect to groups page after successful deletion
+      router.push('/groups');
+    } catch (err) {
+      console.error('Failed to delete group:', err);
+      setIsSaving(false);
+    }
   };
 
   if (groupLoading || !selectedGroup) {
@@ -71,41 +213,57 @@ export default function GroupDetailPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <Link href="/groups">
-            <Button variant="ghost" size="sm" className="gap-1">
+            <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              <span className="hidden sm:inline">Back</span>
             </Button>
           </Link>
         </div>
 
         {/* Group Info */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary mb-2">
               {selectedGroup.name}
             </h1>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-3">
               <CurriculumBadge curriculum={selectedGroup.curriculum} />
               <TierBadge tier={selectedGroup.tier} />
-              <span className="text-text-muted">Grade {selectedGroup.grade}</span>
+              <span className="text-sm md:text-base text-text-muted">Grade {selectedGroup.grade}</span>
             </div>
-            <div className="flex items-center gap-2 text-text-muted">
-              <BookOpen className="w-4 h-4" />
-              <span>Current Position: {positionLabel}</span>
+            <div className="flex items-center gap-2 text-sm md:text-base text-text-muted">
+              <BookOpen className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Current Position: {positionLabel}</span>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" className="gap-2" onClick={() => setShowEditGroup(true)}>
+          <div className="flex gap-2 w-full md:w-auto">
+            <Button
+              variant="secondary"
+              className="gap-2 flex-1 md:flex-initial min-h-[44px]"
+              onClick={() => setShowEditGroupModal(true)}
+            >
               <Settings className="w-4 h-4" />
-              Edit
+              <span>Edit</span>
             </Button>
-            <Button className="gap-2" onClick={() => setShowScheduleSession(true)}>
+            <Button
+              variant="secondary"
+              className="gap-2 min-h-[44px]"
+              onClick={() => setShowDeleteModal(true)}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden md:inline">Delete</span>
+            </Button>
+            <Button
+              className="gap-2 flex-1 md:flex-initial min-h-[44px]"
+              onClick={() => setShowPlanModal(true)}
+            >
               <Plus className="w-4 h-4" />
-              Plan Session
+              <span className="hidden sm:inline">Plan Session</span>
+              <span className="sm:hidden">Plan</span>
             </Button>
           </div>
         </div>
@@ -141,23 +299,41 @@ export default function GroupDetailPage() {
           </Card>
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-5 h-5 text-movement" />
-              <span className="text-2xl font-bold text-text-primary">--</span>
+              <TrendingUp className={`w-5 h-5 ${
+                pmTrend === 'improving' ? 'text-emerald-500' :
+                pmTrend === 'declining' ? 'text-red-500' :
+                pmTrend === 'flat' ? 'text-amber-500' :
+                'text-movement'
+              }`} />
+              <span className={`text-2xl font-bold ${
+                pmTrend === 'improving' ? 'text-emerald-600' :
+                pmTrend === 'declining' ? 'text-red-600' :
+                pmTrend === 'flat' ? 'text-amber-600' :
+                'text-text-primary'
+              }`}>
+                {pmTrend ? (
+                  pmTrend === 'improving' ? '↑' :
+                  pmTrend === 'declining' ? '↓' :
+                  '→'
+                ) : '--'}
+              </span>
             </div>
-            <p className="text-sm text-text-muted">PM Trend</p>
+            <p className="text-sm text-text-muted">
+              {pmTrend ? `PM: ${pmTrend === 'flat' ? 'Stable' : pmTrend.charAt(0).toUpperCase() + pmTrend.slice(1)}` : 'PM Trend'}
+            </p>
           </Card>
         </div>
 
         {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Sessions */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between text-base md:text-lg">
                   <span>Recent Sessions</span>
                   <Link href={`/groups/${groupId}/sessions`}>
-                    <Button variant="ghost" size="sm">View All</Button>
+                    <Button variant="ghost" size="sm" className="min-h-[44px]">View All</Button>
                   </Link>
                 </CardTitle>
               </CardHeader>
@@ -171,37 +347,75 @@ export default function GroupDetailPage() {
                 ) : recentSessions.length === 0 ? (
                   <div className="text-center py-8 text-text-muted">
                     <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No sessions yet</p>
-                    <Button
-                      variant="secondary"
-                      className="mt-4"
-                      onClick={() => setShowScheduleSession(true)}
-                    >
+                    <p className="text-sm md:text-base">No sessions yet</p>
+                    <Button variant="secondary" className="mt-4 min-h-[44px]">
                       Plan First Session
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {recentSessions.map((session) => (
-                      <Link
+                      <div
                         key={session.id}
-                        href={`/groups/${groupId}/session/${session.id}`}
-                        className="block p-3 bg-foundation rounded-lg hover:bg-foundation/80 transition-colors"
+                        className="relative p-3 md:p-4 bg-foundation rounded-lg hover:bg-foundation/80 transition-colors min-h-[60px]"
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-text-primary">
-                            {new Date(session.date).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </span>
-                          <StatusBadge status={session.status} />
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/groups/${groupId}/session/${session.id}`}
+                            className="flex-1 min-w-0"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm md:text-base text-text-primary">
+                                {new Date(session.date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </span>
+                              <StatusBadge status={session.status} />
+                            </div>
+                            <p className="text-xs md:text-sm text-text-muted truncate">
+                              {formatCurriculumPosition(selectedGroup.curriculum, session.curriculum_position)}
+                            </p>
+                          </Link>
+
+                          {session.status === 'planned' && (
+                            <div className="relative flex-shrink-0">
+                              <button
+                                onClick={() => setOpenDropdownId(openDropdownId === session.id ? null : session.id)}
+                                className="p-2 hover:bg-surface rounded-lg transition-colors"
+                              >
+                                <MoreVertical className="w-4 h-4 text-text-muted" />
+                              </button>
+
+                              {openDropdownId === session.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setOpenDropdownId(null)}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[140px] z-20">
+                                    <button
+                                      onClick={() => handleOpenEditSessionModal(session)}
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleOpenCancelSessionModal(session)}
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-sm text-text-muted">
-                          {formatCurriculumPosition(selectedGroup.curriculum, session.curriculum_position)}
-                        </p>
-                      </Link>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -213,35 +427,59 @@ export default function GroupDetailPage() {
           <div>
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between text-base md:text-lg">
                   <span>Students</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => setShowAddStudent(true)}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add
-                  </Button>
+                  <Link href={`/groups/${groupId}/students`}>
+                    <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
+                      <Settings className="w-4 h-4" />
+                      <span className="hidden sm:inline">Manage</span>
+                    </Button>
+                  </Link>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {selectedGroup.students?.length === 0 ? (
                   <div className="text-center py-8 text-text-muted">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No students added</p>
+                    <p className="mb-2 text-sm md:text-base">No students added</p>
+                    <Link href={`/groups/${groupId}/students`}>
+                      <Button variant="secondary" size="sm" className="gap-1 min-h-[44px]">
+                        <Plus className="w-4 h-4" />
+                        Add Students
+                      </Button>
+                    </Link>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {selectedGroup.students?.map((student) => (
-                      <div
-                        key={student.id}
-                        className="p-2 bg-foundation rounded-lg flex items-center justify-between"
-                      >
-                        <span className="text-text-primary">{student.name}</span>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      {selectedGroup.students?.slice(0, 5).map((student) => (
+                        <div
+                          key={student.id}
+                          className="p-3 bg-foundation rounded-lg min-h-[44px] flex items-center"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm md:text-base text-text-primary truncate block">{student.name}</span>
+                            {student.notes && (
+                              <p className="text-xs text-text-muted mt-1 line-clamp-1">
+                                {student.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedGroup.students && selectedGroup.students.length > 5 && (
+                      <Link href={`/groups/${groupId}/students`}>
+                        <Button variant="ghost" size="sm" className="w-full min-h-[44px]">
+                          View all {selectedGroup.students.length} students
+                        </Button>
+                      </Link>
+                    )}
+                    <Link href={`/groups/${groupId}/students`}>
+                      <Button variant="secondary" size="sm" className="w-full gap-1 min-h-[44px]">
+                        Manage Students
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </CardContent>
@@ -250,30 +488,60 @@ export default function GroupDetailPage() {
         </div>
       </div>
 
-      {/* Add Student Modal */}
-      <AddStudentModal
-        isOpen={showAddStudent}
-        onClose={() => setShowAddStudent(false)}
-        groupId={groupId}
-        groupName={selectedGroup.name}
-        onStudentsAdded={handleStudentsAdded}
-      />
-
-      {/* Schedule Session Modal */}
-      <ScheduleSessionModal
-        isOpen={showScheduleSession}
-        onClose={() => setShowScheduleSession(false)}
+      {/* Plan Session Modal */}
+      <PlanSessionModal
         group={selectedGroup}
-        onScheduled={handleSessionScheduled}
+        isOpen={showPlanModal}
+        onClose={() => setShowPlanModal(false)}
+        onSave={handlePlanSession}
       />
 
       {/* Edit Group Modal */}
       <EditGroupModal
-        isOpen={showEditGroup}
-        onClose={() => setShowEditGroup(false)}
+        isOpen={showEditGroupModal}
+        onClose={() => setShowEditGroupModal(false)}
+        onSave={handleEditGroup}
         group={selectedGroup}
-        onUpdated={handleGroupUpdated}
+        isLoading={isSaving}
       />
+
+      {/* Delete Group Modal */}
+      <DeleteGroupModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteGroup}
+        group={selectedGroup}
+        sessionCount={sessions.length}
+        isLoading={isSaving}
+      />
+
+      {/* Edit Session Modal */}
+      {selectedSession && selectedGroup && (
+        <EditSessionModal
+          session={selectedSession}
+          group={selectedGroup}
+          isOpen={showEditSessionModal}
+          onClose={() => {
+            setShowEditSessionModal(false);
+            setSelectedSession(null);
+          }}
+          onSave={handleEditSession}
+        />
+      )}
+
+      {/* Cancel Session Modal */}
+      {selectedSession && selectedGroup && (
+        <CancelSessionModal
+          session={selectedSession}
+          group={selectedGroup}
+          isOpen={showCancelSessionModal}
+          onClose={() => {
+            setShowCancelSessionModal(false);
+            setSelectedSession(null);
+          }}
+          onCancel={handleCancelSession}
+        />
+      )}
     </AppLayout>
   );
 }

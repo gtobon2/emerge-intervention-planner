@@ -1,589 +1,1183 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
+  Check,
   Clock,
-  Users,
-  CheckCircle,
-  StopCircle,
-  BookOpen,
-  AlertTriangle,
   Target,
-  ListChecks,
-  Plus,
-  Trash2,
-  Sparkles,
+  AlertTriangle,
+  MessageSquare,
   Play,
+  Pause,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  CheckCircle,
+  X,
+  Mic,
+  Save,
+  Edit,
+  XCircle,
 } from 'lucide-react';
-import { AppLayout } from '@/components/layout';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { CurriculumBadge, TierBadge, Badge } from '@/components/ui/badge';
+import { Timer } from '@/components/ui/timer';
+import { OTRCounter } from '@/components/ui/otr-counter';
+import type {
+  Session,
+  Group,
+  Student,
+  Curriculum,
+  Pacing,
+  MasteryLevel,
+  ObservedError,
+  AnticipatedError,
+} from '@/lib/supabase/types';
+import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
+import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
 import {
-  Button,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CurriculumBadge,
-  TierBadge,
-  StatusBadge,
-  Input,
-  Select,
-  Checkbox,
-} from '@/components/ui';
-import { Timer, OTRCounter } from '@/components/ui';
-import { EndSessionModal } from '@/components/session';
-import { useGroupsStore } from '@/stores/groups';
-import { useSessionsStore } from '@/stores/sessions';
-import { useUIStore } from '@/stores/ui';
-import { formatCurriculumPosition } from '@/lib/supabase/types';
-import type { AnticipatedError, ObservedError, Student } from '@/lib/supabase/types';
+  EditSessionModal,
+  CancelSessionModal,
+  PlanSessionModal,
+  SessionPlanData,
+  StudentOTRPanel,
+  LessonComponentsPanel,
+  SessionNotesPanel,
+  WILSON_LESSON_COMPONENTS,
+} from '@/components/sessions';
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
+import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore } from '@/stores';
+import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
+import { toNumericId } from '@/lib/utils/id';
 
-interface LiveError {
+// Extended ObservedError type with id for local tracking
+interface ObservedErrorWithId extends ObservedError {
   id: string;
-  studentId: string;
-  studentName: string;
-  errorPattern: string;
-  correctionUsed: string;
-  correctionWorked: boolean;
-  timestamp: Date;
+  student_id?: string;
 }
 
-export default function SessionRunPage() {
-  const params = useParams();
+/**
+ * Get initials from student name (used in error tracking UI)
+ */
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+/**
+ * Student circle colors (used in error tracking UI)
+ */
+const STUDENT_COLORS = [
+  'bg-movement text-white',
+  'bg-emerald-500 text-white',
+  'bg-blue-500 text-white',
+  'bg-purple-500 text-white',
+  'bg-amber-500 text-white',
+];
+
+export default function SessionPage({
+  params,
+}: {
+  params: { id: string; sessionId: string };
+}) {
   const router = useRouter();
-  const groupId = params.id as string;
-  const sessionId = params.sessionId as string;
+  const [session, setSession] = useState<Session | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
+  // Modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+
+  // Store actions
+  const {
+    selectedSession,
+    fetchSessionById,
+    updateSession,
+    cancelSession,
+    completeSession,
+    isLoading: sessionLoading
+  } = useSessionsStore();
   const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
-  const { selectedSession, fetchSessionById, updateSession, isLoading: sessionLoading } = useSessionsStore();
-  const { resetOTR, resetTimer } = useUIStore();
+  const { students: storeStudents, fetchStudentsForGroup } = useStudentsStore();
 
-  const [showEndModal, setShowEndModal] = useState(false);
-  const [sessionStarted, setSessionStarted] = useState(false);
+  // Session tracking state
+  const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
+  const [anticipatedErrorsChecked, setAnticipatedErrorsChecked] = useState<Record<string, boolean>>({});
+  const [correctionWorked, setCorrectionWorked] = useState<Record<string, Record<string, boolean | null>>>({}); // errorId -> studentId -> worked
+  const [unexpectedErrors, setUnexpectedErrors] = useState<ObservedErrorWithId[]>([]);
+  const [componentsCompleted, setComponentsCompleted] = useState<string[]>([]);
+  const [notes, setNotes] = useState('');
+  const [exitTicketCorrect, setExitTicketCorrect] = useState<number | null>(null);
+  const [exitTicketTotal, setExitTicketTotal] = useState<number | null>(null);
+  const [pacing, setPacing] = useState<Pacing | null>(null);
+  const [mastery, setMastery] = useState<MasteryLevel | null>(null);
 
-  // Live error tracking
-  const [liveErrors, setLiveErrors] = useState<LiveError[]>([]);
-  const [newError, setNewError] = useState({
-    studentId: '',
-    errorPattern: '',
-    correctionUsed: '',
-    correctionWorked: true,
+  // Per-student tracking
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null); // null = group level
+  const [studentOTRs, setStudentOTRs] = useState<Record<string, number>>({}); // studentId -> count
+  const [errorStudents, setErrorStudents] = useState<Record<string, string[]>>({}); // errorId -> studentIds[]
+
+  // UI state
+  const [showErrorPanel, setShowErrorPanel] = useState(true);
+  const [showNewErrorForm, setShowNewErrorForm] = useState(false);
+  const [newErrorPattern, setNewErrorPattern] = useState('');
+  const [newErrorCorrection, setNewErrorCorrection] = useState('');
+  const [newErrorStudent, setNewErrorStudent] = useState<string>('');
+
+  // Error bank integration
+  const [savedToBank, setSavedToBank] = useState<Record<string, boolean>>({}); // errorId -> isSaved
+  const { createError } = useErrorsStore();
+
+  // Voice input
+  const {
+    isListening,
+    isSupported: isVoiceSupported,
+    error: voiceError,
+    toggle: toggleVoiceInput,
+  } = useSpeechRecognition({
+    continuous: true,
+    interimResults: true,
+    onTranscript: (transcript, isFinal) => {
+      if (isFinal) {
+        setNotes((prev) => {
+          const separator = prev.trim() ? ' ' : '';
+          return prev + separator + transcript;
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('Voice input error:', error);
+    },
   });
 
-  // AI suggestions
-  const [aiSuggestions, setAiSuggestions] = useState<string | null>(null);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-
+  // Fetch session, group, and students from IndexedDB
   useEffect(() => {
-    if (groupId) fetchGroupById(groupId);
-    if (sessionId) fetchSessionById(sessionId);
-  }, [groupId, sessionId, fetchGroupById, fetchSessionById]);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch session, group, and students in parallel
+        await Promise.all([
+          fetchSessionById(params.sessionId),
+          fetchGroupById(params.id),
+          fetchStudentsForGroup(params.id),
+        ]);
+      } catch (error) {
+        console.error('Error loading session data:', error);
+      }
+    };
+    loadData();
+  }, [params.id, params.sessionId, fetchSessionById, fetchGroupById, fetchStudentsForGroup]);
 
-  // Reset counters when page loads
+  // Update local state when store data changes
   useEffect(() => {
-    resetOTR();
-    resetTimer();
-  }, [resetOTR, resetTimer]);
-
-  // Check if session is already in progress
-  useEffect(() => {
-    if (selectedSession?.status === 'in_progress') {
-      setSessionStarted(true);
+    if (selectedSession) {
+      setSession(selectedSession);
+      setAnticipatedErrors(selectedSession.anticipated_errors || []);
     }
   }, [selectedSession]);
 
-  const handleStartSession = async () => {
-    setSessionStarted(true);
-    // Update session status to in_progress
-    await updateSession(sessionId, { status: 'in_progress' });
-  };
+  useEffect(() => {
+    if (selectedGroup) {
+      setGroup(selectedGroup);
+    }
+  }, [selectedGroup]);
 
-  const handleEndSession = () => {
-    setShowEndModal(true);
-  };
-
-  const handleSessionComplete = () => {
-    router.push(`/groups/${groupId}`);
-  };
-
-  // Live error management
-  const addLiveError = () => {
-    if (!newError.studentId || !newError.errorPattern) return;
-
-    const student = selectedGroup?.students?.find(s => s.id === newError.studentId);
-    setLiveErrors([
-      ...liveErrors,
-      {
-        id: `error-${Date.now()}`,
-        studentId: newError.studentId,
-        studentName: student?.name || 'Unknown',
-        errorPattern: newError.errorPattern,
-        correctionUsed: newError.correctionUsed,
-        correctionWorked: newError.correctionWorked,
-        timestamp: new Date(),
-      },
-    ]);
-    setNewError({
-      studentId: '',
-      errorPattern: '',
-      correctionUsed: '',
-      correctionWorked: true,
-    });
-  };
-
-  const removeLiveError = (id: string) => {
-    setLiveErrors(liveErrors.filter(e => e.id !== id));
-  };
-
-  // Fetch AI error suggestions
-  const fetchAiSuggestions = async () => {
-    if (!selectedGroup || !selectedSession) return;
-
-    setLoadingSuggestions(true);
-    try {
-      const response = await fetch('/api/ai/suggest-errors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          curriculum: selectedGroup.curriculum,
-          position: selectedSession.curriculum_position,
-          previousErrors: liveErrors.map(e => e.errorPattern),
-        }),
+  useEffect(() => {
+    if (storeStudents && storeStudents.length > 0) {
+      setStudents(storeStudents);
+      // Initialize per-student OTR tracking
+      const initialOTRs: Record<string, number> = {};
+      storeStudents.forEach((s) => {
+        initialOTRs[s.id] = 0;
       });
+      setStudentOTRs(initialOTRs);
+    }
+    // Set loading to false once we have all required data
+    if (selectedSession && selectedGroup) {
+      setIsLoading(false);
+    }
+  }, [storeStudents, selectedSession, selectedGroup]);
 
-      if (response.ok) {
-        const data = await response.json();
-        setAiSuggestions(data.suggestions);
+  const handleStartSession = () => {
+    setIsSessionActive(true);
+  };
+
+  /**
+   * Complete the session and save all tracking data to IndexedDB
+   *
+   * Data saved:
+   * - actual_otr_estimate: Total OTRs from all students
+   * - pacing: Pacing assessment (too_slow, just_right, too_fast)
+   * - mastery_demonstrated: Mastery level (yes, partial, no)
+   * - components_completed: Array of completed lesson components
+   * - exit_ticket_correct/total: Exit ticket scores
+   * - errors_observed: Anticipated errors that were checked, with correction effectiveness
+   * - unexpected_errors: New errors observed during session
+   * - notes: Session notes including voice input
+   *
+   * Per-student tracking (saved separately):
+   * - OTR count per student
+   * - Errors exhibited by each student
+   * - Correction effectiveness per student
+   */
+  const handleCompleteSession = async () => {
+    if (!session) return;
+
+    setIsSaving(true);
+
+    try {
+      // Calculate total OTRs from student tracking
+      const totalOTRs = getTotalOTRs();
+
+      // Build errors_observed from anticipated errors that were checked
+      const errorsObserved: ObservedError[] = anticipatedErrors
+        .filter((e) => anticipatedErrorsChecked[e.id])
+        .map((e) => {
+          // Calculate if correction worked overall (majority of students)
+          const studentResults = correctionWorked[e.id] || {};
+          const results = Object.values(studentResults).filter(r => r !== null);
+          const workedCount = results.filter(r => r === true).length;
+          const overallWorked = results.length === 0 ? true : workedCount >= results.length / 2;
+
+          return {
+            error_pattern: e.error_pattern,
+            correction_used: e.correction_protocol,
+            correction_worked: overallWorked,
+            add_to_bank: savedToBank[e.id] || false,
+          };
+        });
+
+      // Build completion data
+      const completionData = {
+        actual_otr_estimate: totalOTRs,
+        pacing,
+        mastery_demonstrated: mastery,
+        components_completed: componentsCompleted.length > 0 ? componentsCompleted : null,
+        exit_ticket_correct: exitTicketCorrect,
+        exit_ticket_total: exitTicketTotal,
+        errors_observed: errorsObserved.length > 0 ? errorsObserved : null,
+        unexpected_errors: unexpectedErrors.length > 0 ? unexpectedErrors.map(e => ({
+          error_pattern: e.error_pattern,
+          correction_used: e.correction_used,
+          correction_worked: e.correction_worked,
+          add_to_bank: e.add_to_bank,
+        })) : null,
+        notes: notes || null,
+      };
+
+      // Save to IndexedDB via the sessions store
+      const result = await completeSession(session.id, completionData, true);
+
+      if (result) {
+        // Build per-student tracking data
+        const studentTrackingData = students.map((student) => {
+          // Get errors this student exhibited (from errorStudents state)
+          const studentErrors: string[] = [];
+          Object.entries(errorStudents).forEach(([errorId, studentIds]) => {
+            if (studentIds.includes(student.id)) {
+              // Find the error pattern
+              const anticipatedError = anticipatedErrors.find(e => e.id === errorId);
+              const unexpectedError = unexpectedErrors.find(e => e.id === errorId);
+              const errorPattern = anticipatedError?.error_pattern || unexpectedError?.error_pattern;
+              if (errorPattern) {
+                studentErrors.push(errorPattern);
+              }
+            }
+          });
+
+          // Get correction effectiveness for this student
+          const studentCorrections: Record<string, boolean> = {};
+          Object.entries(correctionWorked).forEach(([errorId, studentResults]) => {
+            const studentResult = studentResults[student.id];
+            if (studentResult !== undefined && studentResult !== null) {
+              const anticipatedError = anticipatedErrors.find(e => e.id === errorId);
+              if (anticipatedError) {
+                studentCorrections[anticipatedError.error_pattern] = studentResult;
+              }
+            }
+          });
+
+          const numericStudentId = toNumericId(student.id);
+          if (numericStudentId === null) return null;
+
+          return {
+            studentId: numericStudentId,
+            otrCount: studentOTRs[student.id] || 0,
+            errorsExhibited: studentErrors,
+            correctionEffectiveness: studentCorrections,
+          };
+        }).filter((data): data is NonNullable<typeof data> => data !== null);
+
+        // Save per-student tracking data
+        const numericSessionId = toNumericId(session.id);
+        if (numericSessionId !== null && studentTrackingData.length > 0) {
+          await saveStudentSessionTracking(numericSessionId, studentTrackingData);
+        }
+
+        // Success - navigate back to group page
+        router.push(`/groups/${params.id}`);
+      } else {
+        throw new Error('Failed to complete session');
       }
     } catch (error) {
-      console.error('Failed to fetch AI suggestions:', error);
+      console.error('Error completing session:', error);
+      alert('Failed to save session data. Please try again.');
     } finally {
-      setLoadingSuggestions(false);
+      setIsSaving(false);
     }
   };
 
-  const isLoading = groupLoading || sessionLoading;
+  const handleAnticipatedErrorToggle = (errorId: string) => {
+    setAnticipatedErrorsChecked((prev) => ({
+      ...prev,
+      [errorId]: !prev[errorId],
+    }));
+  };
 
-  if (isLoading || !selectedGroup || !selectedSession) {
+  const handleCorrectionWorked = (errorId: string, studentId: string, worked: boolean) => {
+    setCorrectionWorked((prev) => ({
+      ...prev,
+      [errorId]: {
+        ...(prev[errorId] || {}),
+        [studentId]: worked,
+      },
+    }));
+  };
+
+  const handleAddUnexpectedError = () => {
+    if (newErrorPattern.trim()) {
+      const errorId = `unexpected-${Date.now()}`;
+      setUnexpectedErrors((prev) => [
+        ...prev,
+        {
+          id: errorId,
+          error_pattern: newErrorPattern,
+          correction_used: newErrorCorrection,
+          correction_worked: true,
+          add_to_bank: true,
+          student_id: newErrorStudent || undefined,
+        },
+      ]);
+      setNewErrorPattern('');
+      setNewErrorCorrection('');
+      setNewErrorStudent('');
+      setShowNewErrorForm(false);
+    }
+  };
+
+  // Toggle student association with an error
+  const handleToggleErrorStudent = (errorId: string, studentId: string) => {
+    setErrorStudents((prev) => {
+      const currentStudents = prev[errorId] || [];
+      if (currentStudents.includes(studentId)) {
+        return {
+          ...prev,
+          [errorId]: currentStudents.filter((id) => id !== studentId),
+        };
+      } else {
+        return {
+          ...prev,
+          [errorId]: [...currentStudents, studentId],
+        };
+      }
+    });
+  };
+
+  // Increment OTR for a specific student
+  const handleStudentOTR = (studentId: string) => {
+    setStudentOTRs((prev) => ({
+      ...prev,
+      [studentId]: (prev[studentId] || 0) + 1,
+    }));
+  };
+
+  // Get total OTRs across all students
+  const getTotalOTRs = () => {
+    return Object.values(studentOTRs).reduce((sum, count) => sum + count, 0);
+  };
+
+  const handleComponentToggle = (component: string) => {
+    setComponentsCompleted((prev) =>
+      prev.includes(component)
+        ? prev.filter((c) => c !== component)
+        : [...prev, component]
+    );
+  };
+
+  // AI handler functions
+  const handleAddAIError = (error: AnticipatedError) => {
+    setAnticipatedErrors((prev) => [...prev, error]);
+  };
+
+  const handleAddAllAIErrors = (errors: AnticipatedError[]) => {
+    setAnticipatedErrors((prev) => [...prev, ...errors]);
+  };
+
+  const handleSaveSummaryToNotes = (summary: string) => {
+    setNotes((prev) => {
+      if (prev.trim()) {
+        return `${prev}\n\n--- AI Generated Summary ---\n${summary}`;
+      }
+      return summary;
+    });
+  };
+
+  // Save error to error bank
+  const handleEditSession = async (sessionId: string, updates: any) => {
+    await updateSession(sessionId, updates);
+    // Refresh session data
+    if (session) {
+      setSession({ ...session, ...updates });
+    }
+  };
+
+  const handleCancelSession = async (sessionId: string, reason?: string) => {
+    await cancelSession(sessionId, reason);
+    // Navigate back to group page
+    router.push(`/groups/${params.id}`);
+  };
+
+  const handleRescheduleSession = async (sessionId: string, reason?: string) => {
+    // First cancel the current session
+    await cancelSession(sessionId, reason);
+    // Then open the plan session modal with pre-filled data
+    setShowRescheduleModal(true);
+  };
+
+  const handleCreateRescheduledSession = async (data: SessionPlanData) => {
+    // In production, create a new session with the data
+    // For now, just navigate back to group page
+    router.push(`/groups/${params.id}`);
+  };
+
+  const handleSaveToBank = async (
+    errorId: string,
+    errorPattern: string,
+    correctionProtocol: string,
+    isUnexpected: boolean = false
+  ) => {
+    if (!group) return;
+
+    // Get students who made this error
+    const studentsWhoMadeError = errorStudents[errorId] || [];
+    const correctionResults = correctionWorked[errorId] || {};
+
+    // Calculate effectiveness
+    const studentResults = Object.values(correctionResults).filter(r => r !== null);
+    const workedCount = studentResults.filter(r => r === true).length;
+    const effectivenessCount = studentResults.length > 0 ? workedCount : 0;
+
+    // Get student names for metadata
+    const studentNames = studentsWhoMadeError
+      .map(id => students.find(s => s.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+
+    try {
+      const errorBankEntry = await createError({
+        curriculum: group.curriculum,
+        curriculum_position: session?.curriculum_position || null,
+        error_pattern: errorPattern,
+        correction_protocol: correctionProtocol,
+        underlying_gap: null,
+        correction_prompts: null,
+        visual_cues: null,
+        kinesthetic_cues: null,
+        is_custom: true,
+        effectiveness_count: effectivenessCount,
+        occurrence_count: 1,
+      });
+
+      if (errorBankEntry) {
+        // Mark as saved
+        setSavedToBank(prev => ({ ...prev, [errorId]: true }));
+
+        // Add to notes for context
+        const errorNote = `\n[Error saved to bank: "${errorPattern}" - Students: ${studentNames || 'All'} - Session: ${session?.date}]`;
+        setNotes(prev => prev + errorNote);
+      }
+    } catch (error) {
+      console.error('Failed to save error to bank:', error);
+      alert('Failed to save error to bank. Please try again.');
+    }
+  };
+
+  if (isLoading || !session || !group) {
     return (
-      <AppLayout>
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 w-48 bg-surface rounded" />
-          <div className="h-64 bg-surface rounded-xl" />
+      <div className="p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-48 bg-gray-200 rounded" />
+          <div className="h-64 bg-gray-200 rounded" />
         </div>
-      </AppLayout>
+      </div>
     );
   }
 
-  const isCompleted = selectedSession.status === 'completed';
-  const isInProgress = selectedSession.status === 'in_progress' || sessionStarted;
-  const positionLabel = formatCurriculumPosition(
-    selectedGroup.curriculum,
-    selectedSession.curriculum_position
-  );
-
   return (
-    <AppLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Link href={`/groups/${groupId}`}>
-            <Button variant="ghost" size="sm" className="gap-1">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Group
-            </Button>
-          </Link>
-        </div>
-
-        {/* Session Info */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
-              {selectedGroup.name}
-            </h1>
-            <div className="flex items-center gap-3 mb-2">
-              <CurriculumBadge curriculum={selectedGroup.curriculum} />
-              <TierBadge tier={selectedGroup.tier} />
-              <StatusBadge status={isInProgress && !isCompleted ? 'in_progress' : selectedSession.status} />
-            </div>
-            <div className="flex items-center gap-2 text-text-muted">
-              <BookOpen className="w-4 h-4" />
-              <span>{positionLabel}</span>
-            </div>
-          </div>
-
-          {/* Session Actions */}
-          <div className="flex gap-3">
-            {isCompleted ? (
-              <div className="flex items-center gap-2 text-green-500">
-                <CheckCircle className="w-5 h-5" />
-                <span className="font-medium">Session Completed</span>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+              <Link
+                href={`/groups/${group.id}`}
+                className="text-gray-500 hover:text-gray-700 flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -ml-2"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div className="min-w-0 flex-1">
+                <h1 className="font-semibold text-base sm:text-lg truncate">{group.name}</h1>
+                <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
+                  <CurriculumBadge curriculum={group.curriculum} />
+                  <TierBadge tier={group.tier} />
+                  <span className="text-gray-500 hidden sm:inline truncate">
+                    {formatCurriculumPosition(group.curriculum, session.curriculum_position)}
+                  </span>
+                </div>
               </div>
-            ) : !isInProgress ? (
-              <Button onClick={handleStartSession} className="gap-2">
-                <Play className="w-4 h-4" />
-                Start Session
-              </Button>
-            ) : (
-              <Button onClick={handleEndSession} variant="danger" className="gap-2">
-                <StopCircle className="w-4 h-4" />
-                End Session
-              </Button>
-            )}
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              {!isSessionActive && session.status === 'planned' && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowEditModal(true)}
+                    className="gap-1 min-h-[44px]"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCancelModal(true)}
+                    className="gap-1 min-h-[44px] text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span className="hidden sm:inline">Cancel</span>
+                  </Button>
+                </>
+              )}
+              {isSessionActive ? (
+                <>
+                  <Timer targetMinutes={group.schedule?.duration || 45} />
+                  <div className="hidden md:block">
+                    <AISessionSummary
+                      session={{
+                        ...session,
+                        components_completed: componentsCompleted,
+                        actual_otr_estimate: null,
+                        exit_ticket_correct: exitTicketCorrect,
+                        exit_ticket_total: exitTicketTotal,
+                        pacing,
+                        mastery_demonstrated: mastery,
+                        errors_observed: anticipatedErrors
+                          .filter((e) => anticipatedErrorsChecked[e.id])
+                          .map((e) => {
+                            // Calculate if correction worked overall (majority of students)
+                            const studentResults = correctionWorked[e.id] || {};
+                            const results = Object.values(studentResults).filter(r => r !== null);
+                            const workedCount = results.filter(r => r === true).length;
+                            const overallWorked = results.length === 0 ? true : workedCount >= results.length / 2;
+                            return {
+                              error_pattern: e.error_pattern,
+                              correction_used: e.correction_protocol,
+                              correction_worked: overallWorked,
+                            };
+                          }),
+                        unexpected_errors: unexpectedErrors,
+                        notes,
+                      }}
+                      groupName={group.name}
+                      onSaveToNotes={handleSaveSummaryToNotes}
+                    />
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={handleCompleteSession}
+                    disabled={isSaving}
+                    className="min-h-[44px] flex-1 sm:flex-initial"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin sm:mr-1" />
+                        <span className="hidden sm:inline">Saving...</span>
+                        <span className="sm:hidden">Saving</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Complete Session</span>
+                        <span className="sm:hidden">Complete</span>
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" onClick={handleStartSession} className="min-h-[44px] w-full sm:w-auto">
+                  <Play className="w-4 h-4 mr-1" />
+                  Start Session
+                </Button>
+              )}
+            </div>
           </div>
         </div>
+      </header>
 
-        {/* Planning Details - Show before and during session */}
-        {!isCompleted && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ListChecks className="w-5 h-5 text-movement" />
-                Session Plan
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* OTR Target */}
+      <div className="max-w-7xl mx-auto px-4 py-4 md:py-6">
+        {!isSessionActive ? (
+          // Pre-session view
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Session Plan */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-movement" />
+                  Session Plan
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium text-text-muted mb-2 flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    OTR Target
+                  <h4 className="font-medium text-sm text-gray-700 mb-2">
+                    Planned Practice Items
                   </h4>
-                  <p className="text-2xl font-bold text-text-primary">
-                    {selectedSession.planned_otr_target || '--'}
-                  </p>
+                  <ul className="space-y-1">
+                    {session.planned_practice_items?.map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <Badge variant="default">
+                          {item.type}
+                        </Badge>
+                        {item.item}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
-                {/* Response Formats */}
-                {selectedSession.planned_response_formats && selectedSession.planned_response_formats.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-text-muted mb-2">Response Formats</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedSession.planned_response_formats.map((format, i) => (
-                        <span key={i} className="px-2 py-1 bg-foundation rounded text-sm text-text-primary">
-                          {format}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Practice Items */}
-                {selectedSession.planned_practice_items && selectedSession.planned_practice_items.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-text-muted mb-2">Practice Items</h4>
-                    <ul className="text-sm text-text-primary space-y-1">
-                      {selectedSession.planned_practice_items.slice(0, 5).map((item, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${
-                            item.type === 'new' ? 'bg-green-500' :
-                            item.type === 'review' ? 'bg-blue-500' : 'bg-purple-500'
-                          }`} />
-                          {item.item}
-                        </li>
-                      ))}
-                      {selectedSession.planned_practice_items.length > 5 && (
-                        <li className="text-text-muted">+{selectedSession.planned_practice_items.length - 5} more</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Anticipated Errors */}
-              {selectedSession.anticipated_errors && selectedSession.anticipated_errors.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <h4 className="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" />
-                    Anticipated Errors
+                <div>
+                  <h4 className="font-medium text-sm text-gray-700 mb-2">
+                    Response Formats
                   </h4>
-                  <div className="grid md:grid-cols-2 gap-3">
-                    {selectedSession.anticipated_errors.map((error, i) => (
-                      <div key={i} className="p-3 bg-tier3/10 border border-tier3/20 rounded-lg">
-                        <p className="font-medium text-text-primary">{error.error_pattern}</p>
-                        <p className="text-sm text-text-muted mt-1">
-                          Correction: {error.correction_protocol}
+                  <div className="flex flex-wrap gap-2">
+                    {session.planned_response_formats?.map((format) => (
+                      <Badge key={format} variant="default">
+                        {format}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-sm text-gray-700 mb-2">
+                    OTR Target
+                  </h4>
+                  <p className="text-2xl font-bold text-movement">
+                    {session.planned_otr_target}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Anticipated Errors */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    Anticipated Errors
+                  </CardTitle>
+                  <AIErrorSuggestions
+                    curriculum={group.curriculum}
+                    position={session.curriculum_position}
+                    previousErrors={anticipatedErrors.map((e) => e.error_pattern)}
+                    onAddError={handleAddAIError}
+                    onAddAllErrors={handleAddAllAIErrors}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {anticipatedErrors.length > 0 ? (
+                  <div className="space-y-3">
+                    {anticipatedErrors.map((error) => (
+                      <div
+                        key={error.id}
+                        className="p-3 bg-amber-50 border border-amber-200 rounded-lg"
+                      >
+                        <p className="font-medium text-amber-900">
+                          {error.error_pattern}
+                        </p>
+                        <p className="text-sm text-amber-700 mt-1">
+                          <strong>Correction:</strong> {error.correction_protocol}
                         </p>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No anticipated errors yet. Use AI to generate suggestions or add manually.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          // Active session view
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main tracking area */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Student Circles - Per-student tracking */}
+              <StudentOTRPanel
+                students={students}
+                studentOTRs={studentOTRs}
+                targetOTR={session.planned_otr_target || 40}
+                onStudentOTR={handleStudentOTR}
+              />
 
-        {/* Completed Session Summary */}
-        {isCompleted && (
-          <Card className="border-green-500/20 bg-green-500/5">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-sm text-text-muted">OTR Count</p>
-                  <p className="text-xl font-bold text-text-primary">
-                    {selectedSession.actual_otr_count || '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-text-muted">Exit Ticket</p>
-                  <p className="text-xl font-bold text-text-primary">
-                    {selectedSession.exit_ticket_correct !== null
-                      ? `${selectedSession.exit_ticket_correct}/${selectedSession.exit_ticket_total}`
-                      : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-text-muted">Pacing</p>
-                  <p className="text-xl font-bold text-text-primary capitalize">
-                    {selectedSession.pacing?.replace('_', ' ') || '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-text-muted">Mastery</p>
-                  <p className="text-xl font-bold text-text-primary capitalize">
-                    {selectedSession.mastery_demonstrated || '-'}
-                  </p>
-                </div>
-              </div>
-              {selectedSession.notes && (
-                <div className="mt-4 pt-4 border-t border-green-500/20">
-                  <p className="text-sm text-text-muted mb-1">Notes</p>
-                  <p className="text-text-primary">{selectedSession.notes}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Active Session Tools */}
-        {!isCompleted && isInProgress && (
-          <>
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Timer */}
+              {/* OTR Counter - Group level */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-movement" />
-                    Session Timer
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Timer
-                    component="Session"
-                    targetMinutes={selectedGroup.tier === 3 ? 30 : 45}
-                  />
+                <CardContent className="py-6">
+                  <OTRCounter target={session.planned_otr_target || 40} />
                 </CardContent>
               </Card>
 
-              {/* OTR Counter */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-movement" />
-                    OTR Counter
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <OTRCounter target={selectedSession.planned_otr_target || (selectedGroup.tier === 3 ? 15 : 20)} />
-                </CardContent>
-              </Card>
+              {/* Lesson Components Checklist */}
+              <LessonComponentsPanel
+                components={WILSON_LESSON_COMPONENTS}
+                completedComponents={componentsCompleted}
+                onToggle={handleComponentToggle}
+              />
+
+              {/* Notes */}
+              <SessionNotesPanel
+                notes={notes}
+                onNotesChange={setNotes}
+                isListening={isListening}
+                isVoiceSupported={isVoiceSupported}
+                voiceError={voiceError}
+                onToggleVoice={toggleVoiceInput}
+              />
             </div>
 
-            {/* Live Error Tracking */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-tier3" />
-                    Live Error Tracking
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={fetchAiSuggestions}
-                    disabled={loadingSuggestions}
-                    className="gap-1"
+            {/* Side panel - Error tracking */}
+            <div className="space-y-4">
+              {/* Anticipated Errors */}
+              <Card>
+                <CardHeader>
+                  <button
+                    onClick={() => setShowErrorPanel(!showErrorPanel)}
+                    className="w-full flex items-center justify-between"
                   >
-                    <Sparkles className="w-4 h-4" />
-                    {loadingSuggestions ? 'Loading...' : 'AI Suggestions'}
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {/* AI Suggestions */}
-                {aiSuggestions && (
-                  <div className="mb-4 p-4 bg-movement/10 border border-movement/20 rounded-lg">
-                    <p className="text-sm font-medium text-movement mb-2">AI Error Suggestions</p>
-                    <p className="text-sm text-text-primary whitespace-pre-wrap">{aiSuggestions}</p>
-                  </div>
-                )}
-
-                {/* Logged Errors */}
-                {liveErrors.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    {liveErrors.map((error) => (
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-500" />
+                      Error Tracking
+                    </CardTitle>
+                    {showErrorPanel ? (
+                      <ChevronUp className="w-5 h-5" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5" />
+                    )}
+                  </button>
+                </CardHeader>
+                {showErrorPanel && (
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-gray-500 mb-3">
+                      Check errors observed and note if correction worked
+                    </p>
+                    {anticipatedErrors.map((error) => (
                       <div
                         key={error.id}
-                        className="flex items-center gap-3 p-3 bg-foundation rounded-lg"
+                        className={`p-3 rounded-lg border transition-colors ${
+                          anticipatedErrorsChecked[error.id]
+                            ? 'bg-amber-50 border-amber-300'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-text-primary">
-                              {error.studentName}
-                            </span>
-                            <span className="text-xs text-text-muted">
-                              {error.timestamp.toLocaleTimeString()}
-                            </span>
-                            {error.correctionWorked ? (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <AlertTriangle className="w-4 h-4 text-tier3" />
-                            )}
-                          </div>
-                          <p className="text-sm text-text-muted">{error.errorPattern}</p>
-                          {error.correctionUsed && (
-                            <p className="text-xs text-text-muted mt-1">
-                              Correction: {error.correctionUsed}
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={anticipatedErrorsChecked[error.id] || false}
+                            onChange={() =>
+                              handleAnticipatedErrorToggle(error.id)
+                            }
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-900">
+                              {error.error_pattern}
                             </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeLiveError(error.id)}
-                          className="text-tier3"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                            <p className="text-xs text-gray-500 mt-1">
+                              <span className="font-medium">Correction:</span> {error.correction_protocol}
+                            </p>
+                          </div>
+                        </label>
+
+                        {anticipatedErrorsChecked[error.id] && (
+                          <>
+                            {/* Who made this error + did correction work? */}
+                            <div className="mt-2 ml-6">
+                              <p className="text-xs text-gray-500 mb-2">Who made this error? Did correction work?</p>
+                              <div className="space-y-2">
+                                {students.map((student, index) => {
+                                  const isSelected = (errorStudents[error.id] || []).includes(student.id);
+                                  const studentCorrectionResult = correctionWorked[error.id]?.[student.id];
+                                  return (
+                                    <div key={student.id} className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleToggleErrorStudent(error.id, student.id)}
+                                        className={`
+                                          w-8 h-8 rounded-full flex items-center justify-center
+                                          text-xs font-bold transition-all flex-shrink-0
+                                          ${isSelected
+                                            ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                          }
+                                        `}
+                                        title={`${student.name} - click to toggle`}
+                                      >
+                                        {getInitials(student.name)}
+                                      </button>
+                                      {isSelected && (
+                                        <div className="flex gap-1">
+                                          <button
+                                            onClick={() => handleCorrectionWorked(error.id, student.id, true)}
+                                            className={`px-2 py-1 rounded text-xs ${
+                                              studentCorrectionResult === true
+                                                ? 'bg-emerald-500 text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            onClick={() => handleCorrectionWorked(error.id, student.id, false)}
+                                            className={`px-2 py-1 rounded text-xs ${
+                                              studentCorrectionResult === false
+                                                ? 'bg-red-500 text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                          >
+                                            ✗
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            {/* Save to Error Bank button */}
+                            <div className="mt-3 ml-6">
+                              {savedToBank[error.id] ? (
+                                <div className="flex items-center gap-1 text-xs text-emerald-600">
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>Saved to Error Bank</span>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleSaveToBank(
+                                    error.id,
+                                    error.error_pattern,
+                                    error.correction_protocol
+                                  )}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+                                >
+                                  <Save className="w-3 h-3" />
+                                  <span>Save to Bank</span>
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
-                  </div>
-                )}
 
-                {/* Add Error Form */}
-                <div className="p-4 border border-border rounded-lg space-y-3">
-                  <div className="grid md:grid-cols-2 gap-3">
-                    <Select
-                      options={[
-                        { value: '', label: 'Select student...' },
-                        ...(selectedGroup.students?.map(s => ({ value: s.id, label: s.name })) || []),
-                      ]}
-                      value={newError.studentId}
-                      onChange={(e) => setNewError({ ...newError, studentId: e.target.value })}
-                    />
-                    <Input
-                      placeholder="Error pattern (e.g., 'b/d reversal')"
-                      value={newError.errorPattern}
-                      onChange={(e) => setNewError({ ...newError, errorPattern: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-3">
-                    <Input
-                      placeholder="Correction used (optional)"
-                      value={newError.correctionUsed}
-                      onChange={(e) => setNewError({ ...newError, correctionUsed: e.target.value })}
-                    />
-                    <div className="flex items-center justify-between">
-                      <Checkbox
-                        label="Correction worked"
-                        checked={newError.correctionWorked}
-                        onChange={(e) => setNewError({ ...newError, correctionWorked: e.target.checked })}
-                      />
+                    {/* Unexpected errors */}
+                    {unexpectedErrors.length > 0 && (
+                      <div className="pt-3 border-t">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                          New Errors Observed
+                        </h4>
+                        {unexpectedErrors.map((error, i) => {
+                          const errorId = error.id;
+                          const errorStudent = students.find(s => s.id === (error as any).student_id);
+                          const studentIndex = students.findIndex(s => s.id === (error as any).student_id);
+                          return (
+                            <div
+                              key={i}
+                              className="p-2 bg-red-50 border border-red-200 rounded text-sm mb-2"
+                            >
+                              <div className="flex items-start gap-2">
+                                {errorStudent && (
+                                  <div
+                                    className={`
+                                      w-6 h-6 rounded-full flex items-center justify-center
+                                      text-xs font-bold flex-shrink-0
+                                      ${STUDENT_COLORS[studentIndex % STUDENT_COLORS.length]}
+                                    `}
+                                    title={errorStudent.name}
+                                  >
+                                    {getInitials(errorStudent.name)}
+                                  </div>
+                                )}
+                                <div className="flex-1">
+                                  <p className="font-medium">{error.error_pattern}</p>
+                                  {error.correction_used && (
+                                    <p className="text-xs text-gray-600">
+                                      Correction: {error.correction_used}
+                                    </p>
+                                  )}
+                                  {/* Save to Error Bank button */}
+                                  <div className="mt-2">
+                                    {savedToBank[errorId] ? (
+                                      <div className="flex items-center gap-1 text-xs text-emerald-600">
+                                        <CheckCircle className="w-3 h-3" />
+                                        <span>Saved to Error Bank</span>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleSaveToBank(
+                                          errorId,
+                                          error.error_pattern,
+                                          error.correction_used || 'No correction specified',
+                                          true
+                                        )}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+                                      >
+                                        <Save className="w-3 h-3" />
+                                        <span>Save to Bank</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Add new error form */}
+                    {showNewErrorForm ? (
+                      <div className="p-3 bg-gray-100 rounded-lg space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Error pattern observed..."
+                          value={newErrorPattern}
+                          onChange={(e) => setNewErrorPattern(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border rounded"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Correction used..."
+                          value={newErrorCorrection}
+                          onChange={(e) => setNewErrorCorrection(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border rounded"
+                        />
+                        {/* Student selector */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Who made this error?</p>
+                          <div className="flex flex-wrap gap-1">
+                            {students.map((student, index) => (
+                              <button
+                                key={student.id}
+                                type="button"
+                                onClick={() => setNewErrorStudent(
+                                  newErrorStudent === student.id ? '' : student.id
+                                )}
+                                className={`
+                                  w-8 h-8 rounded-full flex items-center justify-center
+                                  text-xs font-bold transition-all
+                                  ${newErrorStudent === student.id
+                                    ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                  }
+                                `}
+                                title={student.name}
+                              >
+                                {getInitials(student.name)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={handleAddUnexpectedError}
+                          >
+                            Add
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setShowNewErrorForm(false);
+                              setNewErrorStudent('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={addLiveError}
-                        disabled={!newError.studentId || !newError.errorPattern}
-                        className="gap-1"
+                        onClick={() => setShowNewErrorForm(true)}
+                        className="w-full"
                       >
-                        <Plus className="w-4 h-4" />
-                        Log Error
+                        <Plus className="w-4 h-4 mr-1" />
+                        Log New Error
                       </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+                    )}
+                  </CardContent>
+                )}
+              </Card>
 
-        {/* Students in Group */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-movement" />
-              Students ({selectedGroup.students?.length || 0})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedGroup.students?.length === 0 ? (
-              <div className="text-center py-6 text-text-muted">
-                <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No students in this group</p>
-                <p className="text-sm mt-1">Add students to track per-student errors</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {selectedGroup.students?.map((student) => {
-                  const errorCount = liveErrors.filter(e => e.studentId === student.id).length;
-                  return (
-                    <div
-                      key={student.id}
-                      className="p-3 bg-foundation rounded-lg text-center relative"
-                    >
-                      <span className="text-text-primary font-medium">
-                        {student.name}
-                      </span>
-                      {errorCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-tier3 text-white text-xs rounded-full flex items-center justify-center">
-                          {errorCount}
-                        </span>
+              {/* Exit Ticket */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Exit Ticket</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={exitTicketCorrect || ''}
+                      onChange={(e) =>
+                        setExitTicketCorrect(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      className="w-16 px-2 py-1 border rounded text-center"
+                      placeholder="0"
+                    />
+                    <span>/</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={exitTicketTotal || ''}
+                      onChange={(e) =>
+                        setExitTicketTotal(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      className="w-16 px-2 py-1 border rounded text-center"
+                      placeholder="0"
+                    />
+                    <span className="text-sm text-gray-500">correct</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick assessments */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Quick Assessment</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-600 block mb-2">
+                      Pacing
+                    </label>
+                    <div className="flex gap-2">
+                      {(['too_slow', 'just_right', 'too_fast'] as Pacing[]).map(
+                        (p) => (
+                          <button
+                            key={p}
+                            onClick={() => setPacing(p)}
+                            className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
+                              pacing === p
+                                ? 'bg-movement text-white'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {p.replace('_', ' ')}
+                          </button>
+                        )
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </div>
 
-        {/* Waiting to Start */}
-        {!isCompleted && !isInProgress && (
-          <Card className="border-movement/20 bg-movement/5">
-            <CardContent className="py-12 text-center">
-              <Clock className="w-12 h-12 mx-auto mb-4 text-movement" />
-              <h3 className="text-xl font-semibold text-text-primary mb-2">
-                Ready to Begin
-              </h3>
-              <p className="text-text-muted mb-6">
-                Click &quot;Start Session&quot; to begin the timer and OTR counter
-              </p>
-              <Button onClick={handleStartSession} size="lg" className="gap-2">
-                <Play className="w-5 h-5" />
-                Start Session
-              </Button>
-            </CardContent>
-          </Card>
+                  <div>
+                    <label className="text-xs text-gray-600 block mb-2">
+                      Mastery
+                    </label>
+                    <div className="flex gap-2">
+                      {(['yes', 'partial', 'no'] as MasteryLevel[]).map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setMastery(m)}
+                          className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
+                            mastery === m
+                              ? m === 'yes'
+                                ? 'bg-emerald-500 text-white'
+                                : m === 'partial'
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-red-500 text-white'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* End Session Modal */}
-      <EndSessionModal
-        isOpen={showEndModal}
-        onClose={() => setShowEndModal(false)}
-        sessionId={sessionId}
-        students={selectedGroup.students || []}
-        onComplete={handleSessionComplete}
-        prefilledErrors={liveErrors.map(e => ({
-          student_id: e.studentId,
-          error_pattern: e.errorPattern,
-          correction_used: e.correctionUsed || undefined,
-          correction_worked: e.correctionWorked,
-        }))}
-      />
-    </AppLayout>
+      {/* Edit Session Modal */}
+      {session && group && (
+        <EditSessionModal
+          session={session}
+          group={group}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSave={handleEditSession}
+        />
+      )}
+
+      {/* Cancel Session Modal */}
+      {session && group && (
+        <CancelSessionModal
+          session={session}
+          group={group}
+          isOpen={showCancelModal}
+          onClose={() => setShowCancelModal(false)}
+          onCancel={handleCancelSession}
+          onReschedule={handleRescheduleSession}
+        />
+      )}
+
+      {/* Reschedule Modal (Plan Session with pre-filled data) */}
+      {session && group && (
+        <PlanSessionModal
+          group={group}
+          isOpen={showRescheduleModal}
+          onClose={() => setShowRescheduleModal(false)}
+          onSave={handleCreateRescheduledSession}
+        />
+      )}
+    </div>
   );
 }

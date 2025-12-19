@@ -1,9 +1,73 @@
 import { create } from 'zustand';
+import { db } from '@/lib/local-db';
+import {
+  createProgressRecord,
+  updateProgressRecord as updateProgressRecordDB,
+  deleteProgressRecord as deleteProgressRecordDB
+} from '@/lib/local-db/hooks';
+import { validateProgressMonitoring } from '@/lib/supabase/validation';
+import { toNumericId } from '@/lib/utils/id';
+import type {
+  LocalProgressMonitoring,
+  LocalProgressMonitoringInsert,
+  LocalStudent,
+} from '@/lib/local-db';
 import type {
   ProgressMonitoring,
   ProgressMonitoringInsert,
   ProgressMonitoringWithStudent,
+  Student,
 } from '@/lib/supabase/types';
+
+/**
+ * Map LocalProgressMonitoring to ProgressMonitoring (API type with string IDs)
+ */
+function mapLocalToProgress(local: LocalProgressMonitoring): ProgressMonitoring {
+  if (local.id === undefined) {
+    throw new Error('LocalProgressMonitoring id is undefined');
+  }
+  return {
+    id: String(local.id),
+    group_id: String(local.group_id),
+    student_id: local.student_id !== null ? String(local.student_id) : null,
+    date: local.date,
+    measure_type: local.measure_type,
+    score: local.score,
+    benchmark: local.benchmark,
+    goal: local.goal,
+    notes: local.notes,
+    created_at: local.created_at,
+  };
+}
+
+/**
+ * Map LocalStudent to Student (API type with string IDs)
+ */
+function mapLocalStudent(student: LocalStudent): Student {
+  if (student.id === undefined) {
+    throw new Error('LocalStudent id is undefined');
+  }
+  return {
+    id: String(student.id),
+    group_id: String(student.group_id),
+    name: student.name,
+    notes: student.notes,
+    created_at: student.created_at,
+  };
+}
+
+/**
+ * Map LocalProgressMonitoring with student to ProgressMonitoringWithStudent
+ */
+function mapLocalToProgressWithStudent(
+  local: LocalProgressMonitoring,
+  student: LocalStudent | null
+): ProgressMonitoringWithStudent {
+  return {
+    ...mapLocalToProgress(local),
+    student: student ? mapLocalStudent(student) : null,
+  };
+}
 
 interface ProgressState {
   data: ProgressMonitoring[];
@@ -27,66 +91,131 @@ export const useProgressStore = create<ProgressState>((set) => ({
 
   fetchProgressForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(
-        `/api/progress-monitoring?group_id=${groupId}&include=student`
-      );
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch progress data');
+    try {
+      const numericGroupId = toNumericId(groupId);
+      if (numericGroupId === null) {
+        throw new Error('Invalid group ID');
       }
 
-      const data = await response.json();
+      const localData = await db.progressMonitoring
+        .where('group_id')
+        .equals(numericGroupId)
+        .sortBy('date');
+
+      // Batch fetch all students to avoid N+1 queries
+      const uniqueStudentIds = [...new Set(
+        localData
+          .filter(pm => pm.student_id !== null)
+          .map(pm => pm.student_id as number)
+      )];
+      const students = uniqueStudentIds.length > 0
+        ? await db.students.bulkGet(uniqueStudentIds)
+        : [];
+      const studentMap = new Map(
+        students
+          .filter((s): s is NonNullable<typeof s> => s !== undefined)
+          .map(s => [s.id!, s])
+      );
+
+      const dataWithStudents: ProgressMonitoringWithStudent[] = localData.map(pm => {
+        const student = pm.student_id !== null ? studentMap.get(pm.student_id) || null : null;
+        return mapLocalToProgressWithStudent(pm, student);
+      });
+
+      const data = localData.map(mapLocalToProgress);
 
       set({
-        data: data,
-        dataWithStudents: data,
+        data,
+        dataWithStudents,
         isLoading: false,
       });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        data: [],
+        dataWithStudents: []
+      });
     }
   },
 
   fetchProgressForStudent: async (studentId: string) => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(
-        `/api/progress-monitoring?student_id=${studentId}`
-      );
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch progress data');
+    try {
+      const numericStudentId = toNumericId(studentId);
+      if (numericStudentId === null) {
+        throw new Error('Invalid student ID');
       }
 
-      const data = await response.json();
-      set({ data: data, isLoading: false });
+      const localData = await db.progressMonitoring
+        .where('student_id')
+        .equals(numericStudentId)
+        .sortBy('date');
+
+      const data = localData.map(mapLocalToProgress);
+      set({ data, isLoading: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        data: []
+      });
     }
   },
 
   addDataPoint: async (dataPoint: ProgressMonitoringInsert) => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await fetch('/api/progress-monitoring', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataPoint),
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to add data point');
+    // Validate progress monitoring data
+    const validation = validateProgressMonitoring(dataPoint);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
+    try {
+      const numericGroupId = toNumericId(dataPoint.group_id);
+      if (numericGroupId === null) {
+        throw new Error('Invalid group ID');
       }
 
-      const data = await response.json();
+      const numericStudentId = dataPoint.student_id !== null
+        ? toNumericId(dataPoint.student_id)
+        : null;
+
+      if (dataPoint.student_id !== null && numericStudentId === null) {
+        throw new Error('Invalid student ID');
+      }
+
+      const localDataPoint: LocalProgressMonitoringInsert = {
+        group_id: numericGroupId,
+        student_id: numericStudentId,
+        date: dataPoint.date,
+        measure_type: dataPoint.measure_type,
+        score: dataPoint.score,
+        benchmark: dataPoint.benchmark || null,
+        goal: dataPoint.goal || null,
+        notes: dataPoint.notes || null,
+      };
+
+      const id = await createProgressRecord(localDataPoint);
+      const newDataPoint = await db.progressMonitoring.get(id);
+
+      if (!newDataPoint) {
+        throw new Error('Failed to retrieve created progress record');
+      }
+
+      const mappedDataPoint = mapLocalToProgress(newDataPoint);
 
       set((state) => ({
-        data: [...state.data, data],
+        data: [...state.data, mappedDataPoint],
         isLoading: false,
       }));
 
-      return data;
+      return mappedDataPoint;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -95,14 +224,14 @@ export const useProgressStore = create<ProgressState>((set) => ({
 
   deleteDataPoint: async (id: string) => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(`/api/progress-monitoring/${id}`, {
-        method: 'DELETE',
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to delete data point');
+    try {
+      const numericId = toNumericId(id);
+      if (numericId === null) {
+        throw new Error('Invalid progress monitoring ID');
       }
+
+      await deleteProgressRecordDB(numericId);
 
       set((state) => ({
         data: state.data.filter((d) => d.id !== id),

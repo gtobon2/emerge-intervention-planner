@@ -1,114 +1,125 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, Plus, Filter, AlertTriangle, CheckCircle, MinusCircle } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
+import { TrendingUp, Plus, Filter, Calendar, BarChart3 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
-import { Button, Card, CardHeader, CardTitle, CardContent, Select, Modal, Input } from '@/components/ui';
+import { Button, Card, CardHeader, CardTitle, CardContent, Select } from '@/components/ui';
+import {
+  ProgressChart,
+  TrendIndicator,
+  DecisionRuleAlert,
+  AddDataPointModal,
+} from '@/components/progress';
+import { useProgress } from '@/hooks/use-progress';
 import { useGroupsStore } from '@/stores/groups';
-import { useProgressStore, checkDecisionRules, calculateTrendLine } from '@/stores/progress';
 
 export default function ProgressPage() {
-  const { groups, fetchGroups } = useGroupsStore();
-  const { data, fetchProgressForGroup, addDataPoint, isLoading } = useProgressStore();
-
   const [selectedGroupId, setSelectedGroupId] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [goal, setGoal] = useState<number>(100);
+  const [dateRange, setDateRange] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form state for adding data point
-  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
-  const [newScore, setNewScore] = useState('');
-  const [newMeasureType, setNewMeasureType] = useState('ORF');
-  const [newNotes, setNewNotes] = useState('');
+  // Fetch groups
+  const { groups, fetchGroups } = useGroupsStore();
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
+
+  // Fetch progress data
+  const { data, isLoading, addDataPoint, trendLine, dataWithStudents, refetch } = useProgress(
+    selectedGroupId || undefined
+  );
 
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
 
-  useEffect(() => {
-    if (selectedGroupId) {
-      fetchProgressForGroup(selectedGroupId);
+  // Filter data by date range
+  const filteredData = useMemo(() => {
+    if (dateRange === 'all') return data;
+
+    const now = new Date();
+    const cutoffDate = new Date();
+
+    switch (dateRange) {
+      case '30':
+        cutoffDate.setDate(now.getDate() - 30);
+        break;
+      case '60':
+        cutoffDate.setDate(now.getDate() - 60);
+        break;
+      case '90':
+        cutoffDate.setDate(now.getDate() - 90);
+        break;
+      default:
+        return data;
     }
-  }, [selectedGroupId, fetchProgressForGroup]);
 
-  // Format data for chart
-  const chartData = useMemo(() => {
-    return data.map((point) => ({
-      date: new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      rawDate: point.date,
-      score: point.score,
-      goal: point.goal || goal,
-      benchmark: point.benchmark,
-    }));
-  }, [data, goal]);
+    return data.filter((d) => new Date(d.date) >= cutoffDate);
+  }, [data, dateRange]);
 
-  // Calculate trend line points
-  const trendLineData = useMemo(() => {
-    const trend = calculateTrendLine(data);
-    if (!trend || data.length < 2) return null;
+  // Calculate summary stats
+  const summaryStats = useMemo(() => {
+    if (filteredData.length === 0) {
+      return {
+        currentScore: null,
+        averageScore: null,
+        trend: null,
+        weeksToGoal: null,
+      };
+    }
 
-    return chartData.map((_, i) => ({
-      date: chartData[i].date,
-      trend: trend.intercept + trend.slope * i,
-    }));
-  }, [data, chartData]);
+    const sortedData = [...filteredData].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
 
-  // Merge trend data with chart data
-  const mergedChartData = useMemo(() => {
-    if (!trendLineData) return chartData;
-    return chartData.map((point, i) => ({
-      ...point,
-      trend: trendLineData[i]?.trend,
-    }));
-  }, [chartData, trendLineData]);
+    const currentScore = sortedData[0]?.score;
+    const averageScore =
+      filteredData.reduce((sum, d) => sum + d.score, 0) / filteredData.length;
 
-  // Check decision rules
-  const decisionResult = useMemo(() => {
-    if (data.length < 4) return null;
-    const avgGoal = data.reduce((sum, p) => sum + (p.goal || goal), 0) / data.length;
-    return checkDecisionRules(data, avgGoal);
-  }, [data, goal]);
+    // Calculate trend
+    let trend: 'improving' | 'declining' | 'flat' = 'flat';
+    if (trendLine && trendLine.slope > 0.1) {
+      trend = 'improving';
+    } else if (trendLine && trendLine.slope < -0.1) {
+      trend = 'declining';
+    }
 
-  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
+    // Calculate weeks to goal
+    let weeksToGoal: number | null = null;
+    const goal = sortedData[0]?.goal;
+    if (goal && trendLine && trendLine.slope > 0 && currentScore < goal) {
+      const pointsNeeded = goal - currentScore;
+      const weeksNeeded = pointsNeeded / trendLine.slope;
+      weeksToGoal = Math.ceil(weeksNeeded);
+    }
 
-  const handleAddDataPoint = async () => {
-    if (!selectedGroupId || !newScore || !newDate) return;
+    return {
+      currentScore,
+      averageScore: Math.round(averageScore * 10) / 10,
+      trend,
+      weeksToGoal,
+    };
+  }, [filteredData, trendLine]);
 
-    await addDataPoint({
-      group_id: selectedGroupId,
-      student_id: null,
-      date: newDate,
-      measure_type: newMeasureType,
-      score: parseFloat(newScore),
-      goal: goal,
-      benchmark: null,
-      notes: newNotes || null,
+  // Get benchmark and goal from most recent data point
+  const benchmark = filteredData[0]?.benchmark || undefined;
+  const goal = filteredData[0]?.goal || undefined;
+
+  // Get students for the selected group
+  const students = useMemo(() => {
+    if (!selectedGroupId) return [];
+    const groupData = dataWithStudents.filter((d) => d.student);
+    const uniqueStudents = new Map();
+    groupData.forEach((d) => {
+      if (d.student && !uniqueStudents.has(d.student.id)) {
+        uniqueStudents.set(d.student.id, d.student);
+      }
     });
+    return Array.from(uniqueStudents.values());
+  }, [selectedGroupId, dataWithStudents]);
 
-    // Reset form and close modal
-    setNewScore('');
-    setNewNotes('');
-    setShowAddModal(false);
-
-    // Refresh data
-    fetchProgressForGroup(selectedGroupId);
+  const handleAddDataPoint = async (dataPoint: any) => {
+    await addDataPoint(dataPoint);
+    refetch();
   };
-
-  const groupOptions = [
-    { value: '', label: 'Select a group' },
-    ...groups.map((g) => ({ value: g.id, label: g.name })),
-  ];
 
   return (
     <AppLayout>
@@ -123,7 +134,7 @@ export default function ProgressPage() {
           </div>
           <Button
             className="gap-2"
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setIsModalOpen(true)}
             disabled={!selectedGroupId}
           >
             <Plus className="w-4 h-4" />
@@ -132,337 +143,197 @@ export default function ProgressPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 p-4 bg-surface rounded-xl">
+        <div className="flex items-center gap-4 p-4 bg-surface rounded-xl flex-wrap">
           <Filter className="w-4 h-4 text-text-muted" />
           <Select
-            options={groupOptions}
+            options={[
+              { value: '', label: 'Select a group' },
+              ...groups.map((g) => ({
+                value: g.id,
+                label: g.name,
+              })),
+            ]}
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
             className="w-64"
           />
+
           {selectedGroupId && (
-            <div className="flex items-center gap-2 ml-4">
-              <label className="text-sm text-text-muted">Goal:</label>
-              <Input
-                type="number"
-                value={goal}
-                onChange={(e) => setGoal(parseInt(e.target.value) || 0)}
-                className="w-24"
-              />
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-text-muted" />
+                <Select
+                  options={[
+                    { value: 'all', label: 'All Time' },
+                    { value: '30', label: 'Last 30 Days' },
+                    { value: '60', label: 'Last 60 Days' },
+                    { value: '90', label: 'Last 90 Days' },
+                  ]}
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            </>
           )}
         </div>
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Chart Area */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-movement" />
-                  Progress Chart
-                  {selectedGroup && (
-                    <span className="text-sm font-normal text-text-muted ml-2">
-                      - {selectedGroup.name}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedGroupId ? (
-                  <div className="h-80 flex items-center justify-center text-text-muted">
-                    <p>Select a group to view progress data</p>
-                  </div>
-                ) : isLoading ? (
-                  <div className="h-80 flex items-center justify-center">
-                    <div className="animate-pulse text-text-muted">Loading data...</div>
-                  </div>
-                ) : data.length === 0 ? (
-                  <div className="h-80 flex flex-col items-center justify-center text-text-muted">
-                    <p className="mb-4">No progress data for this group yet</p>
-                    <Button onClick={() => setShowAddModal(true)}>
-                      Add First Data Point
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={mergedChartData}
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#9CA3AF"
-                          fontSize={12}
-                        />
-                        <YAxis
-                          stroke="#9CA3AF"
-                          fontSize={12}
-                          domain={['auto', 'auto']}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#1F2937',
-                            border: '1px solid #374151',
-                            borderRadius: '8px',
-                          }}
-                          labelStyle={{ color: '#F3F4F6' }}
-                        />
-                        <Legend />
-                        {/* Goal line */}
-                        <ReferenceLine
-                          y={goal}
-                          stroke="#10B981"
-                          strokeDasharray="5 5"
-                          label={{ value: 'Goal', fill: '#10B981', fontSize: 12 }}
-                        />
-                        {/* Score line */}
-                        <Line
-                          type="monotone"
-                          dataKey="score"
-                          stroke="#3B82F6"
-                          strokeWidth={2}
-                          dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                          activeDot={{ r: 6 }}
-                          name="Score"
-                        />
-                        {/* Trend line */}
-                        {trendLineData && (
-                          <Line
-                            type="monotone"
-                            dataKey="trend"
-                            stroke="#F59E0B"
-                            strokeWidth={2}
-                            strokeDasharray="5 5"
-                            dot={false}
-                            name="Trend"
-                          />
-                        )}
-                        {/* Benchmark line */}
-                        {chartData.some((d) => d.benchmark) && (
-                          <Line
-                            type="monotone"
-                            dataKey="benchmark"
-                            stroke="#8B5CF6"
-                            strokeWidth={1}
-                            strokeDasharray="3 3"
-                            dot={false}
-                            name="Benchmark"
-                          />
-                        )}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Data Points Table */}
-            {data.length > 0 && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Data Points ({data.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-2 px-3 text-text-muted">Date</th>
-                          <th className="text-left py-2 px-3 text-text-muted">Measure</th>
-                          <th className="text-right py-2 px-3 text-text-muted">Score</th>
-                          <th className="text-right py-2 px-3 text-text-muted">Goal</th>
-                          <th className="text-left py-2 px-3 text-text-muted">Notes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.slice().reverse().map((point) => (
-                          <tr key={point.id} className="border-b border-border/50">
-                            <td className="py-2 px-3 text-text-primary">
-                              {new Date(point.date).toLocaleDateString()}
-                            </td>
-                            <td className="py-2 px-3 text-text-primary">{point.measure_type}</td>
-                            <td className="py-2 px-3 text-right font-medium text-text-primary">
-                              {point.score}
-                            </td>
-                            <td className="py-2 px-3 text-right text-text-muted">
-                              {point.goal || '-'}
-                            </td>
-                            <td className="py-2 px-3 text-text-muted text-xs">
-                              {point.notes || '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Decision Rules */}
-          <div className="space-y-6">
-            {/* Active Decision Alert */}
-            {decisionResult && (
-              <Card className={`border-2 ${
-                decisionResult.type === 'positive'
-                  ? 'border-green-500/50 bg-green-500/10'
-                  : decisionResult.type === 'negative'
-                  ? 'border-red-500/50 bg-red-500/10'
-                  : 'border-yellow-500/50 bg-yellow-500/10'
-              }`}>
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-3">
-                    {decisionResult.type === 'positive' ? (
-                      <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0" />
-                    ) : decisionResult.type === 'negative' ? (
-                      <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
-                    ) : (
-                      <MinusCircle className="w-6 h-6 text-yellow-500 flex-shrink-0" />
-                    )}
-                    <div>
-                      <p className="font-semibold text-text-primary">Decision Point Reached</p>
-                      <p className="text-sm text-text-muted mt-1">{decisionResult.message}</p>
+        {selectedGroupId ? (
+          <>
+            {/* Summary Stats */}
+            {summaryStats.currentScore !== null && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-text-muted mb-1">Current Score</p>
+                      <p className="text-3xl font-bold text-text-primary">
+                        {summaryStats.currentScore}
+                      </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-text-muted mb-1">Average Score</p>
+                      <p className="text-3xl font-bold text-text-primary">
+                        {summaryStats.averageScore}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-text-muted mb-1">Trend</p>
+                      <p className="text-2xl font-bold text-text-primary capitalize">
+                        {summaryStats.trend}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-text-muted mb-1">Weeks to Goal</p>
+                      <p className="text-3xl font-bold text-text-primary">
+                        {summaryStats.weeksToGoal !== null ? summaryStats.weeksToGoal : 'N/A'}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Decision Rules</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4 text-sm">
-                  <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                    <p className="font-medium text-green-400 mb-1">4+ points above goal</p>
-                    <p className="text-text-muted">Consider raising the goal or advancing in curriculum</p>
-                  </div>
-                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                    <p className="font-medium text-yellow-400 mb-1">Variable performance</p>
-                    <p className="text-text-muted">Continue monitoring, maintain current intervention</p>
-                  </div>
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="font-medium text-red-400 mb-1">4+ points below goal</p>
-                    <p className="text-text-muted">Consider adjusting intervention intensity or approach</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Stats Card */}
-            {data.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Statistics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">Data Points</span>
-                      <span className="font-medium text-text-primary">{data.length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">Average Score</span>
-                      <span className="font-medium text-text-primary">
-                        {(data.reduce((sum, p) => sum + p.score, 0) / data.length).toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">Highest Score</span>
-                      <span className="font-medium text-text-primary">
-                        {Math.max(...data.map((p) => p.score))}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">Lowest Score</span>
-                      <span className="font-medium text-text-primary">
-                        {Math.min(...data.map((p) => p.score))}
-                      </span>
-                    </div>
-                    {data.length >= 2 && (
-                      <div className="flex justify-between pt-2 border-t border-border">
-                        <span className="text-text-muted">Trend</span>
-                        <span className={`font-medium ${
-                          (calculateTrendLine(data)?.slope || 0) > 0 ? 'text-green-500' : 'text-red-500'
-                        }`}>
-                          {(calculateTrendLine(data)?.slope || 0) > 0 ? '↑ Improving' : '↓ Declining'}
-                        </span>
+            {/* Main Content */}
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Chart Area */}
+              <div className="lg:col-span-2 space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-movement" />
+                      Progress Chart
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <div className="h-[400px] flex items-center justify-center text-text-muted">
+                        Loading progress data...
                       </div>
+                    ) : (
+                      <ProgressChart
+                        students={students}
+                        progressData={filteredData}
+                        groupId={selectedGroupId}
+                      />
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+                  </CardContent>
+                </Card>
+
+                {/* Trend Indicator */}
+                {trendLine && filteredData.length > 0 && (
+                  <TrendIndicator trend={summaryStats.trend} slope={trendLine.slope} />
+                )}
+              </div>
+
+              {/* Sidebar */}
+              <div className="space-y-6">
+                {/* Decision Rule Alert */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-movement" />
+                      Decision Rules
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DecisionRuleAlert data={filteredData} goal={goal} />
+                  </CardContent>
+                </Card>
+
+                {/* Group Info */}
+                {selectedGroup && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Group Details</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <p className="text-text-muted">Curriculum</p>
+                          <p className="font-medium text-text-primary capitalize">
+                            {selectedGroup.curriculum.replace('_', ' ')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-text-muted">Tier</p>
+                          <p className="font-medium text-text-primary">Tier {selectedGroup.tier}</p>
+                        </div>
+                        <div>
+                          <p className="text-text-muted">Grade</p>
+                          <p className="font-medium text-text-primary">Grade {selectedGroup.grade}</p>
+                        </div>
+                        <div>
+                          <p className="text-text-muted">Data Points</p>
+                          <p className="font-medium text-text-primary">{filteredData.length}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center text-text-muted">
+                <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">No Group Selected</p>
+                <p className="text-sm">
+                  Select a group from the dropdown above to view progress monitoring data
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Add Data Point Modal */}
-      <Modal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title="Add Progress Data Point"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Date *</label>
-            <Input
-              type="date"
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Measure Type</label>
-            <Select
-              options={[
-                { value: 'ORF', label: 'Oral Reading Fluency (ORF)' },
-                { value: 'MAZE', label: 'MAZE Comprehension' },
-                { value: 'CBM-Math', label: 'CBM Math' },
-                { value: 'Spelling', label: 'Spelling' },
-                { value: 'Other', label: 'Other' },
-              ]}
-              value={newMeasureType}
-              onChange={(e) => setNewMeasureType(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Score *</label>
-            <Input
-              type="number"
-              value={newScore}
-              onChange={(e) => setNewScore(e.target.value)}
-              placeholder="e.g., 85"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Notes</label>
-            <Input
-              value={newNotes}
-              onChange={(e) => setNewNotes(e.target.value)}
-              placeholder="Optional notes..."
-            />
-          </div>
-
-          <div className="flex gap-3 justify-end pt-4 border-t border-border">
-            <Button variant="ghost" onClick={() => setShowAddModal(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddDataPoint} disabled={!newScore || !newDate}>
-              Add Data Point
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <AddDataPointModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleAddDataPoint}
+        groupId={selectedGroupId}
+        students={students}
+        defaultBenchmark={benchmark}
+        defaultGoal={goal}
+      />
     </AppLayout>
   );
 }
