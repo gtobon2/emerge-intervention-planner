@@ -43,13 +43,6 @@ AI-powered error pattern suggestions for session planning.
 - Visual feedback for added errors
 - Error handling with retry functionality
 
-**User Flow:**
-1. User clicks "Suggest Errors with AI" button (pre-session view)
-2. AI analyzes curriculum and position
-3. Displays 3-5 likely error patterns in a modal
-4. User can add individual errors or all errors to anticipated errors list
-5. Added errors appear in the Anticipated Errors section
-
 ### 3. AISessionSummary (`ai-session-summary.tsx`)
 AI-generated professional session summaries for IEP documentation.
 
@@ -68,31 +61,135 @@ AI-generated professional session summaries for IEP documentation.
 - Editable summary with textarea
 - Copy to clipboard functionality
 - Save to session notes
-- Displays session metadata (date, OTR, exit ticket)
-- Only enabled when session has data to summarize
 
-**User Flow:**
-1. User clicks "Generate Summary" button (active session view)
-2. AI analyzes session data and generates professional summary
-3. Summary displayed in formatted text
-4. User can:
-   - Copy to clipboard
-   - Edit the text
-   - Save to session notes
-5. Summary appends to existing notes with header
+### 4. AIChat (`ai-chat.tsx`)
+Conversational AI assistant for intervention support with built-in PII protection.
+
+**Props:**
+```tsx
+{
+  isOpen: boolean;
+  onClose: () => void;
+  students?: StudentContext[];  // Optional student context
+  group?: GroupContext;         // Optional group context
+  recentSessions?: SessionContext[];
+}
+```
+
+**Features:**
+- Full chat interface with conversation history
+- **PII Masking**: Student names automatically replaced with anonymous IDs before sending to AI
+- Privacy legend showing masked-to-real name mappings
+- Context-aware responses based on student/group data
+- Suggested prompts for common questions
+- Calls `/api/ai/chat` endpoint
+
+**Privacy Protection:**
+The AIChat component uses the PII masking utilities from `@/lib/ai/pii-mask` to:
+1. Replace student names with anonymous identifiers (e.g., "Maria" → "Student A1")
+2. Mask names in user messages before sending to AI
+3. Unmask AI responses to show real names to users
+4. Display a privacy legend so users know the mapping
+
+**Usage:**
+```tsx
+import { AIChat } from '@/components/ai';
+
+function MyComponent() {
+  const [showChat, setShowChat] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setShowChat(true)}>Open AI Chat</button>
+      <AIChat
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        students={[{ id: '1', name: 'Maria', groupName: 'Reading Group A' }]}
+        group={{ name: 'Reading Group A', curriculum: 'wilson', tier: 'tier2', grade: '3' }}
+      />
+    </>
+  );
+}
+```
+
+## PII Masking Utilities
+
+Located in `@/lib/ai/pii-mask.ts`:
+
+```tsx
+import {
+  createMaskingContext,
+  maskStudent,
+  maskTextContent,
+  unmaskTextContent,
+  createMaskingLegend,
+} from '@/lib/ai/pii-mask';
+
+// Create a context (one per conversation)
+const context = createMaskingContext();
+
+// Mask a student
+const masked = maskStudent(context, 'student-123', 'Maria');
+// Returns: { originalId: 'student-123', maskedId: 'student_1', maskedName: 'Student A1' }
+
+// Mask text content
+const maskedText = maskTextContent(context, 'Maria did well today', students);
+// Returns: 'Student A1 did well today'
+
+// Unmask AI response
+const unmaskedText = unmaskTextContent(context, 'Student A1 needs more practice', students);
+// Returns: 'Maria needs more practice'
+
+// Get legend for display
+const legend = createMaskingLegend(context, students);
+// Returns: [{ maskedName: 'Student A1', originalName: 'Maria' }]
+```
 
 ## Integration
 
-The AI components are integrated into the session page:
+### Global AI Chat Button
 
-**Pre-Session View:**
-- AI Error Suggestions button appears in the Anticipated Errors card header
-- Generated errors can be added to the anticipated errors list
+The AI Chat is accessible from any page via a floating button in the bottom-right corner. This is integrated in `AppLayout`:
 
-**Active Session View:**
-- AI Summary button appears in the header next to "Complete Session"
-- Summary generation uses current session state data
-- Generated summary can be saved to session notes
+```tsx
+// src/components/layout/app-layout.tsx
+<button
+  onClick={() => setShowAIChat(true)}
+  className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-600 ..."
+>
+  <Sparkles className="w-6 h-6" />
+</button>
+
+<AIChat isOpen={showAIChat} onClose={() => setShowAIChat(false)} />
+```
+
+### Page-Specific Context
+
+When opening AIChat from a specific page (e.g., group detail), pass relevant context:
+
+```tsx
+<AIChat
+  isOpen={showAIChat}
+  onClose={() => setShowAIChat(false)}
+  students={groupStudents}
+  group={currentGroup}
+  recentSessions={recentGroupSessions}
+/>
+```
+
+## API Routes
+
+| Endpoint | Description |
+|----------|-------------|
+| `/api/ai/suggest-errors` | Error pattern suggestions |
+| `/api/ai/session-summary` | Session summary generation |
+| `/api/ai/chat` | Conversational chat with context |
+
+All endpoints:
+- Support both OpenAI and Anthropic providers
+- Handle availability checks
+- Return structured responses
+- Track token usage
 
 ## Styling
 
@@ -103,18 +200,6 @@ All AI components use a consistent design language:
 - Loading states with animated spinners
 - Success feedback with checkmarks
 - Error states with retry options
-
-## API Integration
-
-The components interact with existing API routes:
-- `/api/ai/suggest-errors` - Error pattern suggestions
-- `/api/ai/session-summary` - Session summary generation
-
-Both endpoints handle:
-- AI service availability checks
-- Error handling
-- Response formatting
-- Usage tracking
 
 ## Accessibility
 
