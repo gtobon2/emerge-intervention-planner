@@ -236,6 +236,7 @@ npm run dev      # Manual testing at localhost:3000
 
 | Commit | Description |
 |--------|-------------|
+| `289a24f` | Add AGENTS.md for Claude CI context |
 | `1a0c670` | Update documentation for new features |
 | `1b40f26` | Modernize UI with 2025 design system |
 | `4136d2a` | Fix AI chat input text color for dark mode |
