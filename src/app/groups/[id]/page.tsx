@@ -23,6 +23,7 @@ import { PlanSessionModal, EditSessionModal, CancelSessionModal, SessionPlanData
 import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
+import { useAIContextStore } from '@/stores/ai-context';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
 import { db } from '@/lib/local-db';
 import { toNumericId } from '@/lib/utils/id';
@@ -35,6 +36,7 @@ export default function GroupDetailPage() {
 
   const { selectedGroup, fetchGroupById, updateGroup, deleteGroup, isLoading: groupLoading } = useGroupsStore();
   const { sessions, fetchSessionsForGroup, createSession, updateSession, cancelSession, isLoading: sessionsLoading } = useSessionsStore();
+  const { setContext, clearContext } = useAIContextStore();
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -51,6 +53,57 @@ export default function GroupDetailPage() {
       fetchSessionsForGroup(groupId);
     }
   }, [groupId, fetchGroupById, fetchSessionsForGroup]);
+
+  // Set AI context when group and sessions load
+  useEffect(() => {
+    if (selectedGroup) {
+      // Build students context
+      const studentsContext = (selectedGroup.students || []).map(student => ({
+        id: student.id.toString(),
+        name: student.name,
+        groupName: selectedGroup.name,
+        curriculum: selectedGroup.curriculum,
+        tier: `Tier ${selectedGroup.tier}`,
+        notes: student.notes,
+      }));
+
+      // Build group context
+      const groupContext = {
+        name: selectedGroup.name,
+        curriculum: selectedGroup.curriculum,
+        tier: `Tier ${selectedGroup.tier}`,
+        grade: `${selectedGroup.grade}`,
+      };
+
+      // Build recent sessions context (last 5 completed sessions)
+      const recentSessionsContext = sessions
+        .filter(s => s.status === 'completed')
+        .slice(0, 5)
+        .map(session => ({
+          date: session.date,
+          studentNames: (selectedGroup.students || []).map(s => s.name),
+          errorsLogged: session.errors_observed?.length || 0,
+          otrCount: session.actual_otr_estimate || undefined,
+          exitTicketScore: session.exit_ticket_correct && session.exit_ticket_total
+            ? Math.round((session.exit_ticket_correct / session.exit_ticket_total) * 100)
+            : undefined,
+          notes: session.notes || undefined,
+        }));
+
+      setContext({
+        students: studentsContext,
+        group: groupContext,
+        recentSessions: recentSessionsContext,
+        currentPage: `group-detail:${selectedGroup.name}`,
+      });
+    }
+
+    // Clear context when navigating away
+    return () => {
+      clearContext();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup, sessions]); // setContext and clearContext are stable Zustand actions
 
   /**
    * Calculate PM Trend for the group

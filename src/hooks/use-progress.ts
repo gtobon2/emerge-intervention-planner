@@ -1,58 +1,81 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useProgressStore, checkDecisionRules, calculateTrendLine } from '@/stores/progress';
 import type { ProgressMonitoringInsert } from '@/lib/supabase/types';
 
 export function useProgress(groupId: string | undefined) {
-  const store = useProgressStore();
+  // Use selectors to avoid infinite re-render loop
+  const data = useProgressStore((state) => state.data);
+  const dataWithStudents = useProgressStore((state) => state.dataWithStudents);
+  const isLoading = useProgressStore((state) => state.isLoading);
+  const error = useProgressStore((state) => state.error);
+  const fetchProgressForGroup = useProgressStore((state) => state.fetchProgressForGroup);
+  const addDataPoint = useProgressStore((state) => state.addDataPoint);
+  const deleteDataPoint = useProgressStore((state) => state.deleteDataPoint);
 
   useEffect(() => {
     if (groupId) {
-      store.fetchProgressForGroup(groupId);
+      fetchProgressForGroup(groupId);
     }
-  }, [groupId, store]);
+  }, [groupId, fetchProgressForGroup]);
 
   // Calculate trend line
   const trendLine = useMemo(() => {
-    return calculateTrendLine(store.data);
-  }, [store.data]);
+    return calculateTrendLine(data);
+  }, [data]);
 
   // Check decision rules
   const decisionRule = useMemo(() => {
-    const goal = store.data[0]?.goal;
+    const goal = data[0]?.goal;
     if (goal) {
-      return checkDecisionRules(store.data, goal);
+      return checkDecisionRules(data, goal);
     }
     return null;
-  }, [store.data]);
+  }, [data]);
+
+  const refetch = useCallback(() => {
+    if (groupId) {
+      fetchProgressForGroup(groupId);
+    }
+  }, [groupId, fetchProgressForGroup]);
 
   return {
-    data: store.data,
-    dataWithStudents: store.dataWithStudents,
-    isLoading: store.isLoading,
-    error: store.error,
-    refetch: () => groupId && store.fetchProgressForGroup(groupId),
-    addDataPoint: store.addDataPoint,
-    deleteDataPoint: store.deleteDataPoint,
+    data,
+    dataWithStudents,
+    isLoading,
+    error,
+    refetch,
+    addDataPoint,
+    deleteDataPoint,
     trendLine,
     decisionRule,
   };
 }
 
 export function useStudentProgress(studentId: string | undefined) {
-  const store = useProgressStore();
+  // Use selectors to avoid infinite re-render loop
+  const data = useProgressStore((state) => state.data);
+  const isLoading = useProgressStore((state) => state.isLoading);
+  const error = useProgressStore((state) => state.error);
+  const fetchProgressForStudent = useProgressStore((state) => state.fetchProgressForStudent);
 
   useEffect(() => {
     if (studentId) {
-      store.fetchProgressForStudent(studentId);
+      fetchProgressForStudent(studentId);
     }
-  }, [studentId, store]);
+  }, [studentId, fetchProgressForStudent]);
+
+  const refetch = useCallback(() => {
+    if (studentId) {
+      fetchProgressForStudent(studentId);
+    }
+  }, [studentId, fetchProgressForStudent]);
 
   return {
-    data: store.data,
-    isLoading: store.isLoading,
-    error: store.error,
-    refetch: () => studentId && store.fetchProgressForStudent(studentId),
+    data,
+    isLoading,
+    error,
+    refetch,
   };
 }

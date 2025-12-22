@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Menu, User, LogOut, ChevronDown, HelpCircle, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './sidebar';
@@ -8,6 +8,7 @@ import { NotificationBell } from '@/components/notifications/notification-bell';
 import { GlobalSearch } from '@/components/search';
 import { AIChat } from '@/components/ai';
 import { useUIStore } from '@/stores/ui';
+import { useAIContextStore } from '@/stores/ai-context';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotificationGenerator } from '@/hooks/use-notifications';
 import { OnboardingTour, HelpPanel } from '@/components/help';
@@ -19,6 +20,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { students, group, recentSessions, additionalContext } = useAIContextStore();
   const { user, signOut } = useAuth();
   const { toggleHelpPanel, hasSeenOnboarding, startTour } = useHelpStore();
   const router = useRouter();
@@ -29,12 +31,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   useNotificationGenerator();
 
   // Start tour for first-time users
-  useState(() => {
+  useEffect(() => {
     if (!hasSeenOnboarding) {
       // Small delay to let the page render first
-      setTimeout(() => startTour(), 1000);
+      const timer = setTimeout(() => startTour(), 1000);
+      return () => clearTimeout(timer);
     }
-  });
+  }, [hasSeenOnboarding, startTour]);
 
   const handleSignOut = async () => {
     try {
@@ -222,10 +225,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         <Sparkles className="w-6 h-6 group-hover:scale-110 transition-transform" />
       </button>
 
-      {/* AI Chat Modal */}
+      {/* AI Chat Modal - receives context from useAIContextStore */}
       <AIChat
         isOpen={showAIChat}
         onClose={() => setShowAIChat(false)}
+        students={students}
+        group={group ?? undefined}
+        recentSessions={recentSessions}
+        additionalContext={additionalContext}
       />
     </div>
   );

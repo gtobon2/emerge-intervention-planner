@@ -7,6 +7,8 @@ export { useErrorsStore } from './errors';
 export { useStudentsStore } from './students';
 export { useUIStore, formatElapsedTime } from './ui';
 export { useSettingsStore, getReminderTimingLabel, getThemeLabel } from './settings';
+export { useAIContextStore } from './ai-context';
+export type { StudentContext, GroupContext, SessionContext } from './ai-context';
 
 // Generic store factory for creating new entity stores
 export { createEntityStore } from './factory';

@@ -11,6 +11,7 @@ import { StudentFormModal } from '@/components/students/student-form-modal';
 import { DeleteStudentModal } from '@/components/students/delete-student-modal';
 import { useGroupsStore } from '@/stores/groups';
 import { useStudents } from '@/hooks/use-students';
+import { useAIContextStore } from '@/stores/ai-context';
 import type { Student } from '@/lib/supabase/types';
 
 export default function StudentsManagementPage() {
@@ -28,6 +29,7 @@ export default function StudentsManagementPage() {
     deleteStudent,
     clearError,
   } = useStudents(groupId);
+  const { setContext, clearContext } = useAIContextStore();
 
   const [formModalState, setFormModalState] = useState<{
     isOpen: boolean;
@@ -53,6 +55,41 @@ export default function StudentsManagementPage() {
       fetchGroupById(groupId);
     }
   }, [groupId, fetchGroupById]);
+
+  // Set AI context when group and students load
+  useEffect(() => {
+    if (selectedGroup && students.length > 0) {
+      // Build students context
+      const studentsContext = students.map(student => ({
+        id: student.id.toString(),
+        name: student.name,
+        groupName: selectedGroup.name,
+        curriculum: selectedGroup.curriculum,
+        tier: `Tier ${selectedGroup.tier}`,
+        notes: student.notes,
+      }));
+
+      // Build group context
+      const groupContext = {
+        name: selectedGroup.name,
+        curriculum: selectedGroup.curriculum,
+        tier: `Tier ${selectedGroup.tier}`,
+        grade: `${selectedGroup.grade}`,
+      };
+
+      setContext({
+        students: studentsContext,
+        group: groupContext,
+        currentPage: `students-management:${selectedGroup.name}`,
+      });
+    }
+
+    // Clear context when navigating away
+    return () => {
+      clearContext();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup, students]); // setContext and clearContext are stable Zustand actions
 
   // Auto-hide success message after 3 seconds
   useEffect(() => {

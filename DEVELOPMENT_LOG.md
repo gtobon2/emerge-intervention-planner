@@ -508,6 +508,108 @@ ANTHROPIC_API_KEY=your_anthropic_key
 
 ---
 
+### Session 10: AI Chat Page-Specific Context ✅
+**Date**: 2025-12-21
+
+**Files Created**:
+- `src/stores/ai-context.ts` - AI context store for page-specific context
+
+**Files Updated**:
+- `src/stores/index.ts` - Export AI context store
+- `src/components/layout/app-layout.tsx` - Pass AI context to AIChat
+- `src/app/groups/[id]/page.tsx` - Set group/students context
+- `src/app/groups/[id]/session/[sessionId]/page.tsx` - Set session context
+- `src/app/groups/[id]/students/page.tsx` - Set students management context
+- `src/app/students/page.tsx` - Set all-students context
+
+**Features**:
+- **Page-specific AI context**: AI chat now receives relevant context from the current page
+- **Group detail page**: AI knows about the group, its students, and recent sessions
+- **Session page**: AI knows about the active session, students, and real-time data
+- **Students pages**: AI knows about students for personalized suggestions
+- **Context clearing**: Context automatically clears when navigating away
+- **Privacy preserved**: Student names still masked for AI via PII masking
+
+**Implementation**:
+- Created Zustand store (`useAIContextStore`) for managing AI context
+- AppLayout reads context from store and passes to AIChat
+- Pages set their context via `setContext()` in useEffect hooks
+- Context clears on component unmount via cleanup function
+
+---
+
+### Session 11: Cross-Group Pattern Detection ✅
+**Date**: 2025-12-21
+
+**Files Created**:
+- `src/lib/analytics/pattern-detection.ts` - Pattern analysis algorithms
+- `src/lib/analytics/index.ts` - Analytics module exports
+- `src/components/reports/cross-group-insights.tsx` - UI for pattern insights
+
+**Files Updated**:
+- `src/components/reports/index.ts` - Export CrossGroupInsights
+- `src/app/reports/page.tsx` - Add cross-group pattern report type
+
+**Features**:
+- **Cross-group error patterns**: Identify errors appearing across multiple groups
+- **Top error patterns**: Ranked list with occurrence count, effectiveness rate, and trends
+- **Curriculum insights**: Breakdown by curriculum with effectiveness metrics
+- **Student profiles**: Track which students exhibit similar error patterns
+- **Trend analysis**: Detect improving/declining/stable patterns over time
+- **Recommendations**: AI-generated suggestions based on pattern analysis
+
+**Pattern Detection Algorithms**:
+- Error frequency tracking across groups/students
+- Correction effectiveness calculation (effective/total ratio)
+- Trend detection (compares first half vs second half of sessions)
+- Cross-group pattern identification (errors in 2+ groups)
+- Decision rule-based recommendations
+
+**UI Components**:
+- Summary stats (groups, students, errors, avg effectiveness)
+- Collapsible sections for recommendations, patterns, cross-group
+- Visual effectiveness bars with color coding
+- Trend indicators (improving/declining/stable)
+- Curriculum breakdown cards
+
+---
+
+### Session 12: PDF Export & Bug Fixes ✅
+**Date**: 2025-12-21
+
+**Files Created**:
+- `src/lib/export/pdf-export.ts` - PDF generation utilities using jsPDF
+- `src/lib/export/index.ts` - Export module index
+
+**Files Updated**:
+- `src/hooks/use-progress.ts` - Fixed infinite loop bug (Zustand selector pattern)
+- `src/components/reports/session-report.tsx` - Added PDF export button
+- `src/components/reports/cross-group-insights.tsx` - Added PDF export button
+- `package.json` - Added jspdf and jspdf-autotable dependencies
+
+**Features**:
+- **PDF Export**: Export reports to professional PDF documents
+  - Session Summary Report PDF
+  - Student Progress Report PDF
+  - Group Performance Report PDF
+  - Cross-Group Pattern Analysis PDF
+- **PDF Styling**: Branded headers, tables, page numbers, EMERGE colors
+- **Bug Fix**: Fixed "Maximum update depth exceeded" error in Progress Monitoring
+
+**PDF Export Capabilities**:
+- Automatic table formatting with jspdf-autotable
+- Color-coded effectiveness indicators
+- Multi-page support with page numbers
+- Summary statistics and recommendations
+- Cross-group pattern visualizations
+
+**Bug Fix Details**:
+- Issue: `useProgress` hook caused infinite re-renders
+- Cause: Using entire `store` object as useEffect dependency
+- Fix: Use Zustand selectors (`state => state.action`) for stable references
+
+---
+
 ## Notes
 - Supabase tables must match schema in `src/lib/supabase/types.ts`
 - AI provider configurable via `AI_PROVIDER` env var
@@ -517,3 +619,4 @@ ANTHROPIC_API_KEY=your_anthropic_key
 - Some Supabase type checking disabled (ts-nocheck) due to generic inference issues
 - **PII Masking**: Student names never sent to AI - only anonymous IDs
 - **Environment**: Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in `.env` for AI features
+- **AI Context**: Pages now provide relevant context to the AI chat for personalized responses

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Download, Calendar } from 'lucide-react';
+import { Download, Calendar, FileText } from 'lucide-react';
 import { Button, Card, CardHeader, CardTitle, CardContent, Input } from '@/components/ui';
 import { SessionWithGroup } from '@/lib/supabase/types';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
 import { convertToCSV, downloadCSV, generateTimestampedFilename, formatCSVDate, formatReportDate } from '@/lib/export-utils';
+import { exportSessionReportToPDF } from '@/lib/export';
 
 interface SessionReportProps {
   sessions: SessionWithGroup[];
@@ -15,6 +16,7 @@ export function SessionReport({ sessions }: SessionReportProps) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   // Filter sessions by date range
   const filteredSessions = useMemo(() => {
@@ -108,6 +110,27 @@ export function SessionReport({ sessions }: SessionReportProps) {
     }
   };
 
+  // Export to PDF
+  const handleExportPDF = () => {
+    setIsExportingPDF(true);
+
+    try {
+      // Map SessionWithGroup to Session format for PDF export
+      const sessionsForPDF = filteredSessions.map(s => ({
+        ...s,
+        group_id: s.group.id,
+      }));
+      exportSessionReportToPDF(sessionsForPDF, {
+        subtitle: startDate || endDate
+          ? `${startDate || 'Start'} to ${endDate || 'End'}`
+          : `${filteredSessions.length} sessions`,
+        fileName: generateTimestampedFilename('session-summary-report'),
+      });
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Date Range Filters */}
@@ -188,15 +211,27 @@ export function SessionReport({ sessions }: SessionReportProps) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Session Details ({filteredSessions.length})</CardTitle>
-            <Button
-              onClick={handleExport}
-              disabled={filteredSessions.length === 0 || isExporting}
-              isLoading={isExporting}
-              className="gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleExportPDF}
+                disabled={filteredSessions.length === 0 || isExportingPDF}
+                isLoading={isExportingPDF}
+                variant="secondary"
+                className="gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Export PDF
+              </Button>
+              <Button
+                onClick={handleExport}
+                disabled={filteredSessions.length === 0 || isExporting}
+                isLoading={isExporting}
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

@@ -50,6 +50,8 @@ export interface AIChatProps {
   students?: StudentContext[];
   group?: GroupContext;
   recentSessions?: SessionContext[];
+  // Additional context (e.g., report data, pattern analysis)
+  additionalContext?: string | null;
 }
 
 export function AIChat({
@@ -58,6 +60,7 @@ export function AIChat({
   students = [],
   group,
   recentSessions = [],
+  additionalContext,
 }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -164,6 +167,7 @@ export function AIChat({
             students: maskedStudents.length > 0 ? maskedStudents : undefined,
             group,
             recentSessions: maskedSessions.length > 0 ? maskedSessions : undefined,
+            additionalContext: additionalContext || undefined,
           },
           conversationHistory,
         }),
@@ -194,7 +198,7 @@ export function AIChat({
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, maskingContext, students, group, recentSessions, messages]);
+  }, [input, isLoading, maskingContext, students, group, recentSessions, messages, additionalContext]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

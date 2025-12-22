@@ -108,10 +108,10 @@ export function ProgressChart({ students, progressData, groupId, title }: Progre
     );
   }
 
-  // Chart dimensions
-  const width = 100; // percentage
+  // Chart dimensions (in viewBox units)
+  const width = 800;
   const height = 400;
-  const padding = { top: 20, right: 20, bottom: 60, left: 60 };
+  const padding = { top: 20, right: 30, bottom: 60, left: 60 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -170,8 +170,8 @@ export function ProgressChart({ students, progressData, groupId, title }: Progre
         <div className="w-full overflow-x-auto">
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="w-full"
-            style={{ minWidth: '600px', height: 'auto' }}
+            className="w-full max-w-4xl mx-auto"
+            style={{ minWidth: '400px', height: 'auto', maxHeight: '450px' }}
             preserveAspectRatio="xMidYMid meet"
           >
             {/* Grid lines */}

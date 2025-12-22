@@ -34,6 +34,8 @@ export interface ChatContext {
     exitTicketScore?: number;
     notes?: string;
   }>;
+  // Additional context (e.g., report data, pattern analysis)
+  additionalContext?: string;
 }
 
 const AI_ASSISTANT_PROMPT = `You are an expert intervention specialist assistant helping teachers with reading and math interventions for students with learning difficulties.
@@ -121,6 +123,11 @@ export async function POST(request: NextRequest) {
         }
         if (session.notes) contextString += `\n  Notes: ${session.notes}`;
       }
+    }
+
+    // Include additional context (e.g., report analysis, pattern data)
+    if (context?.additionalContext) {
+      contextString += '\n\n--- Additional Data Context ---\n' + context.additionalContext;
     }
 
     // Build conversation for context

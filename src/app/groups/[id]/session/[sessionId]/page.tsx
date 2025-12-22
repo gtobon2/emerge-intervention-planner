@@ -50,7 +50,7 @@ import {
   WILSON_LESSON_COMPONENTS,
 } from '@/components/sessions';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
-import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore } from '@/stores';
+import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, useAIContextStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
 import { toNumericId } from '@/lib/utils/id';
 
@@ -112,6 +112,7 @@ export default function SessionPage({
   } = useSessionsStore();
   const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
   const { students: storeStudents, fetchStudentsForGroup } = useStudentsStore();
+  const { setContext, clearContext } = useAIContextStore();
 
   // Session tracking state
   const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
@@ -210,6 +211,54 @@ export default function SessionPage({
       setIsLoading(false);
     }
   }, [storeStudents, selectedSession, selectedGroup]);
+
+  // Set AI context when session, group, and students load
+  useEffect(() => {
+    if (selectedSession && selectedGroup && storeStudents.length > 0) {
+      // Build students context
+      const studentsContext = storeStudents.map(student => ({
+        id: student.id.toString(),
+        name: student.name,
+        groupName: selectedGroup.name,
+        curriculum: selectedGroup.curriculum,
+        tier: `Tier ${selectedGroup.tier}`,
+        notes: student.notes,
+      }));
+
+      // Build group context
+      const groupContext = {
+        name: selectedGroup.name,
+        curriculum: selectedGroup.curriculum,
+        tier: `Tier ${selectedGroup.tier}`,
+        grade: `${selectedGroup.grade}`,
+      };
+
+      // Build current session context
+      const sessionContext = [{
+        date: selectedSession.date,
+        studentNames: storeStudents.map(s => s.name),
+        errorsLogged: selectedSession.errors_observed?.length || anticipatedErrors.filter(e => anticipatedErrorsChecked[e.id]).length,
+        otrCount: getTotalOTRs() || undefined,
+        exitTicketScore: exitTicketCorrect && exitTicketTotal
+          ? Math.round((exitTicketCorrect / exitTicketTotal) * 100)
+          : undefined,
+        notes: notes || selectedSession.notes || undefined,
+      }];
+
+      setContext({
+        students: studentsContext,
+        group: groupContext,
+        recentSessions: sessionContext,
+        currentPage: `session:${selectedGroup.name} - ${selectedSession.date}`,
+      });
+    }
+
+    // Clear context when navigating away
+    return () => {
+      clearContext();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSession, selectedGroup, storeStudents, anticipatedErrors, anticipatedErrorsChecked, exitTicketCorrect, exitTicketTotal, notes]); // setContext and clearContext are stable Zustand actions
 
   const handleStartSession = () => {
     setIsSessionActive(true);

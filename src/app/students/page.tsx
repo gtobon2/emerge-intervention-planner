@@ -11,6 +11,7 @@ import { useAllStudents, type StudentWithGroup } from '@/hooks/use-all-students'
 import { useStudentsStore } from '@/stores/students';
 import { useProgressStore } from '@/stores/progress';
 import { useGroupsStore } from '@/stores/groups';
+import { useAIContextStore } from '@/stores/ai-context';
 import { db } from '@/lib/local-db';
 import { toNumericId } from '@/lib/utils/id';
 import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
@@ -26,6 +27,7 @@ export default function StudentsPage() {
 
   const groups = useGroupsStore((state) => state.groups);
   const fetchGroups = useGroupsStore((state) => state.fetchGroups);
+  const { setContext, clearContext } = useAIContextStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<StudentWithGroup | null>(null);
@@ -56,6 +58,33 @@ export default function StudentsPage() {
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
+
+  // Set AI context when students load
+  useEffect(() => {
+    if (students.length > 0) {
+      // Build students context from all students
+      const studentsContext = students.map(student => ({
+        id: student.id.toString(),
+        name: student.name,
+        groupName: student.group?.name,
+        curriculum: student.group?.curriculum,
+        tier: student.group?.tier ? `Tier ${student.group.tier}` : undefined,
+        notes: student.notes,
+      }));
+
+      setContext({
+        students: studentsContext,
+        group: null, // No single group context on all-students page
+        currentPage: 'all-students',
+      });
+    }
+
+    // Clear context when navigating away
+    return () => {
+      clearContext();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students]); // setContext and clearContext are stable Zustand actions
 
   // Filter students by search query
   const filteredStudents = useMemo(() => {

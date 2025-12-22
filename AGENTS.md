@@ -119,9 +119,9 @@ src/
 - [x] Voice input for notes (Web Speech API)
 
 ### In Progress / Backlog
-- [ ] Wire AI chat to page-specific context (group/student detail pages)
-- [ ] Cross-group pattern detection
-- [ ] Export reports to PDF
+- [x] Wire AI chat to page-specific context (group/student detail pages) ✅
+- [x] Cross-group pattern detection ✅
+- [x] Export reports to PDF ✅
 - [ ] Offline sync improvements
 - [ ] Multi-tenancy support
 
