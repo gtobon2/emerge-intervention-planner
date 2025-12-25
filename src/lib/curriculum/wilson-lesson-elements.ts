@@ -133,16 +133,19 @@ export interface WilsonLessonElements {
 // ============================================
 
 export type LessonComponentType =
-  | 'sound-cards'
-  | 'teach-review'
+  // Block 1: Word Study
+  | 'sounds-quick-drill'
+  | 'teach-review-reading'
   | 'word-cards'
-  | 'word-list-reading'
+  | 'wordlist-reading'
   | 'sentence-reading'
+  // Block 2: Spelling
+  | 'quick-drill-reverse'
+  | 'teach-review-spelling'
+  | 'dictation'
+  // Block 3: Fluency/Comprehension
   | 'passage-reading'
-  | 'quick-drill'
-  | 'dictation-sounds'
-  | 'dictation-words'
-  | 'dictation-sentences';
+  | 'listening-comprehension';
 
 export interface LessonPlanElement {
   id: string;
@@ -175,82 +178,137 @@ export interface WilsonLessonPlan {
 // Wilson Lesson Component Definitions
 // ============================================
 
+export type LessonBlock = 'word-study' | 'spelling' | 'fluency-comprehension';
+
 export const WILSON_LESSON_SECTIONS: {
+  part: number;
   type: LessonComponentType;
   name: string;
-  duration: number;
+  block: LessonBlock;
+  duration1to1: number;
+  durationGroup: number;
   description: string;
   acceptsElements: ('sound' | 'word' | 'nonsense' | 'hf_word' | 'sentence' | 'story' | 'element')[];
+  fields?: string[];
 }[] = [
+  // ============================================
+  // BLOCK 1: Word Study
+  // ============================================
   {
-    type: 'sound-cards',
-    name: 'Sound Cards',
-    duration: 2,
-    description: 'Review sound-symbol correspondences',
+    part: 1,
+    type: 'sounds-quick-drill',
+    name: 'Sounds Quick Drill',
+    block: 'word-study',
+    duration1to1: 3,
+    durationGroup: 3,
+    description: 'Establish quick and automatic letter naming and production of sounds for decoding.',
     acceptsElements: ['sound'],
+    fields: ['vowels', 'consonants', 'welded', 'drillLeader'],
   },
   {
-    type: 'teach-review',
-    name: 'Teach/Review Concepts',
-    duration: 5,
-    description: 'Introduce or review phonetic concepts',
-    acceptsElements: ['sound', 'element'],
+    part: 2,
+    type: 'teach-review-reading',
+    name: 'Teach & Review Concepts for Reading',
+    block: 'word-study',
+    duration1to1: 5,
+    durationGroup: 5,
+    description: 'Teach word structure by presenting words in segmented form, and practice decoding words with specific taught patterns.',
+    acceptsElements: ['sound', 'word', 'element'],
+    fields: ['reviewConcepts', 'reviewWords', 'currentConcepts', 'currentWords'],
   },
   {
+    part: 3,
     type: 'word-cards',
     name: 'Word Cards',
-    duration: 2,
-    description: 'Practice reading real words',
-    acceptsElements: ['word'],
+    block: 'word-study',
+    duration1to1: 5,
+    durationGroup: 10,
+    description: 'Present word examples as a whole to solidify conceptual understanding of word structure, establish automaticity, and develop vocabulary.',
+    acceptsElements: ['word', 'hf_word'],
+    fields: ['substeps', 'activity', 'vocabularyWords', 'highFrequencyWords'],
   },
   {
-    type: 'word-list-reading',
-    name: 'Word List Reading',
-    duration: 5,
-    description: 'Read controlled word lists (real + nonsense)',
+    part: 4,
+    type: 'wordlist-reading',
+    name: 'Wordlist Reading',
+    block: 'word-study',
+    duration1to1: 5,
+    durationGroup: 10,
+    description: 'Determine independent application and automaticity of single word decoding skills. Chart progress to determine subsequent lessons/progression.',
     acceptsElements: ['word', 'nonsense'],
+    fields: ['studentReader', 'practicePageTop', 'practicePageBottom', 'chartingPageTop', 'chartingPageBottom', 'errors', 'activity'],
   },
   {
+    part: 5,
     type: 'sentence-reading',
     name: 'Sentence Reading',
-    duration: 3,
-    description: 'Read controlled sentences',
+    block: 'word-study',
+    duration1to1: 5,
+    durationGroup: 5,
+    description: 'Determine independent skills within context. Emphasize vocabulary and fluency with reading in meaningful phrases to support comprehension.',
     acceptsElements: ['sentence'],
+    fields: ['studentReader', 'page', 'errors', 'notes'],
+  },
+  // ============================================
+  // BLOCK 2: Spelling
+  // ============================================
+  {
+    part: 6,
+    type: 'quick-drill-reverse',
+    name: 'Quick Drill in Reverse',
+    block: 'spelling',
+    duration1to1: 2,
+    durationGroup: 3,
+    description: 'Establish quick and automatic letter naming and production of sounds for encoding.',
+    acceptsElements: ['sound'],
+    fields: ['vowels', 'consonants', 'welded', 'wordElements'],
   },
   {
+    part: 7,
+    type: 'teach-review-spelling',
+    name: 'Teach & Review Concepts for Spelling',
+    block: 'spelling',
+    duration1to1: 5,
+    durationGroup: 10,
+    description: 'Establish process to spell words by breaking them into parts (word elements, syllables, sounds).',
+    acceptsElements: ['word', 'element', 'hf_word'],
+    fields: ['reviewConcepts', 'reviewWordsElements', 'currentConcepts', 'currentWordsElements', 'highFrequencyWords'],
+  },
+  {
+    part: 8,
+    type: 'dictation',
+    name: 'Written Work Dictation',
+    block: 'spelling',
+    duration1to1: 15,
+    durationGroup: 20,
+    description: 'Develop independent spelling and proofreading skills with word structure elements directly taught thus far.',
+    acceptsElements: ['sound', 'word', 'nonsense', 'sentence', 'element', 'hf_word'],
+    fields: ['sounds', 'wordElements', 'realWords', 'nonsenseWords', 'hfPhrases', 'sentences'],
+  },
+  // ============================================
+  // BLOCK 3: Fluency/Comprehension
+  // ============================================
+  {
+    part: 9,
     type: 'passage-reading',
-    name: 'Passage Reading',
-    duration: 8,
-    description: 'Read connected text for fluency',
+    name: 'Controlled Text Passage Reading',
+    block: 'fluency-comprehension',
+    duration1to1: 15,
+    durationGroup: 15,
+    description: 'Increase reading fluency with controlled text, and develop silent reading skill including mental representation for comprehension using visualization.',
     acceptsElements: ['story'],
+    fields: ['titlePage', 'source', 'comprehensionSOS', 'vocabulary', 'oralFluency', 'followUpQuestions'],
   },
   {
-    type: 'quick-drill',
-    name: 'Quick Drill',
-    duration: 2,
-    description: 'Rapid review of sounds for automaticity',
-    acceptsElements: ['sound'],
-  },
-  {
-    type: 'dictation-sounds',
-    name: 'Dictation: Sounds',
-    duration: 2,
-    description: 'Write sounds from dictation',
-    acceptsElements: ['sound'],
-  },
-  {
-    type: 'dictation-words',
-    name: 'Dictation: Words',
-    duration: 3,
-    description: 'Spell words from dictation',
-    acceptsElements: ['word'],
-  },
-  {
-    type: 'dictation-sentences',
-    name: 'Dictation: Sentences',
-    duration: 3,
-    description: 'Write sentences from dictation',
-    acceptsElements: ['sentence'],
+    part: 10,
+    type: 'listening-comprehension',
+    name: 'Listening/Reading Fluency and Comprehension',
+    block: 'fluency-comprehension',
+    duration1to1: 30,
+    durationGroup: 30,
+    description: 'Develop auditory processing of language and comprehension of age-appropriate literature and informational text.',
+    acceptsElements: ['story'],
+    fields: ['source', 'title', 'pages', 'tasks', 'notes'],
   },
 ];
 
@@ -293,10 +351,12 @@ export function createEmptyLessonElements(
 
 /**
  * Create an empty lesson plan for a substep
+ * @param isGroup - Whether this is for a group (true) or 1:1 (false) session
  */
 export function createEmptyLessonPlan(
   substep: string,
-  substepName: string
+  substepName: string,
+  isGroup: boolean = true
 ): WilsonLessonPlan {
   return {
     substep,
@@ -304,11 +364,14 @@ export function createEmptyLessonPlan(
     sections: WILSON_LESSON_SECTIONS.map((section) => ({
       component: section.type,
       componentName: section.name,
-      duration: section.duration,
+      duration: isGroup ? section.durationGroup : section.duration1to1,
       elements: [],
       activities: [],
     })),
-    totalDuration: WILSON_LESSON_SECTIONS.reduce((sum, s) => sum + s.duration, 0),
+    totalDuration: WILSON_LESSON_SECTIONS.reduce(
+      (sum, s) => sum + (isGroup ? s.durationGroup : s.duration1to1),
+      0
+    ),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

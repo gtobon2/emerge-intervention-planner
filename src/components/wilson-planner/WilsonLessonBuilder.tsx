@@ -335,16 +335,19 @@ export function WilsonLessonBuilder({
     // Find first matching section that accepts this type
     const targetSection = lessonPlan.sections.find((s) => {
       const acceptedTypes: Record<LessonComponentType, string[]> = {
-        'sound-cards': ['sound'],
-        'teach-review': ['sound', 'element'],
-        'word-cards': ['word'],
-        'word-list-reading': ['word', 'nonsense'],
+        // Block 1: Word Study
+        'sounds-quick-drill': ['sound'],
+        'teach-review-reading': ['sound', 'word', 'element'],
+        'word-cards': ['word', 'hf_word'],
+        'wordlist-reading': ['word', 'nonsense'],
         'sentence-reading': ['sentence'],
+        // Block 2: Spelling
+        'quick-drill-reverse': ['sound'],
+        'teach-review-spelling': ['word', 'element', 'hf_word'],
+        'dictation': ['sound', 'word', 'nonsense', 'sentence', 'element', 'hf_word'],
+        // Block 3: Fluency/Comprehension
         'passage-reading': ['story'],
-        'quick-drill': ['sound'],
-        'dictation-sounds': ['sound'],
-        'dictation-words': ['word'],
-        'dictation-sentences': ['sentence'],
+        'listening-comprehension': ['story'],
       };
       return acceptedTypes[s.component]?.includes(element.type);
     });
@@ -489,7 +492,7 @@ export function WilsonLessonBuilder({
                 </div>
               </div>
             ) : lessonPlan ? (
-              <div className="space-y-4 max-w-3xl mx-auto">
+              <div className="space-y-6 max-w-3xl mx-auto">
                 <div className="text-center mb-6">
                   <h3 className="text-xl font-semibold">
                     Substep {lessonPlan.substep}: {lessonPlan.substepName}
@@ -499,31 +502,104 @@ export function WilsonLessonBuilder({
                   </p>
                 </div>
 
-                {lessonPlan.sections.map((section) => (
-                  <LessonSection
-                    key={section.component}
-                    section={section}
-                    onRemoveElement={(elementId) =>
-                      handleRemoveElement(section.component, elementId)
-                    }
-                    onUpdateDuration={(duration) =>
-                      handleUpdateDuration(section.component, duration)
-                    }
-                    onAddActivity={(activity) =>
-                      handleAddActivity(section.component, activity)
-                    }
-                    onRemoveActivity={(index) =>
-                      handleRemoveActivity(section.component, index)
-                    }
-                    onUpdateNotes={(notes) =>
-                      handleUpdateNotes(section.component, notes)
-                    }
-                    onRequestAISuggestions={() =>
-                      handleRequestAISuggestions(section)
-                    }
-                    isLoadingAI={loadingAISection === section.component}
-                  />
-                ))}
+                {/* Block 1: Word Study */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm">1</div>
+                    <h4 className="font-semibold text-blue-700 dark:text-blue-300">Block 1: Word Study</h4>
+                  </div>
+                  {lessonPlan.sections.slice(0, 5).map((section, idx) => (
+                    <LessonSection
+                      key={section.component}
+                      section={{ ...section, componentName: `${idx + 1}. ${section.componentName}` }}
+                      onRemoveElement={(elementId) =>
+                        handleRemoveElement(section.component, elementId)
+                      }
+                      onUpdateDuration={(duration) =>
+                        handleUpdateDuration(section.component, duration)
+                      }
+                      onAddActivity={(activity) =>
+                        handleAddActivity(section.component, activity)
+                      }
+                      onRemoveActivity={(index) =>
+                        handleRemoveActivity(section.component, index)
+                      }
+                      onUpdateNotes={(notes) =>
+                        handleUpdateNotes(section.component, notes)
+                      }
+                      onRequestAISuggestions={() =>
+                        handleRequestAISuggestions(section)
+                      }
+                      isLoadingAI={loadingAISection === section.component}
+                    />
+                  ))}
+                </div>
+
+                {/* Block 2: Spelling */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-2">
+                    <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 font-bold text-sm">2</div>
+                    <h4 className="font-semibold text-green-700 dark:text-green-300">Block 2: Spelling</h4>
+                  </div>
+                  {lessonPlan.sections.slice(5, 8).map((section, idx) => (
+                    <LessonSection
+                      key={section.component}
+                      section={{ ...section, componentName: `${idx + 6}. ${section.componentName}` }}
+                      onRemoveElement={(elementId) =>
+                        handleRemoveElement(section.component, elementId)
+                      }
+                      onUpdateDuration={(duration) =>
+                        handleUpdateDuration(section.component, duration)
+                      }
+                      onAddActivity={(activity) =>
+                        handleAddActivity(section.component, activity)
+                      }
+                      onRemoveActivity={(index) =>
+                        handleRemoveActivity(section.component, index)
+                      }
+                      onUpdateNotes={(notes) =>
+                        handleUpdateNotes(section.component, notes)
+                      }
+                      onRequestAISuggestions={() =>
+                        handleRequestAISuggestions(section)
+                      }
+                      isLoadingAI={loadingAISection === section.component}
+                    />
+                  ))}
+                </div>
+
+                {/* Block 3: Fluency/Comprehension */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 font-bold text-sm">3</div>
+                    <h4 className="font-semibold text-purple-700 dark:text-purple-300">Block 3: Fluency/Comprehension</h4>
+                  </div>
+                  {lessonPlan.sections.slice(8, 10).map((section, idx) => (
+                    <LessonSection
+                      key={section.component}
+                      section={{ ...section, componentName: `${idx + 9}. ${section.componentName}` }}
+                      onRemoveElement={(elementId) =>
+                        handleRemoveElement(section.component, elementId)
+                      }
+                      onUpdateDuration={(duration) =>
+                        handleUpdateDuration(section.component, duration)
+                      }
+                      onAddActivity={(activity) =>
+                        handleAddActivity(section.component, activity)
+                      }
+                      onRemoveActivity={(index) =>
+                        handleRemoveActivity(section.component, index)
+                      }
+                      onUpdateNotes={(notes) =>
+                        handleUpdateNotes(section.component, notes)
+                      }
+                      onRequestAISuggestions={() =>
+                        handleRequestAISuggestions(section)
+                      }
+                      isLoadingAI={loadingAISection === section.component}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="flex items-center justify-center h-64">

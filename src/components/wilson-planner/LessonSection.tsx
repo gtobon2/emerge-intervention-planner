@@ -26,16 +26,19 @@ interface LessonSectionProps {
 }
 
 const acceptedTypesMap: Record<LessonComponentType, ElementType[]> = {
-  'sound-cards': ['sound'],
-  'teach-review': ['sound', 'element'],
-  'word-cards': ['word'],
-  'word-list-reading': ['word', 'nonsense'],
+  // Block 1: Word Study
+  'sounds-quick-drill': ['sound'],
+  'teach-review-reading': ['sound', 'word', 'element'],
+  'word-cards': ['word', 'hf_word'],
+  'wordlist-reading': ['word', 'nonsense'],
   'sentence-reading': ['sentence'],
+  // Block 2: Spelling
+  'quick-drill-reverse': ['sound'],
+  'teach-review-spelling': ['word', 'element', 'hf_word'],
+  'dictation': ['sound', 'word', 'nonsense', 'sentence', 'element', 'hf_word'],
+  // Block 3: Fluency/Comprehension
   'passage-reading': ['story'],
-  'quick-drill': ['sound'],
-  'dictation-sounds': ['sound'],
-  'dictation-words': ['word'],
-  'dictation-sentences': ['sentence'],
+  'listening-comprehension': ['story'],
 };
 
 export function LessonSection({

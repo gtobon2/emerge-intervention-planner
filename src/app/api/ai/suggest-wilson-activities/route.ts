@@ -12,65 +12,68 @@ interface RequestBody {
 
 // Science of Reading activity database by component type
 const SOR_ACTIVITY_HINTS: Record<LessonComponentType, string[]> = {
-  'sound-cards': [
-    'Tapping/finger counting for phonemes',
+  // Block 1: Word Study
+  'sounds-quick-drill': [
+    'Rapid sound card flip with vowels, consonants, welded sounds',
     'Air writing the grapheme while saying the sound',
-    'Sound card quick flash drill',
     'Keyword connection (show picture, say sound)',
+    'Chain drill around the group for automaticity',
   ],
-  'teach-review': [
+  'teach-review-reading': [
     'Elkonin boxes for sound-symbol mapping',
+    'Present words in segmented form for decoding practice',
     'Concept explanation with visual anchor chart',
     'Teacher modeling with think-aloud',
-    'Interactive whiteboard manipulation',
   ],
   'word-cards': [
     'Scooping syllables while reading',
-    'Tap and blend procedure',
-    'Word card shuffle and read',
-    'Partner word card quiz',
+    'Present words as whole for automaticity',
+    'Vocabulary discussion for new words',
+    'High frequency word recognition drill',
   ],
-  'word-list-reading': [
+  'wordlist-reading': [
     'Choral reading for fluency',
     'Echo reading with teacher model',
-    'Timed word list for automaticity',
+    'Timed word list for automaticity charting',
     'Error correction with immediate feedback',
   ],
   'sentence-reading': [
     'Phrase-cued reading with slashes',
     'Prosody practice with punctuation cues',
-    'Sentence reconstruction with word cards',
+    'Vocabulary emphasis in meaningful phrases',
     'Echo reading for fluency modeling',
   ],
+  // Block 2: Spelling
+  'quick-drill-reverse': [
+    'Sound-to-letter production drill',
+    'Air writing letters while hearing sounds',
+    'Rapid encoding response practice',
+    'Word element recognition drill',
+  ],
+  'teach-review-spelling': [
+    'Break words into parts (elements, syllables, sounds)',
+    'Spelling rule explanation with examples',
+    'Word element meaning discussion',
+    'High frequency word spelling practice',
+  ],
+  'dictation': [
+    'Sound dictation with finger spelling',
+    'Word element dictation with meaning',
+    'Real word dictation with proof and edit',
+    'Sentence dictation with capitalization/punctuation check',
+  ],
+  // Block 3: Fluency/Comprehension
   'passage-reading': [
+    'S.O.S. (Silent/Oral/Silent) comprehension strategy',
     'Repeated reading for fluency',
-    'Partner reading with comprehension check',
-    'Whisper reading with monitoring',
-    'Oral reading with expression focus',
+    'Visualization for mental representation',
+    'Retell for oral expressive language',
   ],
-  'quick-drill': [
-    'Rapid sound card flip',
-    'Beat the clock sound review',
-    'Random sound selection drill',
-    'Chain drill around the group',
-  ],
-  'dictation-sounds': [
-    'Sound-by-sound dictation with finger spelling',
-    'Visual checking against sound cards',
-    'Self-correction with model',
-    'Auditory discrimination practice',
-  ],
-  'dictation-words': [
-    'Finger spelling before writing',
-    'Sound boxes for spelling scaffold',
-    'Syllable division before spelling',
-    'Proof and edit routine',
-  ],
-  'dictation-sentences': [
-    'Repeat sentence before writing',
-    'Count words on fingers first',
-    'Capital and punctuation check',
-    'Edit with colored pencil',
+  'listening-comprehension': [
+    'Listening comprehension with age-appropriate text',
+    'Scaffolded silent reading with support',
+    'Interactive oral reading',
+    'Oral fluency practice with non-controlled text',
   ],
 };
 
