@@ -18,6 +18,10 @@ import type {
   FidelityItem,
   PracticeItem,
 } from '../supabase/types';
+import type {
+  WilsonLessonElements,
+  WilsonLessonPlan,
+} from '../curriculum/wilson-lesson-elements';
 
 // ============================================
 // LOCAL DATABASE INTERFACES
@@ -147,6 +151,8 @@ export class EmergeDatabase extends Dexie {
   progressMonitoring!: Table<LocalProgressMonitoring, number>;
   errorBank!: Table<LocalErrorBankEntry, number>;
   studentSessionTracking!: Table<LocalStudentSessionTracking, number>;
+  wilsonLessonElements!: Table<WilsonLessonElements, number>;
+  wilsonLessonPlans!: Table<WilsonLessonPlan, number>;
 
   constructor() {
     super('emerge-intervention-planner');
@@ -170,6 +176,18 @@ export class EmergeDatabase extends Dexie {
       progressMonitoring: '++id, student_id, group_id, date, created_at',
       errorBank: '++id, curriculum, error_pattern, created_at',
       studentSessionTracking: '++id, session_id, student_id, created_at',
+    });
+
+    // Version 3: Add Wilson lesson elements and lesson plans
+    this.version(3).stores({
+      groups: '++id, name, curriculum, tier, grade, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
+      wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
+      wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
     });
   }
 }

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Calendar, Target, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { X, Calendar, Target, AlertTriangle, Plus, Trash2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { Group, Curriculum, AnticipatedError, CurriculumPosition } from '@/lib/supabase/types';
-import { getCurriculumLabel } from '@/lib/supabase/types';
+import { getCurriculumLabel, isWilsonPosition } from '@/lib/supabase/types';
+import { WilsonLessonBuilder } from '@/components/wilson-planner';
+import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
 
 interface PlanSessionModalProps {
   group: Group;
@@ -23,6 +25,7 @@ export interface SessionPlanData {
   planned_response_formats: string[];
   anticipated_errors: AnticipatedError[];
   notes?: string;
+  wilson_lesson_plan?: WilsonLessonPlan;
 }
 
 const RESPONSE_FORMATS = [
@@ -46,6 +49,10 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   const [newErrorPattern, setNewErrorPattern] = useState('');
   const [newErrorCorrection, setNewErrorCorrection] = useState('');
   const [notes, setNotes] = useState('');
+  const [showLessonBuilder, setShowLessonBuilder] = useState(false);
+  const [wilsonLessonPlan, setWilsonLessonPlan] = useState<WilsonLessonPlan | null>(null);
+
+  const isWilsonCurriculum = group.curriculum === 'wilson';
 
   if (!isOpen) return null;
 
@@ -104,9 +111,15 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
       planned_response_formats: responseFormats,
       anticipated_errors: anticipatedErrors,
       notes: notes || undefined,
+      wilson_lesson_plan: wilsonLessonPlan || undefined,
     };
     onSave(sessionData);
     onClose();
+  };
+
+  const handleLessonPlanSave = (plan: WilsonLessonPlan) => {
+    setWilsonLessonPlan(plan);
+    setShowLessonBuilder(false);
   };
 
   return (
@@ -160,6 +173,40 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
               />
             </div>
           </div>
+
+          {/* Wilson Lesson Builder - Only for Wilson curriculum */}
+          {isWilsonCurriculum && (
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-purple-900 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5" />
+                    Wilson Lesson Builder
+                  </h3>
+                  <p className="text-sm text-purple-700 mt-1">
+                    {wilsonLessonPlan
+                      ? `Lesson plan created for substep ${wilsonLessonPlan.substep}`
+                      : 'Build a detailed lesson plan with drag-and-drop elements'}
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowLessonBuilder(true)}
+                >
+                  {wilsonLessonPlan ? 'Edit Lesson Plan' : 'Build Lesson'}
+                </Button>
+              </div>
+              {wilsonLessonPlan && (
+                <div className="mt-3 pt-3 border-t border-purple-200">
+                  <div className="text-sm text-purple-800">
+                    <strong>{wilsonLessonPlan.sections.filter(s => s.elements.length > 0).length}</strong> sections with elements,{' '}
+                    <strong>{wilsonLessonPlan.totalDuration}</strong> min total
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* OTR Target */}
           <div>
@@ -336,6 +383,23 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
           </Button>
         </div>
       </div>
+
+      {/* Wilson Lesson Builder Modal */}
+      {showLessonBuilder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowLessonBuilder(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden">
+            <WilsonLessonBuilder
+              initialSubstep={isWilsonPosition(group.current_position) ? group.current_position.substep : '1.1'}
+              onSave={handleLessonPlanSave}
+              onClose={() => setShowLessonBuilder(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,7 +16,10 @@ import {
   CheckSquare,
   Sun,
   Monitor,
+  BookOpen,
+  ChevronRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import { AppLayout } from '@/components/layout';
 import {
   Card,
@@ -537,6 +540,36 @@ export default function SettingsPage() {
               helperText="When to send reminders before sessions"
               disabled={!notificationPreferences.sessionReminders}
             />
+          </CardContent>
+        </Card>
+
+        {/* Curriculum Data Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-movement" />
+              <CardTitle>Curriculum Data</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-text-muted">
+              Manage lesson elements and curriculum-specific data for use in the lesson builder.
+            </p>
+            <Link
+              href="/settings/wilson-data"
+              className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-movement hover:bg-movement/5 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <div className="font-medium text-text-primary">Wilson Reading System</div>
+                  <div className="text-sm text-text-muted">Manage sounds, words, sentences by substep</div>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-text-muted group-hover:text-movement transition-colors" />
+            </Link>
           </CardContent>
         </Card>
 

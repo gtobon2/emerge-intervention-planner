@@ -81,6 +81,17 @@ Organize information into clear categories: observations, errors noted, student 
   patternAnalysis: `You are analyzing error patterns across multiple intervention sessions.
 Identify trends, common difficulties, and suggest instructional adjustments.
 Be specific about which students or groups show particular patterns.`,
+
+  wilsonActivities: `You are an expert in the Wilson Reading System and the Science of Reading.
+You suggest evidence-based instructional activities for Wilson lesson components.
+Your suggestions should be:
+- Specific to the lesson component and elements being practiced
+- Grounded in research on systematic phonics instruction
+- Practical and time-efficient for the given duration
+- Multisensory (visual, auditory, kinesthetic) when appropriate
+- Engaging and appropriate for struggling readers
+
+Format each suggestion as a brief, actionable instruction the teacher can follow.`,
 };
 
 // Unified interface for AI completion
