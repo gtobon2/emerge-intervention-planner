@@ -800,4 +800,290 @@ export async function getStudentOTRStats(studentId: number): Promise<{
 }
 
 // Import the type for export
-import type { LocalStudentSessionTracking } from './index';
+import type {
+  LocalStudentSessionTracking,
+  LocalInterventionist,
+  LocalGradeLevelConstraint,
+  LocalStudentConstraint,
+  LocalInterventionistInsert,
+  LocalInterventionistUpdate,
+  LocalGradeLevelConstraintInsert,
+  LocalStudentConstraintInsert,
+  LocalGroupWithInterventionist,
+} from './index';
+
+// ============================================
+// INTERVENTIONIST HOOKS
+// ============================================
+
+/**
+ * Get all interventionists
+ */
+export function useLocalInterventionists() {
+  const interventionists = useLiveQuery(() =>
+    db.interventionists.orderBy('name').toArray()
+  );
+
+  return {
+    interventionists: interventionists ?? [],
+    isLoading: interventionists === undefined,
+  };
+}
+
+/**
+ * Get a single interventionist by ID
+ */
+export function useLocalInterventionist(id: number | undefined) {
+  const interventionist = useLiveQuery(
+    () => (id !== undefined ? db.interventionists.get(id) : undefined),
+    [id]
+  );
+
+  return {
+    interventionist,
+    isLoading: id !== undefined && interventionist === undefined,
+  };
+}
+
+/**
+ * Create a new interventionist
+ */
+export async function createInterventionist(interventionist: LocalInterventionistInsert): Promise<number> {
+  const now = new Date().toISOString();
+  return await db.interventionists.add({
+    ...interventionist,
+    created_at: now,
+    updated_at: now,
+  });
+}
+
+/**
+ * Update an interventionist
+ */
+export async function updateInterventionist(id: number, updates: LocalInterventionistUpdate): Promise<number> {
+  const now = new Date().toISOString();
+  return await db.interventionists.update(id, {
+    ...updates,
+    updated_at: now,
+  });
+}
+
+/**
+ * Delete an interventionist
+ */
+export async function deleteInterventionist(id: number): Promise<void> {
+  // Also clear interventionist_id from any groups
+  await db.transaction('rw', [db.interventionists, db.groups], async () => {
+    // Clear references in groups
+    const groups = await db.groups.where('interventionist_id').equals(id).toArray();
+    for (const group of groups) {
+      if (group.id) {
+        await db.groups.update(group.id, { interventionist_id: undefined });
+      }
+    }
+    // Delete the interventionist
+    await db.interventionists.delete(id);
+  });
+}
+
+/**
+ * Get groups for an interventionist
+ */
+export function useLocalGroupsByInterventionist(interventionistId: number | undefined) {
+  const groups = useLiveQuery(
+    async () => {
+      if (interventionistId === undefined) return [];
+      return await db.groups.where('interventionist_id').equals(interventionistId).toArray();
+    },
+    [interventionistId]
+  );
+
+  return {
+    groups: groups ?? [],
+    isLoading: interventionistId !== undefined && groups === undefined,
+  };
+}
+
+/**
+ * Get all groups with their interventionist data
+ */
+export function useLocalGroupsWithInterventionists() {
+  const data = useLiveQuery(async () => {
+    const groups = await db.groups.toArray();
+    const interventionists = await db.interventionists.toArray();
+
+    return groups.map((group): LocalGroupWithInterventionist => ({
+      ...group,
+      interventionist: group.interventionist_id
+        ? interventionists.find(i => i.id === group.interventionist_id) || null
+        : null,
+    }));
+  });
+
+  return {
+    groups: data ?? [],
+    isLoading: data === undefined,
+  };
+}
+
+// ============================================
+// GRADE-LEVEL CONSTRAINT HOOKS
+// ============================================
+
+/**
+ * Get all grade-level constraints
+ */
+export function useLocalGradeLevelConstraints() {
+  const constraints = useLiveQuery(() =>
+    db.gradeLevelConstraints.orderBy('grade').toArray()
+  );
+
+  return {
+    constraints: constraints ?? [],
+    isLoading: constraints === undefined,
+  };
+}
+
+/**
+ * Get constraints for a specific grade
+ */
+export function useLocalConstraintsByGrade(grade: number | undefined) {
+  const constraints = useLiveQuery(
+    async () => {
+      if (grade === undefined) return [];
+      return await db.gradeLevelConstraints.where('grade').equals(grade).toArray();
+    },
+    [grade]
+  );
+
+  return {
+    constraints: constraints ?? [],
+    isLoading: grade !== undefined && constraints === undefined,
+  };
+}
+
+/**
+ * Create a new grade-level constraint
+ */
+export async function createGradeLevelConstraint(constraint: LocalGradeLevelConstraintInsert): Promise<number> {
+  const now = new Date().toISOString();
+  return await db.gradeLevelConstraints.add({
+    ...constraint,
+    created_at: now,
+  });
+}
+
+/**
+ * Update a grade-level constraint
+ */
+export async function updateGradeLevelConstraint(
+  id: number,
+  updates: Partial<LocalGradeLevelConstraintInsert>
+): Promise<number> {
+  return await db.gradeLevelConstraints.update(id, updates);
+}
+
+/**
+ * Delete a grade-level constraint
+ */
+export async function deleteGradeLevelConstraint(id: number): Promise<void> {
+  await db.gradeLevelConstraints.delete(id);
+}
+
+// ============================================
+// STUDENT CONSTRAINT HOOKS
+// ============================================
+
+/**
+ * Get all student constraints
+ */
+export function useLocalStudentConstraints() {
+  const constraints = useLiveQuery(() =>
+    db.studentConstraints.toArray()
+  );
+
+  return {
+    constraints: constraints ?? [],
+    isLoading: constraints === undefined,
+  };
+}
+
+/**
+ * Get constraints for a specific student
+ */
+export function useLocalConstraintsByStudent(studentId: number | undefined) {
+  const constraints = useLiveQuery(
+    async () => {
+      if (studentId === undefined) return [];
+      return await db.studentConstraints.where('student_id').equals(studentId).toArray();
+    },
+    [studentId]
+  );
+
+  return {
+    constraints: constraints ?? [],
+    isLoading: studentId !== undefined && constraints === undefined,
+  };
+}
+
+/**
+ * Create a new student constraint
+ */
+export async function createStudentConstraint(constraint: LocalStudentConstraintInsert): Promise<number> {
+  const now = new Date().toISOString();
+  return await db.studentConstraints.add({
+    ...constraint,
+    created_at: now,
+  });
+}
+
+/**
+ * Update a student constraint
+ */
+export async function updateStudentConstraint(
+  id: number,
+  updates: Partial<LocalStudentConstraintInsert>
+): Promise<number> {
+  return await db.studentConstraints.update(id, updates);
+}
+
+/**
+ * Delete a student constraint
+ */
+export async function deleteStudentConstraint(id: number): Promise<void> {
+  await db.studentConstraints.delete(id);
+}
+
+/**
+ * Get all constraints that apply to a student (grade-level + individual)
+ */
+export async function getAllConstraintsForStudent(studentId: number): Promise<{
+  gradeLevelConstraints: LocalGradeLevelConstraint[];
+  individualConstraints: LocalStudentConstraint[];
+}> {
+  // Get the student to find their grade
+  const student = await db.students.get(studentId);
+  if (!student) {
+    return { gradeLevelConstraints: [], individualConstraints: [] };
+  }
+
+  // Get the group to find the grade
+  const group = await db.groups.get(student.group_id);
+  if (!group) {
+    return { gradeLevelConstraints: [], individualConstraints: [] };
+  }
+
+  // Get grade-level constraints
+  const gradeLevelConstraints = await db.gradeLevelConstraints
+    .where('grade')
+    .equals(group.grade)
+    .toArray();
+
+  // Get individual constraints
+  const individualConstraints = await db.studentConstraints
+    .where('student_id')
+    .equals(studentId)
+    .toArray();
+
+  return { gradeLevelConstraints, individualConstraints };
+}

@@ -17,6 +17,8 @@ import type {
   ObservedError,
   FidelityItem,
   PracticeItem,
+  WeeklyTimeBlock,
+  ConstraintType,
 } from '../supabase/types';
 import type {
   WilsonLessonElements,
@@ -35,6 +37,7 @@ export interface LocalGroup {
   grade: number;
   current_position: CurriculumPosition;
   schedule: GroupSchedule | null;
+  interventionist_id?: number;  // Optional link to interventionist
   created_at: string;
   updated_at: string;
 }
@@ -141,6 +144,50 @@ export interface LocalStudentSessionTracking {
 }
 
 // ============================================
+// SCHEDULE BUILDER INTERFACES
+// ============================================
+
+/**
+ * Interventionist entity
+ * Represents a staff member who conducts intervention sessions
+ */
+export interface LocalInterventionist {
+  id?: number;
+  name: string;
+  email?: string;
+  color: string;  // Hex color for calendar display
+  availability: WeeklyTimeBlock[];
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Grade-level constraint
+ * Applies to all students in a specific grade (e.g., "3rd grade lunch at 11:30")
+ */
+export interface LocalGradeLevelConstraint {
+  id?: number;
+  grade: number;
+  label: string;  // "Lunch", "Core Reading", "Specials"
+  type: ConstraintType;
+  schedule: WeeklyTimeBlock;
+  created_at: string;
+}
+
+/**
+ * Individual student constraint
+ * Override or addition to grade-level constraints for specific students
+ */
+export interface LocalStudentConstraint {
+  id?: number;
+  student_id: number;
+  label: string;
+  type: ConstraintType;
+  schedule: WeeklyTimeBlock;
+  created_at: string;
+}
+
+// ============================================
 // DEXIE DATABASE CLASS
 // ============================================
 
@@ -153,6 +200,10 @@ export class EmergeDatabase extends Dexie {
   studentSessionTracking!: Table<LocalStudentSessionTracking, number>;
   wilsonLessonElements!: Table<WilsonLessonElements, number>;
   wilsonLessonPlans!: Table<WilsonLessonPlan, number>;
+  // Schedule builder tables
+  interventionists!: Table<LocalInterventionist, number>;
+  gradeLevelConstraints!: Table<LocalGradeLevelConstraint, number>;
+  studentConstraints!: Table<LocalStudentConstraint, number>;
 
   constructor() {
     super('emerge-intervention-planner');
@@ -189,6 +240,21 @@ export class EmergeDatabase extends Dexie {
       wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
       wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
     });
+
+    // Version 4: Add schedule builder tables (interventionists, constraints)
+    this.version(4).stores({
+      groups: '++id, name, curriculum, tier, grade, interventionist_id, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
+      wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
+      wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
+      interventionists: '++id, name, email, created_at, updated_at',
+      gradeLevelConstraints: '++id, grade, type, created_at',
+      studentConstraints: '++id, student_id, type, created_at',
+    });
   }
 }
 
@@ -208,6 +274,10 @@ export type LocalSessionInsert = Omit<LocalSession, 'id' | 'created_at' | 'updat
 export type LocalProgressMonitoringInsert = Omit<LocalProgressMonitoring, 'id' | 'created_at'>;
 export type LocalErrorBankInsert = Omit<LocalErrorBankEntry, 'id' | 'created_at'>;
 export type LocalStudentSessionTrackingInsert = Omit<LocalStudentSessionTracking, 'id' | 'created_at'>;
+// Schedule builder insert types
+export type LocalInterventionistInsert = Omit<LocalInterventionist, 'id' | 'created_at' | 'updated_at'>;
+export type LocalGradeLevelConstraintInsert = Omit<LocalGradeLevelConstraint, 'id' | 'created_at'>;
+export type LocalStudentConstraintInsert = Omit<LocalStudentConstraint, 'id' | 'created_at'>;
 
 // ============================================
 // UPDATE TYPES (for updating records)
@@ -219,6 +289,10 @@ export type LocalSessionUpdate = Partial<LocalSessionInsert>;
 export type LocalProgressMonitoringUpdate = Partial<LocalProgressMonitoringInsert>;
 export type LocalErrorBankUpdate = Partial<LocalErrorBankInsert>;
 export type LocalStudentSessionTrackingUpdate = Partial<LocalStudentSessionTrackingInsert>;
+// Schedule builder update types
+export type LocalInterventionistUpdate = Partial<LocalInterventionistInsert>;
+export type LocalGradeLevelConstraintUpdate = Partial<LocalGradeLevelConstraintInsert>;
+export type LocalStudentConstraintUpdate = Partial<LocalStudentConstraintInsert>;
 
 // ============================================
 // JOINED/ENRICHED TYPES
@@ -238,6 +312,10 @@ export interface LocalSessionWithGroup extends LocalSession {
 
 export interface LocalProgressMonitoringWithStudent extends LocalProgressMonitoring {
   student: LocalStudent | null;
+}
+
+export interface LocalGroupWithInterventionist extends LocalGroup {
+  interventionist: LocalInterventionist | null;
 }
 
 // Export all types

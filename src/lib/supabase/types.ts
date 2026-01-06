@@ -364,3 +364,115 @@ export function getTierColor(tier: Tier): string {
 export function getTierLabel(tier: Tier): string {
   return `Tier ${tier}`;
 }
+
+// ===========================================
+// SCHEDULE BUILDER TYPES
+// ===========================================
+
+export type WeekDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday';
+
+// Time block representation
+export interface TimeBlock {
+  startTime: string;  // "HH:MM" format (24-hour)
+  endTime: string;    // "HH:MM" format (24-hour)
+}
+
+// Weekly recurring time block
+export interface WeeklyTimeBlock extends TimeBlock {
+  days: WeekDay[];
+}
+
+// Constraint types
+export type ConstraintType = 'lunch' | 'core_instruction' | 'specials' | 'therapy' | 'other';
+
+// Interventionist entity
+export interface Interventionist {
+  id: string;
+  name: string;
+  email?: string;
+  color: string;  // Hex color for calendar display
+  availability: WeeklyTimeBlock[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Grade-level constraint (applies to all students in a grade)
+export interface GradeLevelConstraint {
+  id: string;
+  grade: number;
+  label: string;  // "Lunch", "Core Reading", "Specials", etc.
+  type: ConstraintType;
+  schedule: WeeklyTimeBlock;
+  created_at: string;
+}
+
+// Individual student constraint (override/addition to grade-level)
+export interface StudentConstraint {
+  id: string;
+  student_id: string;
+  label: string;
+  type: ConstraintType;
+  schedule: WeeklyTimeBlock;
+  created_at: string;
+}
+
+// Suggested time slot from scheduling algorithm
+export interface SuggestedTimeSlot {
+  day: WeekDay;
+  startTime: string;
+  endTime: string;
+  score: number;  // Lower is better (0 = perfect, higher = more issues)
+  conflicts: ScheduleConflict[];
+}
+
+// Schedule conflict details
+export interface ScheduleConflict {
+  type: 'student_unavailable' | 'interventionist_unavailable' | 'existing_session';
+  description: string;
+  studentId?: string;
+  studentName?: string;
+}
+
+// Insert types for schedule entities
+export type InterventionistInsert = Omit<Interventionist, 'id' | 'created_at' | 'updated_at'>;
+export type InterventionistUpdate = Partial<InterventionistInsert>;
+export type GradeLevelConstraintInsert = Omit<GradeLevelConstraint, 'id' | 'created_at'>;
+export type StudentConstraintInsert = Omit<StudentConstraint, 'id' | 'created_at'>;
+
+// Extended Group type with interventionist
+export interface GroupWithInterventionist extends Group {
+  interventionist_id?: string;
+  interventionist?: Interventionist | null;
+}
+
+// Schedule view data
+export interface ScheduleSlot {
+  day: WeekDay;
+  time: string;  // "HH:MM"
+  type: 'available' | 'session' | 'constraint' | 'suggested';
+  session?: Session;
+  group?: Group;
+  constraint?: GradeLevelConstraint | StudentConstraint;
+}
+
+// Preset constraint templates
+export const CONSTRAINT_PRESETS: Record<string, { label: string; type: ConstraintType; defaultTime: TimeBlock }> = {
+  lunch_early: { label: 'Lunch (Early)', type: 'lunch', defaultTime: { startTime: '11:00', endTime: '11:30' } },
+  lunch_mid: { label: 'Lunch (Mid)', type: 'lunch', defaultTime: { startTime: '11:30', endTime: '12:00' } },
+  lunch_late: { label: 'Lunch (Late)', type: 'lunch', defaultTime: { startTime: '12:00', endTime: '12:30' } },
+  core_reading: { label: 'Core Reading', type: 'core_instruction', defaultTime: { startTime: '09:00', endTime: '10:30' } },
+  core_math: { label: 'Core Math', type: 'core_instruction', defaultTime: { startTime: '10:30', endTime: '11:30' } },
+  specials: { label: 'Specials (PE/Art/Music)', type: 'specials', defaultTime: { startTime: '13:00', endTime: '13:45' } },
+};
+
+// Default interventionist colors
+export const INTERVENTIONIST_COLORS = [
+  '#6366f1', // Indigo
+  '#ec4899', // Pink
+  '#14b8a6', // Teal
+  '#f59e0b', // Amber
+  '#8b5cf6', // Violet
+  '#10b981', // Emerald
+  '#f43f5e', // Rose
+  '#0ea5e9', // Sky
+];
