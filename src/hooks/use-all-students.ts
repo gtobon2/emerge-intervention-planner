@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useStudentsStore } from '@/stores/students';
 import { useGroupsStore } from '@/stores/groups';
 import type { Student, Group } from '@/lib/supabase/types';
@@ -25,11 +25,14 @@ export function useAllStudents() {
     fetchGroups();
   }, [fetchAllStudents, fetchGroups]);
 
-  // Enrich students with group information
-  const studentsWithGroups: StudentWithGroup[] = allStudents.map((student) => ({
-    ...student,
-    group: groups.find((g) => g.id === student.group_id) || null,
-  }));
+  // Enrich students with group information - memoized to prevent infinite re-renders
+  const studentsWithGroups: StudentWithGroup[] = useMemo(() =>
+    allStudents.map((student) => ({
+      ...student,
+      group: groups.find((g) => g.id === student.group_id) || null,
+    })),
+    [allStudents, groups]
+  );
 
   const isLoading = isLoadingStudents || isLoadingGroups;
 
