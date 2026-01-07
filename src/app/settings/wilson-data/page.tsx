@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Plus, Trash2, BookOpen, Volume2, FileText, Sparkles } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, BookOpen, Volume2, FileText, Sparkles, Download, Upload, Database } from 'lucide-react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -21,6 +21,7 @@ import {
   createEmptyLessonElements,
   generateElementId,
 } from '@/lib/curriculum/wilson-lesson-elements';
+import { loadWilsonData, getWilsonDataStats, clearWilsonData } from '@/lib/curriculum/wilson-data-loader';
 
 type TabType = 'sounds' | 'words' | 'nonsense' | 'hf-words' | 'sentences';
 
@@ -30,6 +31,8 @@ export default function WilsonDataPage() {
   const [activeTab, setActiveTab] = useState<TabType>('sounds');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [dataStats, setDataStats] = useState<{ substepCount: number; totalWords: number; totalSentences: number; totalStories: number } | null>(null);
 
   // Get all substeps from Wilson data
   const allSubsteps = WILSON_STEPS.flatMap((step) =>
@@ -40,6 +43,15 @@ export default function WilsonDataPage() {
       stepName: step.name,
     }))
   );
+
+  // Load data stats on mount
+  useEffect(() => {
+    const loadStats = async () => {
+      const stats = await getWilsonDataStats();
+      setDataStats(stats);
+    };
+    loadStats();
+  }, []);
 
   // Load data for selected substep
   useEffect(() => {
@@ -67,6 +79,63 @@ export default function WilsonDataPage() {
     };
     loadData();
   }, [selectedSubstep]);
+
+  // Handle import
+  const handleImport = async () => {
+    setIsImporting(true);
+    try {
+      const result = await loadWilsonData();
+      if (result.success) {
+        setSaveMessage(`Imported ${result.count} substeps successfully!`);
+        // Refresh stats
+        const stats = await getWilsonDataStats();
+        setDataStats(stats);
+        // Reload current substep data
+        const existing = await db.wilsonLessonElements
+          .where('substep')
+          .equals(selectedSubstep)
+          .first();
+        if (existing) {
+          setLessonElements(existing);
+        }
+      } else {
+        setSaveMessage(`Import failed: ${result.message}`);
+      }
+      setTimeout(() => setSaveMessage(null), 5000);
+    } catch (error) {
+      console.error('Import error:', error);
+      setSaveMessage('Import failed: Unknown error');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Handle clear all data
+  const handleClearData = async () => {
+    if (!confirm('Are you sure you want to clear all Wilson data? This cannot be undone.')) {
+      return;
+    }
+    try {
+      await clearWilsonData();
+      setSaveMessage('All Wilson data cleared');
+      setDataStats({ substepCount: 0, totalWords: 0, totalSentences: 0, totalStories: 0 });
+      // Reset current view to empty
+      const substepInfo = allSubsteps.find((s) => s.key === selectedSubstep);
+      if (substepInfo) {
+        setLessonElements(
+          createEmptyLessonElements(
+            selectedSubstep,
+            substepInfo.step,
+            substepInfo.name
+          )
+        );
+      }
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      console.error('Clear error:', error);
+      setSaveMessage('Failed to clear data');
+    }
+  };
 
   // Save data
   const handleSave = async () => {
@@ -380,6 +449,47 @@ export default function WilsonDataPage() {
             </Button>
           </div>
         </div>
+
+        {/* Data Import Section */}
+        <Card className="border-dashed border-2 border-movement/30 bg-movement/5">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Database className="w-5 h-5 text-movement" />
+                <div>
+                  <h3 className="font-medium text-text-primary">Wilson Curriculum Database</h3>
+                  <p className="text-sm text-text-muted">
+                    {dataStats && dataStats.substepCount > 0
+                      ? `${dataStats.substepCount} substeps loaded with ${dataStats.totalWords.toLocaleString()} words, ${dataStats.totalSentences.toLocaleString()} sentences, ${dataStats.totalStories} stories`
+                      : 'No data loaded yet. Import the Wilson curriculum data to get started.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {dataStats && dataStats.substepCount > 0 && (
+                  <Button
+                    onClick={handleClearData}
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Clear
+                  </Button>
+                )}
+                <Button
+                  onClick={handleImport}
+                  disabled={isImporting}
+                  isLoading={isImporting}
+                  className="gap-2 bg-movement hover:bg-movement/90"
+                >
+                  <Upload className="w-4 h-4" />
+                  {isImporting ? 'Importing...' : dataStats && dataStats.substepCount > 0 ? 'Re-import Data' : 'Import Wilson Data'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Substep Selector */}
         <Card>
