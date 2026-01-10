@@ -17,6 +17,7 @@ interface AuthState {
   signUp: (email: string, password: string, fullName?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
   updateProfile: (updates: { full_name?: string; email?: string }) => Promise<void>;
   clearError: () => void;
 }
@@ -224,6 +225,33 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           set({
             error: error.message || 'Failed to send reset email',
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      updatePassword: async (newPassword: string) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          if (isMockMode()) {
+            // Mock mode: simulate password update
+            await new Promise(resolve => setTimeout(resolve, 500));
+            set({ isLoading: false });
+            return;
+          }
+
+          const { error } = await supabase.auth.updateUser({
+            password: newPassword,
+          });
+
+          if (error) throw error;
+
+          set({ isLoading: false });
+        } catch (error: any) {
+          set({
+            error: error.message || 'Failed to update password',
             isLoading: false,
           });
           throw error;

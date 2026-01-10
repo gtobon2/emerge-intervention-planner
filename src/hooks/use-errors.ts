@@ -5,23 +5,30 @@ import { useErrorsStore } from '@/stores/errors';
 import type { Curriculum, CurriculumPosition, ErrorBankInsert } from '@/lib/supabase/types';
 
 export function useErrors(curriculum: Curriculum | undefined) {
-  const store = useErrorsStore();
+  const errors = useErrorsStore((state) => state.errors);
+  const isLoading = useErrorsStore((state) => state.isLoading);
+  const error = useErrorsStore((state) => state.error);
+  const fetchErrorsForCurriculum = useErrorsStore((state) => state.fetchErrorsForCurriculum);
+  const createError = useErrorsStore((state) => state.createError);
+  const updateError = useErrorsStore((state) => state.updateError);
+  const incrementEffectiveness = useErrorsStore((state) => state.incrementEffectiveness);
+  const incrementOccurrence = useErrorsStore((state) => state.incrementOccurrence);
 
   useEffect(() => {
     if (curriculum) {
-      store.fetchErrorsForCurriculum(curriculum);
+      fetchErrorsForCurriculum(curriculum);
     }
-  }, [curriculum, store]);
+  }, [curriculum, fetchErrorsForCurriculum]);
 
   return {
-    errors: store.errors,
-    isLoading: store.isLoading,
-    error: store.error,
-    refetch: () => curriculum && store.fetchErrorsForCurriculum(curriculum),
-    createError: store.createError,
-    updateError: store.updateError,
-    incrementEffectiveness: store.incrementEffectiveness,
-    incrementOccurrence: store.incrementOccurrence,
+    errors,
+    isLoading,
+    error,
+    refetch: () => curriculum && fetchErrorsForCurriculum(curriculum),
+    createError,
+    updateError,
+    incrementEffectiveness,
+    incrementOccurrence,
   };
 }
 
@@ -29,7 +36,10 @@ export function useSuggestedErrors(
   curriculum: Curriculum | undefined,
   position: CurriculumPosition | undefined
 ) {
-  const { suggestedErrors, fetchErrorsForPosition, isLoading, error } = useErrorsStore();
+  const suggestedErrors = useErrorsStore((state) => state.suggestedErrors);
+  const isLoading = useErrorsStore((state) => state.isLoading);
+  const error = useErrorsStore((state) => state.error);
+  const fetchErrorsForPosition = useErrorsStore((state) => state.fetchErrorsForPosition);
 
   useEffect(() => {
     if (curriculum && position) {

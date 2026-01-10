@@ -88,6 +88,9 @@ export interface LocalSession {
   next_session_notes: string | null;
   fidelity_checklist: FidelityItem[] | null;
 
+  // Wilson-specific lesson plan
+  wilson_lesson_plan: WilsonLessonPlan | null;
+
   created_at: string;
   updated_at: string;
 }

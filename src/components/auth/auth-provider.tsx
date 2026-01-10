@@ -9,7 +9,7 @@ interface AuthProviderProps {
 }
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password'];
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const pathname = usePathname();

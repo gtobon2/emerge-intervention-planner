@@ -60,6 +60,7 @@ function mapLocalToSession(local: LocalSession): Session {
     notes: local.notes,
     next_session_notes: local.next_session_notes,
     fidelity_checklist: local.fidelity_checklist,
+    wilson_lesson_plan: local.wilson_lesson_plan,
     created_at: local.created_at,
     updated_at: local.updated_at,
   };
@@ -191,8 +192,10 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const localSessions = await db.sessions
         .where('group_id')
         .equals(numericGroupId)
-        .reverse()
-        .sortBy('date');
+        .toArray();
+
+      // Sort by date descending (most recent first)
+      localSessions.sort((a, b) => b.date.localeCompare(a.date));
 
       const sessions = localSessions.map(mapLocalToSession);
       set({ sessions, isLoading: false });
@@ -337,6 +340,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         notes: session.notes || null,
         next_session_notes: null,
         fidelity_checklist: null,
+        wilson_lesson_plan: session.wilson_lesson_plan || null,
       };
 
       const id = await createSessionDB(localSession);
@@ -396,6 +400,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (updates.notes !== undefined) localUpdates.notes = updates.notes;
       if (updates.next_session_notes !== undefined) localUpdates.next_session_notes = updates.next_session_notes;
       if (updates.fidelity_checklist !== undefined) localUpdates.fidelity_checklist = updates.fidelity_checklist;
+      if (updates.wilson_lesson_plan !== undefined) localUpdates.wilson_lesson_plan = updates.wilson_lesson_plan;
 
       await updateSessionDB(numericId, localUpdates);
 

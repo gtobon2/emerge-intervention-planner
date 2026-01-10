@@ -1,39 +1,54 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useGroupsStore } from '@/stores/groups';
 import type { GroupInsert, GroupUpdate } from '@/lib/supabase/types';
 
 export function useGroups() {
-  const store = useGroupsStore();
+  const groups = useGroupsStore((state) => state.groups);
+  const isLoading = useGroupsStore((state) => state.isLoading);
+  const error = useGroupsStore((state) => state.error);
+  const filter = useGroupsStore((state) => state.filter);
+  const fetchGroups = useGroupsStore((state) => state.fetchGroups);
+  const createGroup = useGroupsStore((state) => state.createGroup);
+  const updateGroup = useGroupsStore((state) => state.updateGroup);
+  const deleteGroup = useGroupsStore((state) => state.deleteGroup);
+  const setFilter = useGroupsStore((state) => state.setFilter);
+
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    if (store.groups.length === 0 && !store.isLoading) {
-      store.fetchGroups();
+    if (!hasFetched.current && groups.length === 0 && !isLoading) {
+      hasFetched.current = true;
+      fetchGroups();
     }
-  }, [store]);
+  }, [groups.length, isLoading, fetchGroups]);
 
   return {
-    groups: store.groups,
-    isLoading: store.isLoading,
-    error: store.error,
-    refetch: store.fetchGroups,
-    createGroup: store.createGroup,
-    updateGroup: store.updateGroup,
-    deleteGroup: store.deleteGroup,
-    setFilter: store.setFilter,
-    filter: store.filter,
+    groups,
+    isLoading,
+    error,
+    refetch: fetchGroups,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    setFilter,
+    filter,
   };
 }
 
 export function useGroup(groupId: string | undefined) {
-  const { selectedGroup, fetchGroupById, isLoading, error, updateGroup } = useGroupsStore();
+  const selectedGroup = useGroupsStore((state) => state.selectedGroup);
+  const isLoading = useGroupsStore((state) => state.isLoading);
+  const error = useGroupsStore((state) => state.error);
+  const fetchGroupById = useGroupsStore((state) => state.fetchGroupById);
+  const updateGroup = useGroupsStore((state) => state.updateGroup);
 
   useEffect(() => {
-    if (groupId && (!selectedGroup || selectedGroup.id !== groupId)) {
+    if (groupId) {
       fetchGroupById(groupId);
     }
-  }, [groupId, selectedGroup, fetchGroupById]);
+  }, [groupId, fetchGroupById]);
 
   const update = useCallback(
     (updates: GroupUpdate) => {

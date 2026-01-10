@@ -5,33 +5,43 @@ import { useSessionsStore } from '@/stores/sessions';
 import type { SessionInsert, SessionUpdate } from '@/lib/supabase/types';
 
 export function useSessions(groupId: string | undefined) {
-  const store = useSessionsStore();
+  const sessions = useSessionsStore((state) => state.sessions);
+  const isLoading = useSessionsStore((state) => state.isLoading);
+  const error = useSessionsStore((state) => state.error);
+  const fetchSessionsForGroup = useSessionsStore((state) => state.fetchSessionsForGroup);
+  const createSession = useSessionsStore((state) => state.createSession);
+  const updateSession = useSessionsStore((state) => state.updateSession);
+  const deleteSession = useSessionsStore((state) => state.deleteSession);
 
   useEffect(() => {
     if (groupId) {
-      store.fetchSessionsForGroup(groupId);
+      fetchSessionsForGroup(groupId);
     }
-  }, [groupId, store]);
+  }, [groupId, fetchSessionsForGroup]);
 
   return {
-    sessions: store.sessions,
-    isLoading: store.isLoading,
-    error: store.error,
-    refetch: () => groupId && store.fetchSessionsForGroup(groupId),
-    createSession: store.createSession,
-    updateSession: store.updateSession,
-    deleteSession: store.deleteSession,
+    sessions,
+    isLoading,
+    error,
+    refetch: () => groupId && fetchSessionsForGroup(groupId),
+    createSession,
+    updateSession,
+    deleteSession,
   };
 }
 
 export function useSession(sessionId: string | undefined) {
-  const { selectedSession, fetchSessionById, isLoading, error, updateSession } = useSessionsStore();
+  const selectedSession = useSessionsStore((state) => state.selectedSession);
+  const isLoading = useSessionsStore((state) => state.isLoading);
+  const error = useSessionsStore((state) => state.error);
+  const fetchSessionById = useSessionsStore((state) => state.fetchSessionById);
+  const updateSession = useSessionsStore((state) => state.updateSession);
 
   useEffect(() => {
-    if (sessionId && (!selectedSession || selectedSession.id !== sessionId)) {
+    if (sessionId) {
       fetchSessionById(sessionId);
     }
-  }, [sessionId, selectedSession, fetchSessionById]);
+  }, [sessionId, fetchSessionById]);
 
   const update = useCallback(
     (updates: SessionUpdate) => {
@@ -52,7 +62,10 @@ export function useSession(sessionId: string | undefined) {
 }
 
 export function useTodaySessions() {
-  const { todaySessions, fetchTodaySessions, isLoading, error } = useSessionsStore();
+  const todaySessions = useSessionsStore((state) => state.todaySessions);
+  const isLoading = useSessionsStore((state) => state.isLoading);
+  const error = useSessionsStore((state) => state.error);
+  const fetchTodaySessions = useSessionsStore((state) => state.fetchTodaySessions);
 
   useEffect(() => {
     fetchTodaySessions();
@@ -67,7 +80,10 @@ export function useTodaySessions() {
 }
 
 export function useAllSessions() {
-  const { allSessions, fetchAllSessions, isLoading, error } = useSessionsStore();
+  const allSessions = useSessionsStore((state) => state.allSessions);
+  const isLoading = useSessionsStore((state) => state.isLoading);
+  const error = useSessionsStore((state) => state.error);
+  const fetchAllSessions = useSessionsStore((state) => state.fetchAllSessions);
 
   useEffect(() => {
     fetchAllSessions();

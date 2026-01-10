@@ -188,6 +188,7 @@ export default function GroupDetailPage() {
       notes: data.notes || null,
       next_session_notes: null,
       fidelity_checklist: null,
+      wilson_lesson_plan: data.wilson_lesson_plan || null,
     });
     // Refresh sessions list
     fetchSessionsForGroup(groupId);

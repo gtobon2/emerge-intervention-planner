@@ -22,6 +22,7 @@ import {
   useSensors,
   closestCenter,
 } from '@dnd-kit/core';
+import { Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ElementBank } from './ElementBank';
 import { LessonSection } from './LessonSection';
@@ -91,6 +92,7 @@ export function WilsonLessonBuilder({
   const [lessonPlan, setLessonPlan] = useState<WilsonLessonPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [activeElement, setActiveElement] = useState<DraggableElementData | null>(null);
   const [loadingAISection, setLoadingAISection] = useState<LessonComponentType | null>(null);
 
@@ -407,6 +409,48 @@ export function WilsonLessonBuilder({
     }
   };
 
+  // Auto-generate entire lesson with AI
+  const handleAutoGenerateWithAI = async () => {
+    if (!lessonPlan) return;
+
+    setIsGeneratingAI(true);
+    try {
+      const substepInfo = WILSON_SUBSTEPS.find((s) => s.value === selectedSubstep);
+      const substepName = substepInfo?.label.split(' - ')[1] || '';
+
+      const response = await fetch('/api/ai/generate-wilson-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          substep: selectedSubstep,
+          substepName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.lessonPlan) {
+          // Update the lesson plan with AI-generated content
+          setLessonPlan((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              sections: data.lessonPlan.sections,
+              totalDuration: data.lessonPlan.totalDuration,
+              updatedAt: new Date().toISOString(),
+            };
+          });
+        }
+      } else {
+        console.error('Failed to generate AI lesson:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error generating AI lesson:', error);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
@@ -431,6 +475,23 @@ export function WilsonLessonBuilder({
               Total: {lessonPlan.totalDuration} min
             </span>
           )}
+          <button
+            onClick={handleAutoGenerateWithAI}
+            disabled={isGeneratingAI || !lessonPlan}
+            className="px-4 py-2 text-sm bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-md hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+          >
+            {isGeneratingAI ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Auto-Plan with AI</span>
+              </>
+            )}
+          </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !lessonPlan}

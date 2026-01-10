@@ -1,6 +1,11 @@
 // EMERGE Intervention Planner - Database Types
 // Generated from Supabase schema
 
+import type { WilsonLessonPlan } from '../curriculum/wilson-lesson-elements';
+
+// Re-export for convenience
+export type { WilsonLessonPlan } from '../curriculum/wilson-lesson-elements';
+
 export type Curriculum = 'wilson' | 'delta_math' | 'camino' | 'wordgen' | 'amira';
 export type Tier = 2 | 3;
 export type SessionStatus = 'planned' | 'completed' | 'cancelled';
@@ -164,6 +169,9 @@ export interface Session {
   notes: string | null;
   next_session_notes: string | null;
   fidelity_checklist: FidelityItem[] | null;
+
+  // Wilson-specific lesson plan
+  wilson_lesson_plan?: WilsonLessonPlan | null;
 
   created_at: string;
   updated_at: string;

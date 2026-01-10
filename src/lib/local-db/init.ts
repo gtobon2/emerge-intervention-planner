@@ -202,6 +202,7 @@ async function seedDemoData(): Promise<void> {
           notes: 'Great session! Students were very engaged.',
           next_session_notes: 'Continue with CVC words',
           fidelity_checklist: null,
+          wilson_lesson_plan: null,
         },
         {
           group_id: groupIds[0],
@@ -229,6 +230,7 @@ async function seedDemoData(): Promise<void> {
           notes: 'All students showing progress',
           next_session_notes: null,
           fidelity_checklist: null,
+          wilson_lesson_plan: null,
         },
         {
           group_id: groupIds[0],
@@ -256,6 +258,7 @@ async function seedDemoData(): Promise<void> {
           notes: null,
           next_session_notes: null,
           fidelity_checklist: null,
+          wilson_lesson_plan: null,
         },
       ];
 

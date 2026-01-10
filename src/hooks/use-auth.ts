@@ -19,6 +19,7 @@ export function useAuth() {
     signUp,
     signOut,
     resetPassword,
+    updatePassword,
     updateProfile,
     clearError,
   } = useAuthStore();
@@ -41,6 +42,7 @@ export function useAuth() {
     signUp,
     signOut,
     resetPassword,
+    updatePassword,
     updateProfile,
     clearError,
   };
