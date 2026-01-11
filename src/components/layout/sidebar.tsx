@@ -16,6 +16,8 @@ import {
   Sparkles,
   BookOpen,
   FileText,
+  ClipboardList,
+  Languages,
   X
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui';
@@ -28,6 +30,8 @@ const navItems = [
   { href: '/schedule', label: 'Schedule', icon: CalendarClock },
   { href: '/progress', label: 'Progress', icon: TrendingUp },
   { href: '/error-bank', label: 'Error Bank', icon: BookOpen },
+  { href: '/worksheets', label: 'Worksheets', icon: ClipboardList },
+  { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
   { href: '/reports', label: 'Reports', icon: FileText },
 ];
 

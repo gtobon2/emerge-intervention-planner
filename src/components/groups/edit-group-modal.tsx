@@ -15,6 +15,7 @@ import type {
   CaminoPosition,
   WordGenPosition,
   AmiraPosition,
+  DespegandoPosition,
   CurriculumPosition,
 } from '@/lib/supabase/types';
 
@@ -32,6 +33,7 @@ const curriculumOptions = [
   { value: 'camino', label: 'Camino a la Lectura' },
   { value: 'wordgen', label: 'WordGen' },
   { value: 'amira', label: 'Amira Learning' },
+  { value: 'despegando', label: 'Despegando (Spanish)' },
 ];
 
 const tierOptions = [
@@ -71,6 +73,7 @@ export function EditGroupModal({
   const [caminoPosition, setCaminoPosition] = useState({ lesson: 1 });
   const [wordgenPosition, setWordgenPosition] = useState({ unit: 1, day: 1 });
   const [amiraPosition, setAmiraPosition] = useState<AmiraPosition>({ level: 'Emergent' });
+  const [despegandoPosition, setDespegandoPosition] = useState<DespegandoPosition>({ phase: 1, lesson: 1 });
 
   const [errors, setErrors] = useState<{ [key: string]: string | undefined }>({});
 
@@ -162,6 +165,8 @@ export function EditGroupModal({
         return wordgenPosition;
       case 'amira':
         return amiraPosition;
+      case 'despegando':
+        return despegandoPosition;
     }
   };
 

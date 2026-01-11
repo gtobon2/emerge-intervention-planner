@@ -6,7 +6,7 @@ import type { WilsonLessonPlan } from '../curriculum/wilson-lesson-elements';
 // Re-export for convenience
 export type { WilsonLessonPlan } from '../curriculum/wilson-lesson-elements';
 
-export type Curriculum = 'wilson' | 'delta_math' | 'camino' | 'wordgen' | 'amira';
+export type Curriculum = 'wilson' | 'delta_math' | 'camino' | 'wordgen' | 'amira' | 'despegando';
 export type Tier = 2 | 3;
 export type SessionStatus = 'planned' | 'completed' | 'cancelled';
 export type Pacing = 'too_slow' | 'just_right' | 'too_fast';
@@ -38,12 +38,18 @@ export interface AmiraPosition {
   level: 'Emergent' | 'Beginning' | 'Transitional' | 'Fluent';
 }
 
+export interface DespegandoPosition {
+  phase: number; // 1-5
+  lesson: number; // 1-40
+}
+
 export type CurriculumPosition =
   | WilsonPosition
   | DeltaMathPosition
   | CaminoPosition
   | WordGenPosition
-  | AmiraPosition;
+  | AmiraPosition
+  | DespegandoPosition;
 
 /**
  * Type guards for CurriculumPosition variants
@@ -69,6 +75,10 @@ export function isWordGenPosition(pos: CurriculumPosition): pos is WordGenPositi
 
 export function isAmiraPosition(pos: CurriculumPosition): pos is AmiraPosition {
   return 'level' in pos && typeof (pos as AmiraPosition).level === 'string';
+}
+
+export function isDespegandoPosition(pos: CurriculumPosition): pos is DespegandoPosition {
+  return 'phase' in pos && 'lesson' in pos;
 }
 
 // Schedule type
@@ -350,6 +360,7 @@ export function getCurriculumColor(curriculum: Curriculum): string {
     camino: 'camino',
     wordgen: 'wordgen',
     amira: 'amira',
+    despegando: 'emerald',
   };
   return colors[curriculum];
 }
@@ -361,6 +372,7 @@ export function getCurriculumLabel(curriculum: Curriculum): string {
     camino: 'Camino a la Lectura',
     wordgen: 'WordGen',
     amira: 'Amira Learning',
+    despegando: 'Despegando (Spanish)',
   };
   return labels[curriculum];
 }

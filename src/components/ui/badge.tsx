@@ -21,7 +21,8 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
           delta_math: 'bg-delta/20 text-delta border border-delta/30',
           camino: 'bg-camino/20 text-camino border border-camino/30',
           wordgen: 'bg-wordgen/20 text-wordgen border border-wordgen/30',
-          amira: 'bg-amira/20 text-amira border border-amira/30'
+          amira: 'bg-amira/20 text-amira border border-amira/30',
+          despegando: 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
         };
         return curriculumColors[curriculum];
       }
@@ -65,7 +66,8 @@ export const CurriculumBadge = ({ curriculum }: { curriculum: Curriculum }) => {
     delta_math: 'Delta Math',
     camino: 'Camino',
     wordgen: 'WordGen',
-    amira: 'Amira'
+    amira: 'Amira',
+    despegando: 'Despegando'
   };
 
   return (

@@ -4,6 +4,8 @@ export * from './delta-math';
 export * from './camino';
 export * from './wordgen';
 export * from './amira';
+export * from './despegando';
+export * from './despegando-lesson-elements';
 
 import type { Curriculum, CurriculumPosition, LessonComponent } from '@/lib/supabase/types';
 import { WILSON_LESSON_COMPONENTS, getWilsonPositionLabel, getNextWilsonPosition } from './wilson';
@@ -12,6 +14,7 @@ import { CAMINO_LESSON_COMPONENTS, getCaminoLessonLabel, getNextCaminoLesson } f
 import { WORDGEN_LESSON_COMPONENTS, getWordGenPositionLabel, getNextWordGenPosition } from './wordgen';
 import { AMIRA_LESSON_COMPONENTS, getAmiraLevelLabel, getNextAmiraLevel } from './amira';
 import type { AmiraLevel } from './amira';
+import { DESPEGANDO_LESSON_COMPONENTS, getDespegandoPositionLabel, getNextDespegandoPosition } from './despegando';
 
 // Get lesson components for any curriculum
 export function getLessonComponents(curriculum: Curriculum): LessonComponent[] {
@@ -34,6 +37,8 @@ export function getLessonComponents(curriculum: Curriculum): LessonComponent[] {
       return WORDGEN_LESSON_COMPONENTS;
     case 'amira':
       return AMIRA_LESSON_COMPONENTS;
+    case 'despegando':
+      return DESPEGANDO_LESSON_COMPONENTS;
     default:
       return [];
   }
@@ -66,6 +71,10 @@ export function getPositionLabel(curriculum: Curriculum, position: CurriculumPos
     case 'amira': {
       const pos = position as { level: AmiraLevel };
       return getAmiraLevelLabel(pos.level);
+    }
+    case 'despegando': {
+      const pos = position as { phase: number; lesson: number };
+      return getDespegandoPositionLabel(pos);
     }
     default:
       return JSON.stringify(position);
@@ -102,6 +111,10 @@ export function getNextPosition(curriculum: Curriculum, position: CurriculumPosi
       const next = getNextAmiraLevel(pos.level);
       return next ? { level: next } : null;
     }
+    case 'despegando': {
+      const pos = position as { phase: number; lesson: number };
+      return getNextDespegandoPosition(pos.lesson);
+    }
     default:
       return null;
   }
@@ -120,6 +133,8 @@ export function getSessionDuration(curriculum: Curriculum): { min: number; max: 
       return { min: 40, max: 50 };
     case 'amira':
       return { min: 25, max: 35 };
+    case 'despegando':
+      return { min: 40, max: 50 };
     default:
       return { min: 30, max: 45 };
   }

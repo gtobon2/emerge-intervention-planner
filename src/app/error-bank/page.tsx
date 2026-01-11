@@ -81,13 +81,14 @@ export default function ErrorBankPage() {
       camino: 0,
       wordgen: 0,
       amira: 0,
+      despegando: 0,
       total: allErrors.length,
       custom: customErrors.length,
     };
 
     allErrors.forEach(error => {
-      if (error.curriculum in stats) {
-        stats[error.curriculum]++;
+      if (error.curriculum && error.curriculum in stats) {
+        (stats as Record<string, number>)[error.curriculum]++;
       }
     });
 
