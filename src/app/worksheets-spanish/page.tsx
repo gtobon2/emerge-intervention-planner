@@ -14,6 +14,7 @@ import {
 } from '@/lib/worksheets/despegando-generators';
 import { type DifficultyLevel, DIFFICULTY_SETTINGS } from '@/lib/worksheets/types';
 import { DESPEGANDO_PHASES } from '@/lib/curriculum/despegando';
+import { getCumulativeSpanishWords } from '@/lib/worksheets/spanish-word-utils';
 import { exportWorksheetToPDF, exportAnswerKeyToPDF } from '@/lib/worksheets/pdf-export';
 
 export default function SpanishWorksheetsPage() {
@@ -77,18 +78,22 @@ export default function SpanishWorksheetsPage() {
 
     // If AI is enabled and template needs sentences, enhance with AI
     if (useAI && needsAISentences) {
-      setAiStatus('Generando oraciones con IA...');
+      setAiStatus('Generando oraciones decodificables con IA...');
 
       try {
-        // Get words from the lesson
-        const words = generated.lessonData.sampleWords.slice(0, 8);
+        // Get target words from the lesson
+        const targetWords = generated.lessonData.sampleWords.slice(0, 8);
 
-        // Call AI endpoint
+        // Get ALL decodable words up to this lesson
+        const decodableWords = getCumulativeSpanishWords(selectedLesson);
+
+        // Call AI endpoint with decodable word constraint
         const response = await fetch('/api/ai/generate-worksheet-sentences', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            words,
+            targetWords: targetWords,
+            decodableWords: decodableWords,
             type: selectedTemplate.replace('_spanish', ''),
             language: 'spanish',
             count: selectedTemplate === 'draw_and_write_spanish' ? 4 : 6,
@@ -112,7 +117,7 @@ export default function SpanishWorksheetsPage() {
                     answer: s.targetWord,
                     options: s.distractorWord
                       ? (Math.random() > 0.5 ? [s.targetWord, s.distractorWord] : [s.distractorWord, s.targetWord])
-                      : [s.targetWord, words[(idx + 3) % words.length]],
+                      : [s.targetWord, targetWords[(idx + 3) % targetWords.length]],
                   })),
                 };
               }

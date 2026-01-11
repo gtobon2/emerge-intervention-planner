@@ -5,6 +5,8 @@
  * for worksheet generation and phonics instruction.
  */
 
+import { DESPEGANDO_PHASES } from '@/lib/curriculum/despegando';
+
 // Spanish digraphs (treated as single units)
 export const SPANISH_DIGRAPHS = ['ch', 'll', 'rr', 'qu', 'gu', 'gü'];
 
@@ -392,4 +394,23 @@ export function countSpanishSyllables(word: string): number {
  */
 export function formatSyllables(word: string): string {
   return divideSpanishSyllables(word).join('-');
+}
+
+/**
+ * Get cumulative decodable words for Spanish (Despegando)
+ * Returns all words from lesson 1 up to and including the target lesson
+ */
+export function getCumulativeSpanishWords(targetLesson: number): string[] {
+  const allWords: string[] = [];
+
+  for (const phase of DESPEGANDO_PHASES) {
+    for (const lesson of phase.lessons) {
+      allWords.push(...lesson.sampleWords);
+      if (lesson.lesson === targetLesson) {
+        return allWords;
+      }
+    }
+  }
+
+  return allWords;
 }

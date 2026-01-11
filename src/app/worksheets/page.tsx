@@ -17,7 +17,7 @@ import {
 } from '@/lib/worksheets';
 import { exportWorksheetToPDF, exportAnswerKeyToPDF } from '@/lib/worksheets/pdf-export';
 import { WILSON_STEPS, getAllWilsonSubsteps } from '@/lib/curriculum/wilson';
-import { getWordsForSubstep } from '@/lib/worksheets/word-utils';
+import { getWordsForSubstep, getCumulativeWords } from '@/lib/worksheets/word-utils';
 
 export default function WorksheetsPage() {
   // Configuration state
@@ -81,18 +81,22 @@ export default function WorksheetsPage() {
 
     // If AI is enabled and template needs sentences, enhance with AI
     if (useAI && needsAISentences) {
-      setAiStatus('Generating smart sentences with AI...');
+      setAiStatus('Generating decodable sentences with AI...');
 
       try {
-        // Get words from the substep
+        // Get target words from the substep
         const { realWords } = getWordsForSubstep(selectedSubstep, wordCount, false);
 
-        // Call AI endpoint
+        // Get ALL decodable words up to this substep
+        const decodableWords = getCumulativeWords(selectedSubstep);
+
+        // Call AI endpoint with decodable word constraint
         const response = await fetch('/api/ai/generate-worksheet-sentences', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            words: realWords.slice(0, 8),
+            targetWords: realWords.slice(0, 8),
+            decodableWords: decodableWords,
             type: selectedTemplate,
             language: 'english',
             count: selectedTemplate === 'draw_and_write' ? 4 : 6,
