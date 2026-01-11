@@ -86,6 +86,14 @@ function SectionRenderer({ section }: { section: WorksheetSection }) {
       {section.type === 'matching' && (
         <MatchingSection items={section.items} />
       )}
+
+      {section.type === 'sentence_choice' && (
+        <SentenceChoiceSection items={section.items} />
+      )}
+
+      {section.type === 'draw_area' && (
+        <DrawAreaSection items={section.items} />
+      )}
     </div>
   );
 }
@@ -196,6 +204,52 @@ function MatchingSection({ items }: { items: WorksheetItem[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SentenceChoiceSection({ items }: { items: WorksheetItem[] }) {
+  return (
+    <div className="space-y-4">
+      {items.map((item) => (
+        <div key={item.id} className="p-3 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-700 mb-3">
+            {item.id}. {item.prompt}
+          </p>
+          <div className="flex gap-4 ml-4">
+            {item.options?.map((option, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white"
+              >
+                <span className="w-5 h-5 border-2 border-gray-400 rounded-full" />
+                <span className="text-gray-800 font-medium">{option}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DrawAreaSection({ items }: { items: WorksheetItem[] }) {
+  return (
+    <div className="space-y-6">
+      {items.map((item) => (
+        <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+          <p className="text-sm text-gray-700 mb-3 font-medium">
+            {item.id}. Read: &quot;{item.prompt}&quot;
+          </p>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 h-32 flex items-center justify-center">
+            <span className="text-gray-400 text-sm">Draw your picture here</span>
+          </div>
+          <div className="mt-3">
+            <p className="text-xs text-gray-500 mb-1">Write the sentence:</p>
+            <div className="h-6 border-b-2 border-gray-300 border-dashed" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

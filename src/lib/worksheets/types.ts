@@ -12,7 +12,9 @@ export type WorksheetTemplate =
   | 'sound_mapping'
   | 'syllable_division'
   | 'hf_words'
-  | 'combined';
+  | 'combined'
+  | 'sentence_completion'
+  | 'draw_and_write';
 
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
@@ -46,7 +48,7 @@ export interface WorksheetContent {
 
 export interface WorksheetSection {
   title: string;
-  type: 'word_list' | 'sentences' | 'sound_boxes' | 'syllable_split' | 'fill_blank' | 'matching';
+  type: 'word_list' | 'sentences' | 'sound_boxes' | 'syllable_split' | 'fill_blank' | 'matching' | 'sentence_choice' | 'draw_area';
   items: WorksheetItem[];
 }
 
@@ -116,6 +118,18 @@ export const WORKSHEET_TEMPLATES: Record<WorksheetTemplate, {
     description: 'Mixed worksheet with multiple activity types',
     icon: '📚',
     suitableFor: ['review', 'assessment', 'homework'],
+  },
+  sentence_completion: {
+    name: 'Finish the Sentence',
+    description: 'Choose the correct word to complete the sentence',
+    icon: '✅',
+    suitableFor: ['comprehension', 'vocabulary', 'centers'],
+  },
+  draw_and_write: {
+    name: 'Draw & Write',
+    description: 'Read a decodable sentence and draw a picture',
+    icon: '🎨',
+    suitableFor: ['comprehension', 'creativity', 'centers'],
   },
 };
 

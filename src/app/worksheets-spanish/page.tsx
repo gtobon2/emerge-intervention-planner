@@ -491,6 +491,48 @@ function SpanishWorksheetPreview({ worksheet }: { worksheet: GeneratedSpanishWor
                 ))}
               </div>
             )}
+
+            {section.type === 'sentence_choice' && (
+              <div className="space-y-4">
+                {section.items.map((item, idx) => (
+                  <div key={idx} className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                    <p className="text-text-primary mb-3">
+                      {item.id}. {item.prompt}
+                    </p>
+                    <div className="flex gap-4 ml-4">
+                      {item.options?.map((option, optIdx) => (
+                        <div
+                          key={optIdx}
+                          className="flex items-center gap-2 px-3 py-2 border border-emerald-300 rounded-lg bg-white dark:bg-surface-secondary"
+                        >
+                          <span className="w-5 h-5 border-2 border-emerald-400 rounded-full" />
+                          <span className="text-text-primary font-medium">{option}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {section.type === 'draw_area' && (
+              <div className="space-y-6">
+                {section.items.map((item, idx) => (
+                  <div key={idx} className="border border-border-default rounded-lg p-4">
+                    <p className="text-text-primary mb-3 font-medium">
+                      {item.id}. Lee: &quot;{item.prompt}&quot;
+                    </p>
+                    <div className="border-2 border-dashed border-emerald-300 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 h-32 flex items-center justify-center">
+                      <span className="text-text-muted text-sm">Dibuja aquí / Draw here</span>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-xs text-text-muted mb-1">Escribe la oración:</p>
+                      <div className="h-6 border-b-2 border-emerald-300 border-dashed" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -592,6 +634,35 @@ function exportSpanishWorksheetToPDF(worksheet: GeneratedSpanishWorksheet) {
         ${section.type === 'sentences' ? `
           ${section.items.map(item => `
             <div class="fill-line">${item.prompt}</div>
+          `).join('')}
+        ` : ''}
+        ${section.type === 'sentence_choice' ? `
+          ${section.items.map(item => `
+            <div style="margin: 16px 0; padding: 12px; background: #ecfdf5; border-radius: 8px;">
+              <p style="margin-bottom: 12px;">${item.id}. ${item.prompt}</p>
+              <div style="display: flex; gap: 16px; margin-left: 16px;">
+                ${(item.options || []).map(opt => `
+                  <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #10b981; border-radius: 8px; background: white;">
+                    <span style="width: 16px; height: 16px; border: 2px solid #10b981; border-radius: 50%; display: inline-block;"></span>
+                    ${opt}
+                  </span>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        ` : ''}
+        ${section.type === 'draw_area' ? `
+          ${section.items.map(item => `
+            <div style="margin: 16px 0; border: 1px solid #ccc; border-radius: 8px; padding: 16px;">
+              <p style="margin-bottom: 12px; font-weight: 500;">${item.id}. Lee: "${item.prompt}"</p>
+              <div style="height: 120px; border: 2px dashed #10b981; border-radius: 8px; background: #f0fdf4; display: flex; align-items: center; justify-content: center;">
+                <span style="color: #666;">Dibuja aquí</span>
+              </div>
+              <div style="margin-top: 12px;">
+                <p style="font-size: 12px; color: #666; margin-bottom: 4px;">Escribe la oración:</p>
+                <div style="border-bottom: 2px dashed #10b981; height: 24px;"></div>
+              </div>
+            </div>
           `).join('')}
         ` : ''}
       `).join('')}

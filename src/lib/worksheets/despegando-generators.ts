@@ -42,7 +42,9 @@ export type SpanishWorksheetTemplate =
   | 'elkonin_boxes'
   | 'sentence_dictation_spanish'
   | 'syllable_clapping'
-  | 'mixed_spanish';
+  | 'mixed_spanish'
+  | 'sentence_completion_spanish'
+  | 'draw_and_write_spanish';
 
 // Spanish worksheet configuration
 export interface SpanishWorksheetConfig {
@@ -153,6 +155,22 @@ export const SPANISH_WORKSHEET_TEMPLATES: Record<SpanishWorksheetTemplate, {
     icon: '📚',
     suitableFor: ['review', 'assessment', 'homework'],
   },
+  sentence_completion_spanish: {
+    name: 'Finish the Sentence',
+    nameSpanish: 'Completa la Oración',
+    description: 'Choose the correct word to complete the sentence',
+    descriptionSpanish: 'Elige la palabra correcta para completar la oración',
+    icon: '✅',
+    suitableFor: ['comprehension', 'vocabulary', 'centers'],
+  },
+  draw_and_write_spanish: {
+    name: 'Draw & Write',
+    nameSpanish: 'Dibuja y Escribe',
+    description: 'Read a decodable sentence and draw a picture',
+    descriptionSpanish: 'Lee una oración decodificable y dibuja',
+    icon: '🎨',
+    suitableFor: ['comprehension', 'creativity', 'centers'],
+  },
 };
 
 /**
@@ -215,6 +233,14 @@ export function generateSpanishWorksheet(
     case 'mixed_spanish':
       ({ content, title, titleSpanish, instructions, instructionsSpanish } =
         generateMixedSpanishWorksheet(config, lessonData, lessonElements));
+      break;
+    case 'sentence_completion_spanish':
+      ({ content, title, titleSpanish, instructions, instructionsSpanish } =
+        generateSpanishSentenceCompletionWorksheet(config, lessonData, lessonElements));
+      break;
+    case 'draw_and_write_spanish':
+      ({ content, title, titleSpanish, instructions, instructionsSpanish } =
+        generateSpanishDrawAndWriteWorksheet(config, lessonData, lessonElements));
       break;
     default:
       return null;
@@ -759,6 +785,160 @@ function generateMixedSpanishWorksheet(
     titleSpanish: `Práctica Combinada - Lección ${lessonData.lesson}`,
     instructions: 'Complete each section. Take your time and sound out each word.',
     instructionsSpanish: 'Completa cada sección. Tómate tu tiempo y pronuncia cada palabra.',
+  };
+}
+
+/**
+ * Generate Spanish Sentence Completion Worksheet (Finish the Sentence)
+ */
+function generateSpanishSentenceCompletionWorksheet(
+  config: SpanishWorksheetConfig,
+  lessonData: DespegandoLesson,
+  lessonElements?: DespegandoLessonElements
+): {
+  content: { sections: WorksheetSection[] };
+  title: string;
+  titleSpanish: string;
+  instructions: string;
+  instructionsSpanish: string;
+} {
+  const sections: WorksheetSection[] = [];
+
+  // Get words from lesson
+  const words = lessonElements?.realWords?.map(w => w.word) || lessonData.sampleWords;
+  const shuffledWords = shuffleArray(words);
+
+  // Spanish sentence frames with blanks for word choices
+  const sentenceFrames = [
+    { frame: 'El ___ está en la mesa.', context: 'object' },
+    { frame: 'Mi mamá tiene una ___.', context: 'object' },
+    { frame: 'Yo puedo ___ muy bien.', context: 'action' },
+    { frame: 'La ___ es muy bonita.', context: 'object' },
+    { frame: 'Mira el ___ grande.', context: 'object' },
+    { frame: 'Me gusta la ___.', context: 'object' },
+    { frame: 'El niño ve un ___.', context: 'object' },
+    { frame: 'La ___ está aquí.', context: 'object' },
+  ];
+
+  // Create sentence completion items with two word choices
+  const completionItems: WorksheetItem[] = [];
+  for (let i = 0; i < Math.min(6, shuffledWords.length - 1); i++) {
+    const correctWord = shuffledWords[i];
+    // Get a distractor word from the same lesson (different word)
+    const distractorIndex = (i + Math.floor(shuffledWords.length / 2)) % shuffledWords.length;
+    const distractorWord = shuffledWords[distractorIndex] !== correctWord
+      ? shuffledWords[distractorIndex]
+      : shuffledWords[(distractorIndex + 1) % shuffledWords.length];
+
+    const frame = sentenceFrames[i % sentenceFrames.length];
+    const sentence = frame.frame.replace('___', '_____');
+
+    // Randomize option order
+    const options = Math.random() > 0.5
+      ? [correctWord, distractorWord]
+      : [distractorWord, correctWord];
+
+    completionItems.push({
+      id: i + 1,
+      prompt: sentence,
+      answer: correctWord,
+      options: options,
+    });
+  }
+
+  sections.push({
+    title: 'Finish the Sentence / Completa la Oración',
+    type: 'sentence_choice',
+    items: completionItems,
+  });
+
+  // Add a word bank section for reference
+  sections.push({
+    title: 'Word Bank / Banco de Palabras',
+    type: 'word_list',
+    items: shuffledWords.slice(0, 8).map((word, idx) => ({
+      id: idx + 1,
+      prompt: word,
+      answer: word,
+    })),
+  });
+
+  return {
+    content: { sections },
+    title: `Finish the Sentence - Lesson ${lessonData.lesson}`,
+    titleSpanish: `Completa la Oración - Lección ${lessonData.lesson}`,
+    instructions: 'Read each sentence. Circle the word that makes sense to complete the sentence.',
+    instructionsSpanish: 'Lee cada oración. Encierra en un círculo la palabra que tiene sentido para completar la oración.',
+  };
+}
+
+/**
+ * Generate Spanish Draw and Write Worksheet
+ */
+function generateSpanishDrawAndWriteWorksheet(
+  config: SpanishWorksheetConfig,
+  lessonData: DespegandoLesson,
+  lessonElements?: DespegandoLessonElements
+): {
+  content: { sections: WorksheetSection[] };
+  title: string;
+  titleSpanish: string;
+  instructions: string;
+  instructionsSpanish: string;
+} {
+  const sections: WorksheetSection[] = [];
+
+  // Get words from lesson
+  const words = lessonElements?.realWords?.map(w => w.word) || lessonData.sampleWords;
+  const shuffledWords = shuffleArray(words);
+
+  // Simple decodable Spanish sentence frames
+  const simpleFrames = [
+    'El ___ es grande.',
+    'Yo veo un ___.',
+    'La ___ está aquí.',
+    'Mira el ___.',
+    'Mi ___ es bonito.',
+    'Hay un ___ en la mesa.',
+  ];
+
+  // Create draw and write items
+  const drawItems: WorksheetItem[] = [];
+  for (let i = 0; i < Math.min(4, shuffledWords.length); i++) {
+    const word = shuffledWords[i];
+    const frame = simpleFrames[i % simpleFrames.length];
+    const sentence = frame.replace('___', word);
+
+    drawItems.push({
+      id: i + 1,
+      prompt: sentence,
+      answer: sentence,
+    });
+  }
+
+  sections.push({
+    title: 'Read, Draw, and Write / Lee, Dibuja y Escribe',
+    type: 'draw_area',
+    items: drawItems,
+  });
+
+  // Copy the sentence section
+  sections.push({
+    title: 'Copy the Sentence / Copia la Oración',
+    type: 'sentences',
+    items: drawItems.slice(0, 2).map((item, idx) => ({
+      id: idx + 1,
+      prompt: `${item.prompt}\n_________________________________________________`,
+      answer: item.answer,
+    })),
+  });
+
+  return {
+    content: { sections },
+    title: `Draw & Write - Lesson ${lessonData.lesson}`,
+    titleSpanish: `Dibuja y Escribe - Lección ${lessonData.lesson}`,
+    instructions: 'Read the sentence. Draw a picture that shows what the sentence means. Then copy the sentence on the line.',
+    instructionsSpanish: 'Lee la oración. Dibuja lo que significa la oración. Luego copia la oración en la línea.',
   };
 }
 

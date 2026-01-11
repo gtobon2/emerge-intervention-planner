@@ -68,6 +68,12 @@ export function generateWorksheet(config: WorksheetConfig): GeneratedWorksheet |
     case 'combined':
       ({ content, title, instructions } = generateCombinedWorksheet(config, substepData));
       break;
+    case 'sentence_completion':
+      ({ content, title, instructions } = generateSentenceCompletionWorksheet(config, substepData));
+      break;
+    case 'draw_and_write':
+      ({ content, title, instructions } = generateDrawAndWriteWorksheet(config, substepData));
+      break;
     default:
       return null;
   }
@@ -429,6 +435,140 @@ function generateCombinedWorksheet(
     content: { sections },
     title: `Combined Practice - ${substepData.name}`,
     instructions: 'Complete each section. Take your time and tap the sounds in each word.',
+  };
+}
+
+/**
+ * Generate Sentence Completion Worksheet (Finish the Sentence)
+ */
+function generateSentenceCompletionWorksheet(
+  config: WorksheetConfig,
+  substepData: WilsonSubstep
+): { content: { sections: WorksheetSection[] }; title: string; instructions: string } {
+  const { realWords } = getWordsForSubstep(config.substep, config.wordCount, false);
+  const shuffledWords = shuffleArray(realWords);
+
+  // Sentence frames with blanks for word choices
+  const sentenceFrames = [
+    { frame: 'The ___ is on the bed.', context: 'object' },
+    { frame: 'I can ___ very fast.', context: 'action' },
+    { frame: 'She has a ___ pet.', context: 'adjective' },
+    { frame: 'We went to the ___.', context: 'place' },
+    { frame: 'The ___ is red.', context: 'object' },
+    { frame: 'He can ___ the ball.', context: 'action' },
+    { frame: 'Look at the big ___.', context: 'object' },
+    { frame: 'I like to ___ at home.', context: 'action' },
+  ];
+
+  const sections: WorksheetSection[] = [];
+
+  // Create sentence completion items with two word choices
+  const completionItems: WorksheetItem[] = [];
+  for (let i = 0; i < Math.min(6, shuffledWords.length - 1); i++) {
+    const correctWord = shuffledWords[i];
+    // Get a distractor word from the same substep (different word)
+    const distractorIndex = (i + Math.floor(shuffledWords.length / 2)) % shuffledWords.length;
+    const distractorWord = shuffledWords[distractorIndex] !== correctWord
+      ? shuffledWords[distractorIndex]
+      : shuffledWords[(distractorIndex + 1) % shuffledWords.length];
+
+    const frame = sentenceFrames[i % sentenceFrames.length];
+    const sentence = frame.frame.replace('___', '_____');
+
+    // Randomize option order
+    const options = Math.random() > 0.5
+      ? [correctWord, distractorWord]
+      : [distractorWord, correctWord];
+
+    completionItems.push({
+      id: i + 1,
+      prompt: sentence,
+      answer: correctWord,
+      options: options,
+    });
+  }
+
+  sections.push({
+    title: 'Finish the Sentence',
+    type: 'sentence_choice',
+    items: completionItems,
+  });
+
+  // Add a word bank section for reference
+  sections.push({
+    title: 'Word Bank',
+    type: 'word_list',
+    items: shuffledWords.slice(0, 8).map((word, idx) => ({
+      id: idx + 1,
+      prompt: word,
+      answer: word,
+    })),
+  });
+
+  return {
+    content: { sections },
+    title: `Finish the Sentence - ${substepData.name}`,
+    instructions: 'Read each sentence. Circle the word that makes sense to complete the sentence.',
+  };
+}
+
+/**
+ * Generate Draw and Write Worksheet
+ */
+function generateDrawAndWriteWorksheet(
+  config: WorksheetConfig,
+  substepData: WilsonSubstep
+): { content: { sections: WorksheetSection[] }; title: string; instructions: string } {
+  const { realWords } = getWordsForSubstep(config.substep, config.wordCount, false);
+  const shuffledWords = shuffleArray(realWords);
+
+  // Simple decodable sentence frames
+  const simpleFrames = [
+    'The ___ is big.',
+    'I see a ___.',
+    'The ___ can run.',
+    'Look at the ___.',
+    'A ___ is here.',
+    'The ___ is fun.',
+  ];
+
+  const sections: WorksheetSection[] = [];
+
+  // Create draw and write items
+  const drawItems: WorksheetItem[] = [];
+  for (let i = 0; i < Math.min(4, shuffledWords.length); i++) {
+    const word = shuffledWords[i];
+    const frame = simpleFrames[i % simpleFrames.length];
+    const sentence = frame.replace('___', word);
+
+    drawItems.push({
+      id: i + 1,
+      prompt: sentence,
+      answer: sentence,
+    });
+  }
+
+  sections.push({
+    title: 'Read, Draw, and Write',
+    type: 'draw_area',
+    items: drawItems,
+  });
+
+  // Copy the sentence section
+  sections.push({
+    title: 'Copy the Sentence',
+    type: 'sentences',
+    items: drawItems.slice(0, 2).map((item, idx) => ({
+      id: idx + 1,
+      prompt: `${item.prompt}\n_________________________________________________`,
+      answer: item.answer,
+    })),
+  });
+
+  return {
+    content: { sections },
+    title: `Draw & Write - ${substepData.name}`,
+    instructions: 'Read the sentence. Draw a picture that shows what the sentence means. Then copy the sentence on the line.',
   };
 }
 

@@ -219,6 +219,12 @@ function addSection(doc: jsPDF, section: WorksheetSection, startY: number): numb
     case 'matching':
       yPos = renderMatching(doc, section, yPos);
       break;
+    case 'sentence_choice':
+      yPos = renderSentenceChoice(doc, section, yPos);
+      break;
+    case 'draw_area':
+      yPos = renderDrawArea(doc, section, yPos);
+      break;
   }
 
   return yPos + 8;
@@ -403,6 +409,99 @@ function renderMatching(doc: jsPDF, section: WorksheetSection, startY: number): 
 
     doc.text(`${item.id}. ${item.prompt}: ________________`, STYLES.page.marginLeft, yPos);
     yPos += STYLES.lineHeight + 2;
+  }
+
+  return yPos;
+}
+
+/**
+ * Render sentence choice section (finish the sentence)
+ */
+function renderSentenceChoice(doc: jsPDF, section: WorksheetSection, startY: number): number {
+  let yPos = startY;
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(STYLES.body.fontSize);
+  doc.setTextColor(...STYLES.body.color);
+
+  for (const item of section.items) {
+    if (yPos > 240) {
+      doc.addPage();
+      yPos = STYLES.page.marginTop;
+    }
+
+    // Sentence prompt
+    doc.text(`${item.id}. ${item.prompt}`, STYLES.page.marginLeft, yPos);
+    yPos += 10;
+
+    // Options (with circles)
+    const options = item.options || [];
+    let xPos = STYLES.page.marginLeft + 10;
+
+    for (const option of options) {
+      // Draw circle
+      doc.setDrawColor(100, 100, 100);
+      doc.setLineWidth(0.5);
+      doc.circle(xPos + 3, yPos - 2, 3);
+
+      // Option text
+      doc.text(option, xPos + 10, yPos);
+      xPos += 60; // Space between options
+    }
+
+    yPos += 12;
+  }
+
+  return yPos;
+}
+
+/**
+ * Render draw area section
+ */
+function renderDrawArea(doc: jsPDF, section: WorksheetSection, startY: number): number {
+  let yPos = startY;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const boxWidth = pageWidth - STYLES.page.marginLeft - STYLES.page.marginRight;
+
+  doc.setFontSize(STYLES.body.fontSize);
+  doc.setTextColor(...STYLES.body.color);
+
+  for (const item of section.items) {
+    if (yPos > 180) {
+      doc.addPage();
+      yPos = STYLES.page.marginTop;
+    }
+
+    // Sentence prompt
+    doc.text(`${item.id}. Read: "${item.prompt}"`, STYLES.page.marginLeft, yPos);
+    yPos += 8;
+
+    // Draw box for drawing
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.5);
+    doc.setLineDashPattern([2, 2], 0);
+    doc.rect(STYLES.page.marginLeft, yPos, boxWidth, 50);
+    doc.setLineDashPattern([], 0); // Reset dash pattern
+
+    // "Draw here" text in center
+    doc.setFontSize(10);
+    doc.setTextColor(180, 180, 180);
+    doc.text('Draw your picture here', STYLES.page.marginLeft + boxWidth / 2 - 25, yPos + 27);
+    doc.setFontSize(STYLES.body.fontSize);
+    doc.setTextColor(...STYLES.body.color);
+
+    yPos += 55;
+
+    // Line for writing sentence
+    doc.setFontSize(9);
+    doc.text('Write the sentence:', STYLES.page.marginLeft, yPos);
+    yPos += 5;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.3);
+    doc.line(STYLES.page.marginLeft, yPos + 2, STYLES.page.marginLeft + boxWidth, yPos + 2);
+
+    yPos += 15;
   }
 
   return yPos;
