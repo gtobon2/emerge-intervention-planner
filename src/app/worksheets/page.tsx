@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FileText, Printer, Download, RefreshCw, Eye } from 'lucide-react';
+import { FileText, Printer, Download, RefreshCw, Eye, Sparkles } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card } from '@/components/ui';
 import { WorksheetConfigPanel } from '@/components/worksheets/worksheet-config-panel';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/worksheets';
 import { exportWorksheetToPDF, exportAnswerKeyToPDF } from '@/lib/worksheets/pdf-export';
 import { WILSON_STEPS, getAllWilsonSubsteps } from '@/lib/curriculum/wilson';
+import { getWordsForSubstep } from '@/lib/worksheets/word-utils';
 
 export default function WorksheetsPage() {
   // Configuration state
@@ -33,6 +34,13 @@ export default function WorksheetsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  // AI generation state
+  const [useAI, setUseAI] = useState<boolean>(true);
+  const [aiStatus, setAiStatus] = useState<string>('');
+
+  // Check if template needs AI sentences
+  const needsAISentences = selectedTemplate === 'sentence_completion' || selectedTemplate === 'draw_and_write';
+
   // Get all substeps for dropdown
   const allSubsteps = useMemo(() => getAllWilsonSubsteps(), []);
 
@@ -48,8 +56,9 @@ export default function WorksheetsPage() {
   }, []);
 
   // Generate worksheet
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
+    setAiStatus('');
 
     const config: WorksheetConfig = {
       template: selectedTemplate,
@@ -62,13 +71,81 @@ export default function WorksheetsPage() {
       date: new Date().toLocaleDateString(),
     };
 
-    // Simulate slight delay for UX
-    setTimeout(() => {
-      const generated = generateWorksheet(config);
-      setWorksheet(generated);
-      setShowPreview(true);
+    // Generate base worksheet
+    const generated = generateWorksheet(config);
+
+    if (!generated) {
       setIsGenerating(false);
-    }, 300);
+      return;
+    }
+
+    // If AI is enabled and template needs sentences, enhance with AI
+    if (useAI && needsAISentences) {
+      setAiStatus('Generating smart sentences with AI...');
+
+      try {
+        // Get words from the substep
+        const { realWords } = getWordsForSubstep(selectedSubstep, wordCount, false);
+
+        // Call AI endpoint
+        const response = await fetch('/api/ai/generate-worksheet-sentences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            words: realWords.slice(0, 8),
+            type: selectedTemplate,
+            language: 'english',
+            count: selectedTemplate === 'draw_and_write' ? 4 : 6,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          if (data.sentences && data.sentences.length > 0) {
+            // Update the worksheet with AI-generated sentences
+            const updatedContent = { ...generated.content };
+
+            updatedContent.sections = updatedContent.sections.map(section => {
+              if (section.type === 'sentence_choice') {
+                return {
+                  ...section,
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; distractorWord?: string }, idx: number) => ({
+                    id: idx + 1,
+                    prompt: s.sentence.replace(s.targetWord, '_____'),
+                    answer: s.targetWord,
+                    options: s.distractorWord
+                      ? (Math.random() > 0.5 ? [s.targetWord, s.distractorWord] : [s.distractorWord, s.targetWord])
+                      : [s.targetWord, realWords[(idx + 3) % realWords.length]],
+                  })),
+                };
+              }
+              if (section.type === 'draw_area') {
+                return {
+                  ...section,
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string }, idx: number) => ({
+                    id: idx + 1,
+                    prompt: s.sentence,
+                    answer: s.sentence,
+                  })),
+                };
+              }
+              return section;
+            });
+
+            generated.content = updatedContent;
+            setAiStatus(data.source === 'ai' ? '✨ AI-enhanced sentences' : '');
+          }
+        }
+      } catch (error) {
+        console.error('AI generation failed:', error);
+        setAiStatus('Using default sentences (AI unavailable)');
+      }
+    }
+
+    setWorksheet(generated);
+    setShowPreview(true);
+    setIsGenerating(false);
   };
 
   // Export handlers
@@ -138,6 +215,28 @@ export default function WorksheetsPage() {
               substepOptions={substepOptions}
             />
 
+            {/* AI Option (only for sentence templates) */}
+            {needsAISentences && (
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="useAI"
+                    checked={useAI}
+                    onChange={(e) => setUseAI(e.target.checked)}
+                    className="w-4 h-4 rounded border-border-default text-wilson focus:ring-wilson"
+                  />
+                  <label htmlFor="useAI" className="flex items-center gap-2 text-sm text-text-secondary">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Use AI to create meaningful sentences
+                  </label>
+                </div>
+                <p className="text-xs text-text-muted mt-2 ml-7">
+                  AI generates sentences that make sense with your target words
+                </p>
+              </Card>
+            )}
+
             {/* Generate Button */}
             <Button
               className="w-full gap-2"
@@ -147,15 +246,24 @@ export default function WorksheetsPage() {
               {isGenerating ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Generating...
+                  {aiStatus || 'Generating...'}
                 </>
               ) : (
                 <>
-                  <FileText className="w-4 h-4" />
+                  {needsAISentences && useAI ? (
+                    <Sparkles className="w-4 h-4" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
                   Generate Worksheet
                 </>
               )}
             </Button>
+
+            {/* AI Status */}
+            {aiStatus && !isGenerating && (
+              <p className="text-sm text-center text-emerald-600">{aiStatus}</p>
+            )}
           </div>
 
           {/* Right Column: Preview & Export */}

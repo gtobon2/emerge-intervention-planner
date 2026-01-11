@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FileText, Printer, Download, RefreshCw, Eye, Languages } from 'lucide-react';
+import { FileText, Printer, Download, RefreshCw, Eye, Languages, Sparkles } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card } from '@/components/ui';
 import {
@@ -31,6 +31,13 @@ export default function SpanishWorksheetsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  // AI generation state
+  const [useAI, setUseAI] = useState<boolean>(true);
+  const [aiStatus, setAiStatus] = useState<string>('');
+
+  // Check if template needs AI sentences
+  const needsAISentences = selectedTemplate === 'sentence_completion_spanish' || selectedTemplate === 'draw_and_write_spanish';
+
   // Group lessons by phase for the dropdown
   const lessonOptions = useMemo(() => {
     return DESPEGANDO_PHASES.map(phase => ({
@@ -45,8 +52,9 @@ export default function SpanishWorksheetsPage() {
   }, []);
 
   // Generate worksheet
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
+    setAiStatus('');
 
     const config: SpanishWorksheetConfig = {
       template: selectedTemplate,
@@ -59,13 +67,81 @@ export default function SpanishWorksheetsPage() {
       date: new Date().toLocaleDateString(),
     };
 
-    // Simulate slight delay for UX
-    setTimeout(() => {
-      const generated = generateSpanishWorksheet(config);
-      setWorksheet(generated);
-      setShowPreview(true);
+    // Generate base worksheet
+    const generated = generateSpanishWorksheet(config);
+
+    if (!generated) {
       setIsGenerating(false);
-    }, 300);
+      return;
+    }
+
+    // If AI is enabled and template needs sentences, enhance with AI
+    if (useAI && needsAISentences) {
+      setAiStatus('Generando oraciones con IA...');
+
+      try {
+        // Get words from the lesson
+        const words = generated.lessonData.sampleWords.slice(0, 8);
+
+        // Call AI endpoint
+        const response = await fetch('/api/ai/generate-worksheet-sentences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            words,
+            type: selectedTemplate.replace('_spanish', ''),
+            language: 'spanish',
+            count: selectedTemplate === 'draw_and_write_spanish' ? 4 : 6,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          if (data.sentences && data.sentences.length > 0) {
+            // Update the worksheet with AI-generated sentences
+            const updatedContent = { ...generated.content };
+
+            updatedContent.sections = updatedContent.sections.map(section => {
+              if (section.type === 'sentence_choice') {
+                return {
+                  ...section,
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; distractorWord?: string }, idx: number) => ({
+                    id: idx + 1,
+                    prompt: s.sentence.replace(s.targetWord, '_____'),
+                    answer: s.targetWord,
+                    options: s.distractorWord
+                      ? (Math.random() > 0.5 ? [s.targetWord, s.distractorWord] : [s.distractorWord, s.targetWord])
+                      : [s.targetWord, words[(idx + 3) % words.length]],
+                  })),
+                };
+              }
+              if (section.type === 'draw_area') {
+                return {
+                  ...section,
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string }, idx: number) => ({
+                    id: idx + 1,
+                    prompt: s.sentence,
+                    answer: s.sentence,
+                  })),
+                };
+              }
+              return section;
+            });
+
+            generated.content = updatedContent;
+            setAiStatus(data.source === 'ai' ? '✨ Oraciones mejoradas con IA' : '');
+          }
+        }
+      } catch (error) {
+        console.error('AI generation failed:', error);
+        setAiStatus('Usando oraciones predeterminadas');
+      }
+    }
+
+    setWorksheet(generated);
+    setShowPreview(true);
+    setIsGenerating(false);
   };
 
   // Export handlers - will need Spanish-specific PDF export
@@ -251,6 +327,28 @@ export default function SpanishWorksheetsPage() {
               </div>
             </Card>
 
+            {/* AI Option (only for sentence templates) */}
+            {needsAISentences && (
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="useAI"
+                    checked={useAI}
+                    onChange={(e) => setUseAI(e.target.checked)}
+                    className="w-4 h-4 rounded border-border-default text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="useAI" className="flex items-center gap-2 text-sm text-text-secondary">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Usar IA para crear oraciones / Use AI for sentences
+                  </label>
+                </div>
+                <p className="text-xs text-text-muted mt-2 ml-7">
+                  La IA genera oraciones que tienen sentido con las palabras objetivo
+                </p>
+              </Card>
+            )}
+
             {/* Generate Button */}
             <Button
               className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"
@@ -260,15 +358,24 @@ export default function SpanishWorksheetsPage() {
               {isGenerating ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Generating... / Generando...
+                  {aiStatus || 'Generando...'}
                 </>
               ) : (
                 <>
-                  <FileText className="w-4 h-4" />
+                  {needsAISentences && useAI ? (
+                    <Sparkles className="w-4 h-4" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
                   Generate Worksheet / Generar Hoja
                 </>
               )}
             </Button>
+
+            {/* AI Status */}
+            {aiStatus && !isGenerating && (
+              <p className="text-sm text-center text-emerald-600">{aiStatus}</p>
+            )}
           </div>
 
           {/* Right Column: Preview & Export */}
