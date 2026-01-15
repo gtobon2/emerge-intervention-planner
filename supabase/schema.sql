@@ -74,7 +74,15 @@ CREATE TABLE sessions (
   
   -- Fidelity self-check
   fidelity_checklist JSONB,
-  
+
+  -- Wilson lesson plan
+  wilson_lesson_plan JSONB,
+
+  -- Multi-day session series
+  series_id UUID,
+  series_order INTEGER,
+  series_total INTEGER,
+
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

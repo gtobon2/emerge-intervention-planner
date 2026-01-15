@@ -38,6 +38,7 @@ import { useSettings } from '@/hooks/use-settings';
 import { useUIStore } from '@/stores/ui';
 import { useStudentsStore } from '@/stores/students';
 import { useGroupsStore } from '@/stores/groups';
+import { exportToFile, importFromFile, getDatabaseStats } from '@/lib/local-db/backup';
 import type { UserRole, Theme, CalendarStartDay, DateFormat, ReminderTiming } from '@/stores/settings';
 import type { ValidatedStudent } from '@/lib/import-utils';
 
@@ -59,9 +60,12 @@ export default function SettingsPage() {
 
   const [showClearDataModal, setShowClearDataModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('Settings saved successfully!');
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
   const [localSessionDefaults, setLocalSessionDefaults] = useState(sessionDefaults);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const { setSidebarCollapsed } = useUIStore();
 
   const groups = useGroupsStore((state) => state.groups);
@@ -123,11 +127,42 @@ export default function SettingsPage() {
 
   const handleExportData = async () => {
     try {
-      await exportData();
+      setIsExporting(true);
+      await exportToFile();
+      setSuccessMessage('Data exported successfully!');
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 3000);
     } catch (error) {
       console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsImporting(true);
+      const result = await importFromFile(file, { clearExisting: true, remapIds: true });
+      if (result.success) {
+        setSuccessMessage(`Imported ${result.stats.total} records successfully!`);
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 3000);
+        // Refresh data
+        fetchGroups();
+        fetchAllStudents();
+      } else {
+        alert(`Import failed: ${result.errors.join(', ')}`);
+      }
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert('Import failed. Make sure the file is a valid backup.');
+    } finally {
+      setIsImporting(false);
+      // Reset file input
+      event.target.value = '';
     }
   };
 
@@ -221,7 +256,7 @@ export default function SettingsPage() {
         {showSuccessToast && (
           <div className="fixed top-20 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-in slide-in-from-top">
             <CheckSquare className="w-5 h-5" />
-            <span>Settings saved successfully!</span>
+            <span>{successMessage}</span>
           </div>
         )}
 
@@ -582,24 +617,62 @@ export default function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Button onClick={handleExportData} variant="secondary" className="gap-2 w-full">
-                <Download className="w-4 h-4" />
-                Export All Data
-              </Button>
-              <p className="text-xs text-text-muted mt-2">
-                Download all your settings and data as a JSON file
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                Important: Your data is stored locally in this browser.
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Export regularly to avoid data loss. If you clear browser data, your groups and sessions will be deleted.
               </p>
             </div>
 
             <div>
+              <Button
+                onClick={handleExportData}
+                variant="secondary"
+                className="gap-2 w-full"
+                isLoading={isExporting}
+              >
+                <Download className="w-4 h-4" />
+                {isExporting ? 'Exporting...' : 'Export All Data (Backup)'}
+              </Button>
+              <p className="text-xs text-text-muted mt-2">
+                Download all groups, students, sessions, and settings as a JSON file
+              </p>
+            </div>
+
+            <div>
+              <label className="block">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportData}
+                  className="hidden"
+                  id="import-file"
+                />
+                <Button
+                  variant="secondary"
+                  className="gap-2 w-full cursor-pointer"
+                  isLoading={isImporting}
+                  onClick={() => document.getElementById('import-file')?.click()}
+                >
+                  <Upload className="w-4 h-4" />
+                  {isImporting ? 'Importing...' : 'Restore from Backup'}
+                </Button>
+              </label>
+              <p className="text-xs text-text-muted mt-2">
+                Restore all data from a previously exported JSON backup file
+              </p>
+            </div>
+
+            <div className="pt-4 border-t border-text-muted/10">
               <Button
                 onClick={() => setImportModalOpen(true)}
                 variant="secondary"
                 className="gap-2 w-full"
               >
                 <Upload className="w-4 h-4" />
-                Import Students
+                Import Students (CSV)
               </Button>
               <p className="text-xs text-text-muted mt-2">
                 Import student data from CSV file
