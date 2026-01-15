@@ -336,6 +336,9 @@ export async function seedDatabase(): Promise<{
       next_session_notes: null,
       fidelity_checklist: null,
       wilson_lesson_plan: null,
+      series_id: null,
+      series_order: null,
+      series_total: null,
       created_at: today + 'T00:00:00Z',
       updated_at: today + 'T00:00:00Z',
     });
@@ -371,6 +374,9 @@ export async function seedDatabase(): Promise<{
       next_session_notes: null,
       fidelity_checklist: null,
       wilson_lesson_plan: null,
+      series_id: null,
+      series_order: null,
+      series_total: null,
       created_at: today + 'T00:00:00Z',
       updated_at: today + 'T00:00:00Z',
     });
@@ -404,6 +410,9 @@ export async function seedDatabase(): Promise<{
       next_session_notes: null,
       fidelity_checklist: null,
       wilson_lesson_plan: null,
+      series_id: null,
+      series_order: null,
+      series_total: null,
       created_at: yesterday + 'T00:00:00Z',
       updated_at: yesterday + 'T00:00:00Z',
     });

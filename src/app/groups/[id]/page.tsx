@@ -189,6 +189,10 @@ export default function GroupDetailPage() {
       next_session_notes: null,
       fidelity_checklist: null,
       wilson_lesson_plan: data.wilson_lesson_plan || null,
+      // Multi-day series fields
+      series_id: data.series_id || null,
+      series_order: data.series_order || null,
+      series_total: data.series_total || null,
     });
     // Refresh sessions list
     fetchSessionsForGroup(groupId);

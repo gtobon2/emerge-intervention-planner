@@ -61,6 +61,9 @@ function mapLocalToSession(local: LocalSession): Session {
     next_session_notes: local.next_session_notes,
     fidelity_checklist: local.fidelity_checklist,
     wilson_lesson_plan: local.wilson_lesson_plan,
+    series_id: local.series_id,
+    series_order: local.series_order,
+    series_total: local.series_total,
     created_at: local.created_at,
     updated_at: local.updated_at,
   };
@@ -341,6 +344,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         next_session_notes: null,
         fidelity_checklist: null,
         wilson_lesson_plan: session.wilson_lesson_plan || null,
+        series_id: session.series_id || null,
+        series_order: session.series_order || null,
+        series_total: session.series_total || null,
       };
 
       const id = await createSessionDB(localSession);
@@ -401,6 +407,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (updates.next_session_notes !== undefined) localUpdates.next_session_notes = updates.next_session_notes;
       if (updates.fidelity_checklist !== undefined) localUpdates.fidelity_checklist = updates.fidelity_checklist;
       if (updates.wilson_lesson_plan !== undefined) localUpdates.wilson_lesson_plan = updates.wilson_lesson_plan;
+      if (updates.series_id !== undefined) localUpdates.series_id = updates.series_id;
+      if (updates.series_order !== undefined) localUpdates.series_order = updates.series_order;
+      if (updates.series_total !== undefined) localUpdates.series_total = updates.series_total;
 
       await updateSessionDB(numericId, localUpdates);
 

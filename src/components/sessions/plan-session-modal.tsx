@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { Group, Curriculum, AnticipatedError, CurriculumPosition } from '@/lib/supabase/types';
 import { getCurriculumLabel, isWilsonPosition } from '@/lib/supabase/types';
-import { WilsonLessonBuilder } from '@/components/wilson-planner';
+import { WilsonLessonBuilder, MultiDayWilsonLessonPlan } from '@/components/wilson-planner';
 import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
 
 interface PlanSessionModalProps {
@@ -26,6 +26,10 @@ export interface SessionPlanData {
   anticipated_errors: AnticipatedError[];
   notes?: string;
   wilson_lesson_plan?: WilsonLessonPlan;
+  // Multi-day series fields
+  series_id?: string;
+  series_order?: number;
+  series_total?: number;
 }
 
 const RESPONSE_FORMATS = [
@@ -51,8 +55,10 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   const [notes, setNotes] = useState('');
   const [showLessonBuilder, setShowLessonBuilder] = useState(false);
   const [wilsonLessonPlan, setWilsonLessonPlan] = useState<WilsonLessonPlan | null>(null);
+  const [multiDayPlan, setMultiDayPlan] = useState<MultiDayWilsonLessonPlan | null>(null);
 
   const isWilsonCurriculum = group.curriculum === 'wilson';
+  const isMultiDay = multiDayPlan !== null && multiDayPlan.days > 1;
 
   if (!isOpen) return null;
 
@@ -101,24 +107,65 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
     setAnticipatedErrors((prev) => prev.filter((e) => e.id !== id));
   };
 
+  // Helper to add days to a date string
+  const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  };
+
   const handleSave = () => {
-    const sessionData: SessionPlanData = {
-      date,
-      time,
-      curriculum_position: group.current_position,
-      planned_otr_target: otrTarget,
-      planned_practice_items: practiceItems.filter((p) => p.item.trim()),
-      planned_response_formats: responseFormats,
-      anticipated_errors: anticipatedErrors,
-      notes: notes || undefined,
-      wilson_lesson_plan: wilsonLessonPlan || undefined,
-    };
-    onSave(sessionData);
+    if (isMultiDay && multiDayPlan) {
+      // Multi-day: create multiple linked sessions
+      const seriesId = crypto.randomUUID();
+      const totalDays = multiDayPlan.days;
+
+      multiDayPlan.plans.forEach((plan, index) => {
+        const sessionData: SessionPlanData = {
+          date: addDays(date, index), // Consecutive days
+          time,
+          curriculum_position: group.current_position,
+          planned_otr_target: otrTarget,
+          planned_practice_items: practiceItems.filter((p) => p.item.trim()),
+          planned_response_formats: responseFormats,
+          anticipated_errors: anticipatedErrors,
+          notes: notes ? `${notes} (Day ${index + 1}/${totalDays})` : `Day ${index + 1}/${totalDays}`,
+          wilson_lesson_plan: plan,
+          series_id: seriesId,
+          series_order: index + 1,
+          series_total: totalDays,
+        };
+        onSave(sessionData);
+      });
+    } else {
+      // Single day: create one session
+      const sessionData: SessionPlanData = {
+        date,
+        time,
+        curriculum_position: group.current_position,
+        planned_otr_target: otrTarget,
+        planned_practice_items: practiceItems.filter((p) => p.item.trim()),
+        planned_response_formats: responseFormats,
+        anticipated_errors: anticipatedErrors,
+        notes: notes || undefined,
+        wilson_lesson_plan: wilsonLessonPlan || undefined,
+      };
+      onSave(sessionData);
+    }
     onClose();
   };
 
-  const handleLessonPlanSave = (plan: WilsonLessonPlan) => {
-    setWilsonLessonPlan(plan);
+  const handleLessonPlanSave = (plan: WilsonLessonPlan | MultiDayWilsonLessonPlan) => {
+    // Check if it's a multi-day plan
+    if ('days' in plan && plan.days > 1) {
+      // It's a MultiDayWilsonLessonPlan
+      setMultiDayPlan(plan as MultiDayWilsonLessonPlan);
+      setWilsonLessonPlan(null);
+    } else {
+      // It's a single WilsonLessonPlan
+      setWilsonLessonPlan(plan as WilsonLessonPlan);
+      setMultiDayPlan(null);
+    }
     setShowLessonBuilder(false);
   };
 
@@ -184,9 +231,11 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                     Wilson Lesson Builder
                   </h3>
                   <p className="text-sm text-purple-700 mt-1">
-                    {wilsonLessonPlan
-                      ? `Lesson plan created for substep ${wilsonLessonPlan.substep}`
-                      : 'Build a detailed lesson plan with drag-and-drop elements'}
+                    {isMultiDay && multiDayPlan
+                      ? `${multiDayPlan.days}-day lesson plan for substep ${multiDayPlan.plans[0]?.substep}`
+                      : wilsonLessonPlan
+                        ? `Lesson plan created for substep ${wilsonLessonPlan.substep}`
+                        : 'Build a detailed lesson plan with drag-and-drop elements'}
                   </p>
                 </div>
                 <Button
@@ -194,10 +243,34 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                   size="sm"
                   onClick={() => setShowLessonBuilder(true)}
                 >
-                  {wilsonLessonPlan ? 'Edit Lesson Plan' : 'Build Lesson'}
+                  {wilsonLessonPlan || multiDayPlan ? 'Edit Lesson Plan' : 'Build Lesson'}
                 </Button>
               </div>
-              {wilsonLessonPlan && (
+              {isMultiDay && multiDayPlan && (
+                <div className="mt-3 pt-3 border-t border-purple-200">
+                  <div className="text-sm text-purple-800 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      <strong>{multiDayPlan.days} sessions</strong> will be created
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {multiDayPlan.plans.map((plan, idx) => (
+                        <div
+                          key={idx}
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            idx === 0 ? 'bg-blue-100 text-blue-700' :
+                            idx === 1 ? 'bg-green-100 text-green-700' :
+                            'bg-purple-100 text-purple-700'
+                          }`}
+                        >
+                          Day {idx + 1}: {plan.totalDuration} min
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {wilsonLessonPlan && !isMultiDay && (
                 <div className="mt-3 pt-3 border-t border-purple-200">
                   <div className="text-sm text-purple-800">
                     <strong>{wilsonLessonPlan.sections.filter(s => s.elements.length > 0).length}</strong> sections with elements,{' '}
@@ -379,7 +452,7 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
           </Button>
           <Button variant="primary" onClick={handleSave}>
             <Calendar className="w-4 h-4 mr-1" />
-            Schedule Session
+            {isMultiDay ? `Schedule ${multiDayPlan?.days} Sessions` : 'Schedule Session'}
           </Button>
         </div>
       </div>

@@ -89,10 +89,27 @@ export interface LocalSession {
   fidelity_checklist: FidelityItem[] | null;
 
   // Wilson-specific lesson plan
-  wilson_lesson_plan: WilsonLessonPlan | null;
+  wilson_lesson_plan?: WilsonLessonPlan | null;
+
+  // Wilson lesson progress tracking (persists between sessions)
+  wilson_lesson_progress?: WilsonLessonProgress | null;
+
+  // Multi-day session series (for splitting lessons across days)
+  series_id: string | null;
+  series_order: number | null;
+  series_total: number | null;
 
   created_at: string;
   updated_at: string;
+}
+
+// Wilson lesson progress tracking type
+export interface WilsonLessonProgress {
+  [sectionComponent: string]: {
+    completed: boolean;
+    elementsCompleted: string[];
+    activitiesCompleted: number[];
+  };
 }
 
 export interface LocalProgressMonitoring {
@@ -249,6 +266,21 @@ export class EmergeDatabase extends Dexie {
       groups: '++id, name, curriculum, tier, grade, interventionist_id, created_at, updated_at',
       students: '++id, name, group_id, created_at',
       sessions: '++id, group_id, date, status, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
+      wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
+      wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
+      interventionists: '++id, name, email, created_at, updated_at',
+      gradeLevelConstraints: '++id, grade, type, created_at',
+      studentConstraints: '++id, student_id, type, created_at',
+    });
+
+    // Version 5: Add series_id index for multi-day sessions
+    this.version(5).stores({
+      groups: '++id, name, curriculum, tier, grade, interventionist_id, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, series_id, created_at, updated_at',
       progressMonitoring: '++id, student_id, group_id, date, created_at',
       errorBank: '++id, curriculum, error_pattern, created_at',
       studentSessionTracking: '++id, session_id, student_id, created_at',

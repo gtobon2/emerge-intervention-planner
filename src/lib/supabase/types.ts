@@ -1,10 +1,16 @@
 // EMERGE Intervention Planner - Database Types
 // Generated from Supabase schema
 
-import type { WilsonLessonPlan } from '../curriculum/wilson-lesson-elements';
+import type { WilsonLessonPlan, LessonComponentType } from '../curriculum/wilson-lesson-elements';
 
 // Re-export for convenience
-export type { WilsonLessonPlan } from '../curriculum/wilson-lesson-elements';
+export type { WilsonLessonPlan, LessonComponentType } from '../curriculum/wilson-lesson-elements';
+
+// Multi-day Wilson lesson assignment
+export interface WilsonDayAssignment {
+  day: number;  // 1, 2, or 3
+  components: LessonComponentType[];
+}
 
 export type Curriculum = 'wilson' | 'delta_math' | 'camino' | 'wordgen' | 'amira' | 'despegando';
 export type Tier = 2 | 3;
@@ -183,8 +189,25 @@ export interface Session {
   // Wilson-specific lesson plan
   wilson_lesson_plan?: WilsonLessonPlan | null;
 
+  // Wilson lesson progress tracking (persists between sessions)
+  wilson_lesson_progress?: WilsonLessonProgress | null;
+
+  // Multi-day session series (for splitting lessons across days)
+  series_id?: string | null;       // Links sessions in a multi-day series
+  series_order?: number | null;    // 1, 2, 3 for day order in series
+  series_total?: number | null;    // Total days in series (2 or 3)
+
   created_at: string;
   updated_at: string;
+}
+
+// Wilson lesson progress tracking type
+export interface WilsonLessonProgress {
+  [sectionComponent: string]: {
+    completed: boolean;
+    elementsCompleted: string[];
+    activitiesCompleted: number[];
+  };
 }
 
 export interface ProgressMonitoring {

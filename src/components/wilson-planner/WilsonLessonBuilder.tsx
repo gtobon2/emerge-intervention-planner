@@ -22,7 +22,7 @@ import {
   useSensors,
   closestCenter,
 } from '@dnd-kit/core';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ElementBank } from './ElementBank';
 import { LessonSection } from './LessonSection';
@@ -74,10 +74,17 @@ const WILSON_SUBSTEPS = [
   { value: '6.4', label: '6.4 - Multisyllable Review', step: 6 },
 ];
 
+// Multi-day lesson plan with day assignments
+export interface MultiDayWilsonLessonPlan {
+  days: number;  // 1, 2, or 3
+  plans: WilsonLessonPlan[];  // One plan per day
+  dayAssignments: Record<LessonComponentType, number>;  // Component -> day number
+}
+
 interface WilsonLessonBuilderProps {
   initialSubstep?: string;
   sessionId?: number;
-  onSave?: (plan: WilsonLessonPlan) => void;
+  onSave?: (plan: WilsonLessonPlan | MultiDayWilsonLessonPlan) => void;
   onClose?: () => void;
 }
 
@@ -95,6 +102,79 @@ export function WilsonLessonBuilder({
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [activeElement, setActiveElement] = useState<DraggableElementData | null>(null);
   const [loadingAISection, setLoadingAISection] = useState<LessonComponentType | null>(null);
+
+  // Multi-day state
+  const [numDays, setNumDays] = useState(1);
+  const [dayAssignments, setDayAssignments] = useState<Record<LessonComponentType, number>>({
+    // Default: all components on day 1
+    'sounds-quick-drill': 1,
+    'teach-review-reading': 1,
+    'word-cards': 1,
+    'wordlist-reading': 1,
+    'sentence-reading': 1,
+    'quick-drill-reverse': 1,
+    'teach-review-spelling': 1,
+    'dictation': 1,
+    'passage-reading': 1,
+    'listening-comprehension': 1,
+  });
+
+  // Default day distributions
+  const DEFAULT_2_DAY: Record<LessonComponentType, number> = {
+    // Day 1: Blocks 1 & 2 (Word Study + Spelling)
+    'sounds-quick-drill': 1,
+    'teach-review-reading': 1,
+    'word-cards': 1,
+    'wordlist-reading': 1,
+    'sentence-reading': 1,
+    'quick-drill-reverse': 1,
+    'teach-review-spelling': 1,
+    'dictation': 1,
+    // Day 2: Block 3 (Comprehension)
+    'passage-reading': 2,
+    'listening-comprehension': 2,
+  };
+
+  const DEFAULT_3_DAY: Record<LessonComponentType, number> = {
+    // Day 1: Block 1 (Word Study)
+    'sounds-quick-drill': 1,
+    'teach-review-reading': 1,
+    'word-cards': 1,
+    'wordlist-reading': 1,
+    'sentence-reading': 1,
+    // Day 2: Block 2 (Spelling)
+    'quick-drill-reverse': 2,
+    'teach-review-spelling': 2,
+    'dictation': 2,
+    // Day 3: Block 3 (Comprehension)
+    'passage-reading': 3,
+    'listening-comprehension': 3,
+  };
+
+  // Handle numDays change - apply default distribution
+  const handleNumDaysChange = (days: number) => {
+    setNumDays(days);
+    if (days === 1) {
+      // Reset all to day 1
+      const allDay1: Record<LessonComponentType, number> = {} as any;
+      Object.keys(dayAssignments).forEach(key => {
+        allDay1[key as LessonComponentType] = 1;
+      });
+      setDayAssignments(allDay1);
+    } else if (days === 2) {
+      setDayAssignments(DEFAULT_2_DAY);
+    } else if (days === 3) {
+      setDayAssignments(DEFAULT_3_DAY);
+    }
+  };
+
+  // Handle day assignment change for a component
+  const handleDayAssignmentChange = (component: LessonComponentType, day: number) => {
+    setDayAssignments(prev => ({
+      ...prev,
+      [component]: day,
+    }));
+  };
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -387,20 +467,60 @@ export function WilsonLessonBuilder({
 
     setIsSaving(true);
     try {
-      const planToSave = {
-        ...lessonPlan,
-        updatedAt: new Date().toISOString(),
-      };
+      if (numDays === 1) {
+        // Single day - save as before
+        const planToSave = {
+          ...lessonPlan,
+          updatedAt: new Date().toISOString(),
+        };
 
-      if (planToSave.id) {
-        await db.wilsonLessonPlans.update(planToSave.id, planToSave);
+        if (planToSave.id) {
+          await db.wilsonLessonPlans.update(planToSave.id, planToSave);
+        } else {
+          const id = await db.wilsonLessonPlans.add(planToSave);
+          setLessonPlan({ ...planToSave, id });
+        }
+
+        if (onSave) {
+          onSave(planToSave);
+        }
       } else {
-        const id = await db.wilsonLessonPlans.add(planToSave);
-        setLessonPlan({ ...planToSave, id });
-      }
+        // Multi-day - create separate plans for each day
+        const plans: WilsonLessonPlan[] = [];
 
-      if (onSave) {
-        onSave(planToSave);
+        for (let day = 1; day <= numDays; day++) {
+          // Get sections assigned to this day
+          const daySections = lessonPlan.sections.filter(
+            section => dayAssignments[section.component] === day
+          );
+
+          if (daySections.length > 0) {
+            const dayPlan: WilsonLessonPlan = {
+              substep: lessonPlan.substep,
+              substepName: `${lessonPlan.substepName} (Day ${day}/${numDays})`,
+              sections: daySections,
+              totalDuration: daySections.reduce((sum, s) => sum + s.duration, 0),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+
+            if (sessionId) {
+              dayPlan.sessionId = sessionId;
+            }
+
+            plans.push(dayPlan);
+          }
+        }
+
+        // Save multi-day plan
+        if (onSave) {
+          const multiDayPlan: MultiDayWilsonLessonPlan = {
+            days: numDays,
+            plans,
+            dayAssignments,
+          };
+          onSave(multiDayPlan);
+        }
       }
     } catch (error) {
       console.error('Error saving lesson plan:', error);
@@ -468,6 +588,19 @@ export function WilsonLessonBuilder({
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-2 border-l pl-4">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Days:</span>
+            <select
+              value={numDays}
+              onChange={(e) => handleNumDaysChange(Number(e.target.value))}
+              className="px-2 py-1 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value={1}>1 Day</option>
+              <option value={2}>2 Days</option>
+              <option value={3}>3 Days</option>
+            </select>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {lessonPlan && (
@@ -559,8 +692,33 @@ export function WilsonLessonBuilder({
                     Substep {lessonPlan.substep}: {lessonPlan.substepName}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Drag elements from the bank into each lesson section
+                    {numDays > 1
+                      ? `Assign each section to Day 1-${numDays}, then drag elements into sections`
+                      : 'Drag elements from the bank into each lesson section'
+                    }
                   </p>
+                  {numDays > 1 && (
+                    <div className="flex justify-center gap-2 mt-2">
+                      {Array.from({ length: numDays }, (_, i) => i + 1).map(day => {
+                        const dayDuration = lessonPlan.sections
+                          .filter(s => dayAssignments[s.component] === day)
+                          .reduce((sum, s) => sum + s.duration, 0);
+                        return (
+                          <span
+                            key={day}
+                            className={cn(
+                              "px-3 py-1 rounded-full text-xs font-medium",
+                              day === 1 && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                              day === 2 && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+                              day === 3 && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                            )}
+                          >
+                            Day {day}: {dayDuration} min
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Block 1: Word Study */}
@@ -570,29 +728,48 @@ export function WilsonLessonBuilder({
                     <h4 className="font-semibold text-blue-700 dark:text-blue-300">Block 1: Word Study</h4>
                   </div>
                   {lessonPlan.sections.slice(0, 5).map((section, idx) => (
-                    <LessonSection
-                      key={section.component}
-                      section={{ ...section, componentName: `${idx + 1}. ${section.componentName}` }}
-                      onRemoveElement={(elementId) =>
-                        handleRemoveElement(section.component, elementId)
-                      }
-                      onUpdateDuration={(duration) =>
-                        handleUpdateDuration(section.component, duration)
-                      }
-                      onAddActivity={(activity) =>
-                        handleAddActivity(section.component, activity)
-                      }
-                      onRemoveActivity={(index) =>
-                        handleRemoveActivity(section.component, index)
-                      }
-                      onUpdateNotes={(notes) =>
-                        handleUpdateNotes(section.component, notes)
-                      }
-                      onRequestAISuggestions={() =>
-                        handleRequestAISuggestions(section)
-                      }
-                      isLoadingAI={loadingAISection === section.component}
-                    />
+                    <div key={section.component} className="relative">
+                      {numDays > 1 && (
+                        <div className="absolute -top-1 right-2 z-10">
+                          <select
+                            value={dayAssignments[section.component]}
+                            onChange={(e) => handleDayAssignmentChange(section.component, Number(e.target.value))}
+                            className={cn(
+                              "px-2 py-0.5 text-xs font-medium rounded border-0 cursor-pointer",
+                              dayAssignments[section.component] === 1 && "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+                              dayAssignments[section.component] === 2 && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+                              dayAssignments[section.component] === 3 && "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
+                            )}
+                          >
+                            {Array.from({ length: numDays }, (_, i) => i + 1).map(day => (
+                              <option key={day} value={day}>Day {day}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <LessonSection
+                        section={{ ...section, componentName: `${idx + 1}. ${section.componentName}` }}
+                        onRemoveElement={(elementId) =>
+                          handleRemoveElement(section.component, elementId)
+                        }
+                        onUpdateDuration={(duration) =>
+                          handleUpdateDuration(section.component, duration)
+                        }
+                        onAddActivity={(activity) =>
+                          handleAddActivity(section.component, activity)
+                        }
+                        onRemoveActivity={(index) =>
+                          handleRemoveActivity(section.component, index)
+                        }
+                        onUpdateNotes={(notes) =>
+                          handleUpdateNotes(section.component, notes)
+                        }
+                        onRequestAISuggestions={() =>
+                          handleRequestAISuggestions(section)
+                        }
+                        isLoadingAI={loadingAISection === section.component}
+                      />
+                    </div>
                   ))}
                 </div>
 
@@ -603,29 +780,48 @@ export function WilsonLessonBuilder({
                     <h4 className="font-semibold text-green-700 dark:text-green-300">Block 2: Spelling</h4>
                   </div>
                   {lessonPlan.sections.slice(5, 8).map((section, idx) => (
-                    <LessonSection
-                      key={section.component}
-                      section={{ ...section, componentName: `${idx + 6}. ${section.componentName}` }}
-                      onRemoveElement={(elementId) =>
-                        handleRemoveElement(section.component, elementId)
-                      }
-                      onUpdateDuration={(duration) =>
-                        handleUpdateDuration(section.component, duration)
-                      }
-                      onAddActivity={(activity) =>
-                        handleAddActivity(section.component, activity)
-                      }
-                      onRemoveActivity={(index) =>
-                        handleRemoveActivity(section.component, index)
-                      }
-                      onUpdateNotes={(notes) =>
-                        handleUpdateNotes(section.component, notes)
-                      }
-                      onRequestAISuggestions={() =>
-                        handleRequestAISuggestions(section)
-                      }
-                      isLoadingAI={loadingAISection === section.component}
-                    />
+                    <div key={section.component} className="relative">
+                      {numDays > 1 && (
+                        <div className="absolute -top-1 right-2 z-10">
+                          <select
+                            value={dayAssignments[section.component]}
+                            onChange={(e) => handleDayAssignmentChange(section.component, Number(e.target.value))}
+                            className={cn(
+                              "px-2 py-0.5 text-xs font-medium rounded border-0 cursor-pointer",
+                              dayAssignments[section.component] === 1 && "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+                              dayAssignments[section.component] === 2 && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+                              dayAssignments[section.component] === 3 && "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
+                            )}
+                          >
+                            {Array.from({ length: numDays }, (_, i) => i + 1).map(day => (
+                              <option key={day} value={day}>Day {day}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <LessonSection
+                        section={{ ...section, componentName: `${idx + 6}. ${section.componentName}` }}
+                        onRemoveElement={(elementId) =>
+                          handleRemoveElement(section.component, elementId)
+                        }
+                        onUpdateDuration={(duration) =>
+                          handleUpdateDuration(section.component, duration)
+                        }
+                        onAddActivity={(activity) =>
+                          handleAddActivity(section.component, activity)
+                        }
+                        onRemoveActivity={(index) =>
+                          handleRemoveActivity(section.component, index)
+                        }
+                        onUpdateNotes={(notes) =>
+                          handleUpdateNotes(section.component, notes)
+                        }
+                        onRequestAISuggestions={() =>
+                          handleRequestAISuggestions(section)
+                        }
+                        isLoadingAI={loadingAISection === section.component}
+                      />
+                    </div>
                   ))}
                 </div>
 
@@ -636,29 +832,48 @@ export function WilsonLessonBuilder({
                     <h4 className="font-semibold text-purple-700 dark:text-purple-300">Block 3: Fluency/Comprehension</h4>
                   </div>
                   {lessonPlan.sections.slice(8, 10).map((section, idx) => (
-                    <LessonSection
-                      key={section.component}
-                      section={{ ...section, componentName: `${idx + 9}. ${section.componentName}` }}
-                      onRemoveElement={(elementId) =>
-                        handleRemoveElement(section.component, elementId)
-                      }
-                      onUpdateDuration={(duration) =>
-                        handleUpdateDuration(section.component, duration)
-                      }
-                      onAddActivity={(activity) =>
-                        handleAddActivity(section.component, activity)
-                      }
-                      onRemoveActivity={(index) =>
-                        handleRemoveActivity(section.component, index)
-                      }
-                      onUpdateNotes={(notes) =>
-                        handleUpdateNotes(section.component, notes)
-                      }
-                      onRequestAISuggestions={() =>
-                        handleRequestAISuggestions(section)
-                      }
-                      isLoadingAI={loadingAISection === section.component}
-                    />
+                    <div key={section.component} className="relative">
+                      {numDays > 1 && (
+                        <div className="absolute -top-1 right-2 z-10">
+                          <select
+                            value={dayAssignments[section.component]}
+                            onChange={(e) => handleDayAssignmentChange(section.component, Number(e.target.value))}
+                            className={cn(
+                              "px-2 py-0.5 text-xs font-medium rounded border-0 cursor-pointer",
+                              dayAssignments[section.component] === 1 && "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+                              dayAssignments[section.component] === 2 && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+                              dayAssignments[section.component] === 3 && "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
+                            )}
+                          >
+                            {Array.from({ length: numDays }, (_, i) => i + 1).map(day => (
+                              <option key={day} value={day}>Day {day}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <LessonSection
+                        section={{ ...section, componentName: `${idx + 9}. ${section.componentName}` }}
+                        onRemoveElement={(elementId) =>
+                          handleRemoveElement(section.component, elementId)
+                        }
+                        onUpdateDuration={(duration) =>
+                          handleUpdateDuration(section.component, duration)
+                        }
+                        onAddActivity={(activity) =>
+                          handleAddActivity(section.component, activity)
+                        }
+                        onRemoveActivity={(index) =>
+                          handleRemoveActivity(section.component, index)
+                        }
+                        onUpdateNotes={(notes) =>
+                          handleUpdateNotes(section.component, notes)
+                        }
+                        onRequestAISuggestions={() =>
+                          handleRequestAISuggestions(section)
+                        }
+                        isLoadingAI={loadingAISection === section.component}
+                      />
+                    </div>
                   ))}
                 </div>
               </div>

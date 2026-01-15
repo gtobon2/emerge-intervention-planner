@@ -203,6 +203,9 @@ async function seedDemoData(): Promise<void> {
           next_session_notes: 'Continue with CVC words',
           fidelity_checklist: null,
           wilson_lesson_plan: null,
+          series_id: null,
+          series_order: null,
+          series_total: null,
         },
         {
           group_id: groupIds[0],
@@ -231,6 +234,9 @@ async function seedDemoData(): Promise<void> {
           next_session_notes: null,
           fidelity_checklist: null,
           wilson_lesson_plan: null,
+          series_id: null,
+          series_order: null,
+          series_total: null,
         },
         {
           group_id: groupIds[0],
@@ -259,6 +265,9 @@ async function seedDemoData(): Promise<void> {
           next_session_notes: null,
           fidelity_checklist: null,
           wilson_lesson_plan: null,
+          series_id: null,
+          series_order: null,
+          series_total: null,
         },
       ];
 
