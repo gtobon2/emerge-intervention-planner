@@ -1,23 +1,7 @@
 import { create } from 'zustand';
-import { db } from '@/lib/local-db';
-import {
-  createStudent as createStudentDB,
-  updateStudent as updateStudentDB,
-  deleteStudent as deleteStudentDB
-} from '@/lib/local-db/hooks';
+import * as supabaseService from '@/lib/supabase/services';
 import { validateStudent } from '@/lib/supabase/validation';
-import { toNumericId } from '@/lib/utils/id';
-import type { LocalStudent, LocalStudentInsert, LocalStudentUpdate } from '@/lib/local-db';
 import type { Student, StudentInsert, StudentUpdate } from '@/lib/supabase/types';
-
-// Map LocalStudent to Student (for compatibility with existing code)
-function mapLocalToStudent(local: LocalStudent): Student {
-  return {
-    ...local,
-    id: String(local.id),
-    group_id: String(local.group_id),
-  } as Student;
-}
 
 interface StudentsState {
   students: Student[];
@@ -44,17 +28,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericGroupId = toNumericId(groupId);
-      if (numericGroupId === null) {
-        throw new Error('Invalid group ID');
-      }
-
-      const localStudents = await db.students
-        .where('group_id')
-        .equals(numericGroupId)
-        .toArray();
-
-      const students = localStudents.map(mapLocalToStudent);
+      const students = await supabaseService.fetchStudentsByGroupId(groupId);
       set({ students, isLoading: false });
     } catch (err) {
       set({
@@ -69,8 +43,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const localStudents = await db.students.toArray();
-      const students = localStudents.map(mapLocalToStudent);
+      const students = await supabaseService.fetchAllStudents();
       set({ allStudents: students, isLoading: false });
     } catch (err) {
       set({
@@ -93,34 +66,15 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     }
 
     try {
-      // Convert StudentInsert to LocalStudentInsert
-      const numericGroupId = toNumericId(student.group_id);
-      if (numericGroupId === null) {
-        throw new Error('Invalid group ID');
-      }
-
-      const localStudent: LocalStudentInsert = {
-        group_id: numericGroupId,
-        name: student.name,
-        notes: student.notes || null,
-      };
-
-      const id = await createStudentDB(localStudent);
-      const newStudent = await db.students.get(id);
-
-      if (!newStudent) {
-        throw new Error('Failed to retrieve created student');
-      }
-
-      const mappedStudent = mapLocalToStudent(newStudent);
+      const newStudent = await supabaseService.createStudent(student);
 
       set((state) => ({
-        students: [...state.students, mappedStudent],
-        allStudents: [...state.allStudents, mappedStudent],
+        students: [...state.students, newStudent],
+        allStudents: [...state.allStudents, newStudent],
         isLoading: false,
       }));
 
-      return mappedStudent;
+      return newStudent;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -131,32 +85,11 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid student ID');
-      }
-
-      // Convert updates to LocalStudentUpdate
-      const numericGroupId = updates.group_id !== undefined ? toNumericId(updates.group_id) : undefined;
-      const localUpdates: LocalStudentUpdate = {
-        ...(updates.name !== undefined && { name: updates.name }),
-        ...(updates.notes !== undefined && { notes: updates.notes }),
-        ...(numericGroupId !== undefined && numericGroupId !== null && { group_id: numericGroupId }),
-      };
-
-      await updateStudentDB(numericId, localUpdates);
-
-      // Fetch updated student
-      const updatedStudent = await db.students.get(numericId);
-      if (!updatedStudent) {
-        throw new Error('Student not found after update');
-      }
-
-      const mappedStudent = mapLocalToStudent(updatedStudent);
+      const updatedStudent = await supabaseService.updateStudent(id, updates);
 
       set((state) => ({
-        students: state.students.map((s) => (s.id === id ? mappedStudent : s)),
-        allStudents: state.allStudents.map((s) => (s.id === id ? mappedStudent : s)),
+        students: state.students.map((s) => (s.id === id ? updatedStudent : s)),
+        allStudents: state.allStudents.map((s) => (s.id === id ? updatedStudent : s)),
         isLoading: false,
       }));
     } catch (err) {
@@ -168,13 +101,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid student ID');
-      }
-
-      // Delete student and related progress monitoring data
-      await deleteStudentDB(numericId, true);
+      await supabaseService.deleteStudent(id);
 
       set((state) => ({
         students: state.students.filter((s) => s.id !== id),

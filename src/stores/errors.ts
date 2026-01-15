@@ -1,20 +1,7 @@
 import { create } from 'zustand';
-import { db } from '@/lib/local-db';
-import {
-  createErrorBankEntry as createErrorBankEntryDB,
-  updateErrorBankEntry as updateErrorBankEntryDB,
-  incrementErrorEffectiveness,
-  incrementErrorOccurrence
-} from '@/lib/local-db/hooks';
+import * as supabaseService from '@/lib/supabase/services';
 import { validateErrorBankEntry } from '@/lib/supabase/validation';
-import { toNumericId } from '@/lib/utils/id';
-import type {
-  LocalErrorBankEntry,
-  LocalErrorBankInsert,
-  LocalErrorBankUpdate,
-  Curriculum,
-  CurriculumPosition,
-} from '@/lib/local-db';
+import type { Curriculum, CurriculumPosition } from '@/lib/local-db';
 import type {
   ErrorBankEntry,
   ErrorBankInsert,
@@ -25,14 +12,6 @@ import {
   isDeltaMathPosition,
   isCaminoPosition,
 } from '@/lib/supabase/types';
-
-// Map LocalErrorBankEntry to ErrorBankEntry
-function mapLocalToError(local: LocalErrorBankEntry): ErrorBankEntry {
-  return {
-    ...local,
-    id: String(local.id),
-  } as ErrorBankEntry;
-}
 
 interface ErrorsState {
   errors: ErrorBankEntry[];
@@ -64,13 +43,7 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const localErrors = await db.errorBank
-        .where('curriculum')
-        .equals(curriculum)
-        .reverse()
-        .sortBy('occurrence_count');
-
-      const errors = localErrors.map(mapLocalToError);
+      const errors = await supabaseService.fetchErrorsByCurriculum(curriculum);
       set({ errors, isLoading: false });
     } catch (err) {
       set({
@@ -88,10 +61,7 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const allErrors = await db.errorBank
-        .where('curriculum')
-        .equals(curriculum)
-        .toArray();
+      const allErrors = await supabaseService.fetchErrorsByCurriculum(curriculum);
 
       // Filter errors that match the position or are universal (null position)
       const filteredErrors = allErrors.filter((e) => {
@@ -99,9 +69,8 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
         return matchPosition(curriculum, e.curriculum_position, position);
       });
 
-      const errors = filteredErrors.map(mapLocalToError);
       set({
-        suggestedErrors: errors,
+        suggestedErrors: filteredErrors,
         isLoading: false,
       });
     } catch (err) {
@@ -125,35 +94,14 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
     }
 
     try {
-      const localError: LocalErrorBankInsert = {
-        curriculum: errorData.curriculum,
-        curriculum_position: errorData.curriculum_position || null,
-        error_pattern: errorData.error_pattern,
-        underlying_gap: errorData.underlying_gap || null,
-        correction_protocol: errorData.correction_protocol,
-        correction_prompts: errorData.correction_prompts || null,
-        visual_cues: errorData.visual_cues || null,
-        kinesthetic_cues: errorData.kinesthetic_cues || null,
-        is_custom: true,
-        effectiveness_count: errorData.effectiveness_count || 0,
-        occurrence_count: errorData.occurrence_count || 1,
-      };
-
-      const id = await createErrorBankEntryDB(localError);
-      const newError = await db.errorBank.get(id);
-
-      if (!newError) {
-        throw new Error('Failed to retrieve created error bank entry');
-      }
-
-      const mappedError = mapLocalToError(newError);
+      const newError = await supabaseService.createError(errorData);
 
       set((state) => ({
-        errors: [...state.errors, mappedError],
+        errors: [...state.errors, newError],
         isLoading: false,
       }));
 
-      return mappedError;
+      return newError;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -164,38 +112,11 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid error bank entry ID');
-      }
-
-      // Convert updates to LocalErrorBankUpdate
-      const localUpdates: LocalErrorBankUpdate = {};
-
-      if (updates.curriculum !== undefined) localUpdates.curriculum = updates.curriculum;
-      if (updates.curriculum_position !== undefined) localUpdates.curriculum_position = updates.curriculum_position;
-      if (updates.error_pattern !== undefined) localUpdates.error_pattern = updates.error_pattern;
-      if (updates.underlying_gap !== undefined) localUpdates.underlying_gap = updates.underlying_gap;
-      if (updates.correction_protocol !== undefined) localUpdates.correction_protocol = updates.correction_protocol;
-      if (updates.correction_prompts !== undefined) localUpdates.correction_prompts = updates.correction_prompts;
-      if (updates.visual_cues !== undefined) localUpdates.visual_cues = updates.visual_cues;
-      if (updates.kinesthetic_cues !== undefined) localUpdates.kinesthetic_cues = updates.kinesthetic_cues;
-      if (updates.effectiveness_count !== undefined) localUpdates.effectiveness_count = updates.effectiveness_count;
-      if (updates.occurrence_count !== undefined) localUpdates.occurrence_count = updates.occurrence_count;
-
-      await updateErrorBankEntryDB(numericId, localUpdates);
-
-      // Fetch updated error
-      const updatedError = await db.errorBank.get(numericId);
-      if (!updatedError) {
-        throw new Error('Error bank entry not found after update');
-      }
-
-      const mappedError = mapLocalToError(updatedError);
+      const updatedError = await supabaseService.updateError(id, updates);
 
       set((state) => ({
         errors: state.errors.map((e) =>
-          e.id === id ? mappedError : e
+          e.id === id ? updatedError : e
         ),
         isLoading: false,
       }));
@@ -206,21 +127,19 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   incrementEffectiveness: async (id: string) => {
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid error bank entry ID');
+      // Find the current error to get its effectiveness count
+      const currentError = get().errors.find(e => e.id === id);
+      if (!currentError) {
+        throw new Error('Error not found');
       }
 
-      await incrementErrorEffectiveness(numericId);
+      const updatedError = await supabaseService.updateError(id, {
+        effectiveness_count: currentError.effectiveness_count + 1,
+      });
 
-      // Fetch updated error
-      const updatedError = await db.errorBank.get(numericId);
-      if (updatedError) {
-        const mappedError = mapLocalToError(updatedError);
-        set((state) => ({
-          errors: state.errors.map((e) => (e.id === id ? mappedError : e)),
-        }));
-      }
+      set((state) => ({
+        errors: state.errors.map((e) => (e.id === id ? updatedError : e)),
+      }));
     } catch (err) {
       set({ error: (err as Error).message });
     }
@@ -228,21 +147,19 @@ export const useErrorsStore = create<ErrorsState>((set, get) => ({
 
   incrementOccurrence: async (id: string) => {
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid error bank entry ID');
+      // Find the current error to get its occurrence count
+      const currentError = get().errors.find(e => e.id === id);
+      if (!currentError) {
+        throw new Error('Error not found');
       }
 
-      await incrementErrorOccurrence(numericId);
+      const updatedError = await supabaseService.updateError(id, {
+        occurrence_count: currentError.occurrence_count + 1,
+      });
 
-      // Fetch updated error
-      const updatedError = await db.errorBank.get(numericId);
-      if (updatedError) {
-        const mappedError = mapLocalToError(updatedError);
-        set((state) => ({
-          errors: state.errors.map((e) => (e.id === id ? mappedError : e)),
-        }));
-      }
+      set((state) => ({
+        errors: state.errors.map((e) => (e.id === id ? updatedError : e)),
+      }));
     } catch (err) {
       set({ error: (err as Error).message });
     }

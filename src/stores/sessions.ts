@@ -1,18 +1,6 @@
 import { create } from 'zustand';
-import { db } from '@/lib/local-db';
-import {
-  createSession as createSessionDB,
-  updateSession as updateSessionDB,
-  deleteSession as deleteSessionDB
-} from '@/lib/local-db/hooks';
+import * as supabaseService from '@/lib/supabase/services';
 import { validateSession } from '@/lib/supabase/validation';
-import { toNumericId } from '@/lib/utils/id';
-import type {
-  LocalSession,
-  LocalSessionInsert,
-  LocalSessionUpdate,
-  LocalGroup,
-} from '@/lib/local-db';
 import type {
   Session,
   SessionInsert,
@@ -25,82 +13,6 @@ import type {
   PMTrend,
   Group,
 } from '@/lib/supabase/types';
-
-/**
- * Map LocalSession to Session (API type with string IDs)
- */
-function mapLocalToSession(local: LocalSession): Session {
-  if (local.id === undefined) {
-    throw new Error('LocalSession id is undefined');
-  }
-  return {
-    id: String(local.id),
-    group_id: String(local.group_id),
-    date: local.date,
-    time: local.time,
-    status: local.status,
-    curriculum_position: local.curriculum_position,
-    advance_after: local.advance_after,
-    planned_otr_target: local.planned_otr_target,
-    planned_response_formats: local.planned_response_formats,
-    planned_practice_items: local.planned_practice_items,
-    cumulative_review_items: local.cumulative_review_items,
-    anticipated_errors: local.anticipated_errors,
-    actual_otr_estimate: local.actual_otr_estimate,
-    pacing: local.pacing,
-    components_completed: local.components_completed,
-    exit_ticket_correct: local.exit_ticket_correct,
-    exit_ticket_total: local.exit_ticket_total,
-    mastery_demonstrated: local.mastery_demonstrated as MasteryLevel | null,
-    errors_observed: local.errors_observed,
-    unexpected_errors: local.unexpected_errors,
-    pm_score: local.pm_score,
-    pm_trend: local.pm_trend,
-    dbi_adaptation_notes: local.dbi_adaptation_notes,
-    notes: local.notes,
-    next_session_notes: local.next_session_notes,
-    fidelity_checklist: local.fidelity_checklist,
-    wilson_lesson_plan: local.wilson_lesson_plan,
-    series_id: local.series_id,
-    series_order: local.series_order,
-    series_total: local.series_total,
-    created_at: local.created_at,
-    updated_at: local.updated_at,
-  };
-}
-
-/**
- * Map LocalGroup to Group (API type with string IDs)
- */
-function mapLocalToGroup(local: LocalGroup): Group {
-  if (local.id === undefined) {
-    throw new Error('LocalGroup id is undefined');
-  }
-  return {
-    id: String(local.id),
-    name: local.name,
-    curriculum: local.curriculum,
-    tier: local.tier,
-    grade: local.grade,
-    current_position: local.current_position,
-    schedule: local.schedule,
-    created_at: local.created_at,
-    updated_at: local.updated_at,
-  };
-}
-
-/**
- * Map LocalSession with LocalGroup to SessionWithGroup
- */
-function mapLocalToSessionWithGroup(
-  local: LocalSession,
-  group: LocalGroup
-): SessionWithGroup {
-  return {
-    ...mapLocalToSession(local),
-    group: mapLocalToGroup(group),
-  };
-}
 
 interface SessionsState {
   sessions: Session[];
@@ -155,21 +67,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const localSessions = await db.sessions.orderBy('date').reverse().toArray();
+      const sessions = await supabaseService.fetchAllSessions();
+      const groups = await supabaseService.fetchAllGroups();
 
-      // Batch fetch all groups to avoid N+1 queries
-      const uniqueGroupIds = [...new Set(localSessions.map(s => s.group_id))];
-      const groups = await db.groups.bulkGet(uniqueGroupIds);
-      const groupMap = new Map(
-        groups.filter((g): g is NonNullable<typeof g> => g !== undefined)
-          .map(g => [g.id!, g])
-      );
+      const groupMap = new Map(groups.map(g => [g.id, g]));
 
-      const sessionsWithGroups: SessionWithGroup[] = localSessions
+      const sessionsWithGroups: SessionWithGroup[] = sessions
         .map(session => {
           const group = groupMap.get(session.group_id);
           if (!group) return null;
-          return mapLocalToSessionWithGroup(session, group);
+          return { ...session, group };
         })
         .filter((s): s is SessionWithGroup => s !== null);
 
@@ -187,20 +94,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericGroupId = toNumericId(groupId);
-      if (numericGroupId === null) {
-        throw new Error('Invalid group ID');
-      }
-
-      const localSessions = await db.sessions
-        .where('group_id')
-        .equals(numericGroupId)
-        .toArray();
-
-      // Sort by date descending (most recent first)
-      localSessions.sort((a, b) => b.date.localeCompare(a.date));
-
-      const sessions = localSessions.map(mapLocalToSession);
+      const sessions = await supabaseService.fetchSessionsByGroupId(groupId);
       set({ sessions, isLoading: false });
     } catch (err) {
       set({
@@ -216,27 +110,19 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
     try {
       const today = new Date().toISOString().split('T')[0];
+      const allSessions = await supabaseService.fetchAllSessions();
+      const todaySessionsRaw = allSessions.filter(s => s.date === today);
 
-      const localSessions = await db.sessions
-        .where('date')
-        .equals(today)
-        .toArray();
+      const groups = await supabaseService.fetchAllGroups();
+      const groupMap = new Map(groups.map(g => [g.id, g]));
 
-      // Batch fetch all groups to avoid N+1 queries
-      const uniqueGroupIds = [...new Set(localSessions.map(s => s.group_id))];
-      const groups = await db.groups.bulkGet(uniqueGroupIds);
-      const groupMap = new Map(
-        groups.filter((g): g is NonNullable<typeof g> => g !== undefined)
-          .map(g => [g.id!, g])
-      );
-
-      const todaySessions: TodaySession[] = localSessions
+      const todaySessions: TodaySession[] = todaySessionsRaw
         .map(session => {
           const group = groupMap.get(session.group_id);
           if (!group) return null;
           return {
-            id: String(session.id),
-            groupId: String(session.group_id),
+            id: session.id,
+            groupId: session.group_id,
             groupName: group.name,
             curriculum: group.curriculum,
             tier: group.tier,
@@ -265,26 +151,20 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   fetchSessionById: async (id: string) => {
-    // Clear selected session immediately to prevent stale data showing during navigation
     set({ isLoading: true, error: null, selectedSession: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid session ID');
-      }
-
-      const session = await db.sessions.get(numericId);
+      const session = await supabaseService.fetchSessionById(id);
       if (!session) {
         throw new Error('Session not found');
       }
 
-      const group = await db.groups.get(session.group_id);
+      const group = await supabaseService.fetchGroupById(session.group_id);
       if (!group) {
         throw new Error('Group not found for session');
       }
 
-      const sessionWithGroup = mapLocalToSessionWithGroup(session, group);
+      const sessionWithGroup: SessionWithGroup = { ...session, group };
 
       set({
         selectedSession: sessionWithGroup,
@@ -302,7 +182,6 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   createSession: async (session: SessionInsert) => {
     set({ isLoading: true, error: null });
 
-    // Validate session data
     const validation = validateSession(session);
     if (!validation.isValid) {
       const errorMessage = validation.errors.join(', ');
@@ -311,59 +190,14 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
 
     try {
-      const numericGroupId = toNumericId(session.group_id);
-      if (numericGroupId === null) {
-        throw new Error('Invalid group ID');
-      }
-
-      // Convert SessionInsert to LocalSessionInsert
-      const localSession: LocalSessionInsert = {
-        group_id: numericGroupId,
-        date: session.date,
-        time: session.time || null,
-        status: session.status || 'planned',
-        curriculum_position: session.curriculum_position,
-        advance_after: session.advance_after || false,
-        planned_otr_target: session.planned_otr_target || null,
-        planned_response_formats: session.planned_response_formats || null,
-        planned_practice_items: session.planned_practice_items || null,
-        cumulative_review_items: session.cumulative_review_items || null,
-        anticipated_errors: session.anticipated_errors || null,
-        actual_otr_estimate: null,
-        pacing: null,
-        components_completed: null,
-        exit_ticket_correct: null,
-        exit_ticket_total: null,
-        mastery_demonstrated: null,
-        errors_observed: null,
-        unexpected_errors: null,
-        pm_score: null,
-        pm_trend: null,
-        dbi_adaptation_notes: null,
-        notes: session.notes || null,
-        next_session_notes: null,
-        fidelity_checklist: null,
-        wilson_lesson_plan: session.wilson_lesson_plan || null,
-        series_id: session.series_id || null,
-        series_order: session.series_order || null,
-        series_total: session.series_total || null,
-      };
-
-      const id = await createSessionDB(localSession);
-      const newSession = await db.sessions.get(id);
-
-      if (!newSession) {
-        throw new Error('Failed to retrieve created session');
-      }
-
-      const mappedSession = mapLocalToSession(newSession);
+      const newSession = await supabaseService.createSession(session);
 
       set((state) => ({
-        sessions: [mappedSession, ...state.sessions],
+        sessions: [newSession, ...state.sessions],
         isLoading: false,
       }));
 
-      return mappedSession;
+      return newSession;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -374,58 +208,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid session ID');
-      }
-
-      // Convert updates to LocalSessionUpdate
-      const localUpdates: LocalSessionUpdate = {};
-
-      if (updates.date !== undefined) localUpdates.date = updates.date;
-      if (updates.time !== undefined) localUpdates.time = updates.time;
-      if (updates.status !== undefined) localUpdates.status = updates.status;
-      if (updates.curriculum_position !== undefined) localUpdates.curriculum_position = updates.curriculum_position;
-      if (updates.advance_after !== undefined) localUpdates.advance_after = updates.advance_after;
-      if (updates.planned_otr_target !== undefined) localUpdates.planned_otr_target = updates.planned_otr_target;
-      if (updates.planned_response_formats !== undefined) localUpdates.planned_response_formats = updates.planned_response_formats;
-      if (updates.planned_practice_items !== undefined) localUpdates.planned_practice_items = updates.planned_practice_items;
-      if (updates.cumulative_review_items !== undefined) localUpdates.cumulative_review_items = updates.cumulative_review_items;
-      if (updates.anticipated_errors !== undefined) localUpdates.anticipated_errors = updates.anticipated_errors;
-      if (updates.actual_otr_estimate !== undefined) localUpdates.actual_otr_estimate = updates.actual_otr_estimate;
-      if (updates.pacing !== undefined) localUpdates.pacing = updates.pacing;
-      if (updates.components_completed !== undefined) localUpdates.components_completed = updates.components_completed;
-      if (updates.exit_ticket_correct !== undefined) localUpdates.exit_ticket_correct = updates.exit_ticket_correct;
-      if (updates.exit_ticket_total !== undefined) localUpdates.exit_ticket_total = updates.exit_ticket_total;
-      if (updates.mastery_demonstrated !== undefined) localUpdates.mastery_demonstrated = updates.mastery_demonstrated;
-      if (updates.errors_observed !== undefined) localUpdates.errors_observed = updates.errors_observed;
-      if (updates.unexpected_errors !== undefined) localUpdates.unexpected_errors = updates.unexpected_errors;
-      if (updates.pm_score !== undefined) localUpdates.pm_score = updates.pm_score;
-      if (updates.pm_trend !== undefined) localUpdates.pm_trend = updates.pm_trend;
-      if (updates.dbi_adaptation_notes !== undefined) localUpdates.dbi_adaptation_notes = updates.dbi_adaptation_notes;
-      if (updates.notes !== undefined) localUpdates.notes = updates.notes;
-      if (updates.next_session_notes !== undefined) localUpdates.next_session_notes = updates.next_session_notes;
-      if (updates.fidelity_checklist !== undefined) localUpdates.fidelity_checklist = updates.fidelity_checklist;
-      if (updates.wilson_lesson_plan !== undefined) localUpdates.wilson_lesson_plan = updates.wilson_lesson_plan;
-      if (updates.series_id !== undefined) localUpdates.series_id = updates.series_id;
-      if (updates.series_order !== undefined) localUpdates.series_order = updates.series_order;
-      if (updates.series_total !== undefined) localUpdates.series_total = updates.series_total;
-
-      await updateSessionDB(numericId, localUpdates);
-
-      // Fetch updated session
-      const updatedSession = await db.sessions.get(numericId);
-      if (!updatedSession) {
-        throw new Error('Session not found after update');
-      }
-
-      const mappedSession = mapLocalToSession(updatedSession);
+      const updatedSession = await supabaseService.updateSession(id, updates);
 
       set((state) => ({
-        sessions: state.sessions.map((s) => (s.id === id ? mappedSession : s)),
+        sessions: state.sessions.map((s) => (s.id === id ? updatedSession : s)),
         selectedSession:
           state.selectedSession?.id === id
-            ? { ...state.selectedSession, ...mappedSession }
+            ? { ...state.selectedSession, ...updatedSession }
             : state.selectedSession,
         isLoading: false,
       }));
@@ -438,42 +227,33 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid session ID');
+      const session = await supabaseService.fetchSessionById(id);
+      if (!session) {
+        throw new Error('Session not found');
       }
 
       // Update session with completion data and set status to completed
-      const localUpdates: LocalSessionUpdate = {
+      const updates: SessionUpdate = {
         ...completionData,
         status: 'completed',
       };
 
-      await updateSessionDB(numericId, localUpdates);
-
-      const completedSession = await db.sessions.get(numericId);
-      if (!completedSession) {
-        throw new Error('Failed to retrieve completed session');
-      }
+      const completedSession = await supabaseService.updateSession(id, updates);
 
       // Save errors to error bank if requested
       if (saveErrors && completionData.errors_observed && completionData.errors_observed.length > 0) {
-        const group = await db.groups.get(completedSession.group_id);
+        const group = await supabaseService.fetchGroupById(session.group_id);
         if (group) {
           const curriculum = group.curriculum;
           const errorsToAdd = completionData.errors_observed.filter((e: any) => e.add_to_bank);
 
           for (const error of errorsToAdd) {
             // Check if error pattern already exists
-            const existingErrors = await db.errorBank
-              .where('curriculum')
-              .equals(curriculum)
-              .and((entry) => entry.error_pattern === error.error_pattern)
-              .toArray();
+            const existingErrors = await supabaseService.fetchErrorsByCurriculum(curriculum);
+            const existingError = existingErrors.find(e => e.error_pattern === error.error_pattern);
 
-            if (existingErrors.length > 0) {
+            if (existingError) {
               // Error exists - increment counters
-              const existingError = existingErrors[0];
               const updates: any = {
                 occurrence_count: existingError.occurrence_count + 1,
               };
@@ -482,12 +262,12 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
                 updates.effectiveness_count = existingError.effectiveness_count + 1;
               }
 
-              await db.errorBank.update(existingError.id!, updates);
+              await supabaseService.updateError(existingError.id, updates);
             } else {
               // New error - create entry
-              await db.errorBank.add({
+              await supabaseService.createError({
                 curriculum,
-                curriculum_position: completedSession.curriculum_position,
+                curriculum_position: session.curriculum_position,
                 error_pattern: error.error_pattern,
                 underlying_gap: null,
                 correction_protocol: error.correction_used,
@@ -497,26 +277,23 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
                 is_custom: true,
                 effectiveness_count: error.correction_worked ? 1 : 0,
                 occurrence_count: 1,
-                created_at: new Date().toISOString(),
               });
             }
           }
         }
       }
 
-      const mappedSession = mapLocalToSession(completedSession);
-
       // Update local state
       set((state) => ({
-        sessions: state.sessions.map((s) => (s.id === id ? mappedSession : s)),
+        sessions: state.sessions.map((s) => (s.id === id ? completedSession : s)),
         selectedSession:
           state.selectedSession?.id === id
-            ? { ...state.selectedSession, ...mappedSession }
+            ? { ...state.selectedSession, ...completedSession }
             : state.selectedSession,
         isLoading: false,
       }));
 
-      return mappedSession;
+      return completedSession;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -527,12 +304,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid session ID');
-      }
-
-      await deleteSessionDB(numericId);
+      await supabaseService.deleteSession(id);
 
       set((state) => ({
         sessions: state.sessions.filter((s) => s.id !== id),

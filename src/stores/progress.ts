@@ -1,73 +1,12 @@
 import { create } from 'zustand';
-import { db } from '@/lib/local-db';
-import {
-  createProgressRecord,
-  updateProgressRecord as updateProgressRecordDB,
-  deleteProgressRecord as deleteProgressRecordDB
-} from '@/lib/local-db/hooks';
+import * as supabaseService from '@/lib/supabase/services';
 import { validateProgressMonitoring } from '@/lib/supabase/validation';
-import { toNumericId } from '@/lib/utils/id';
-import type {
-  LocalProgressMonitoring,
-  LocalProgressMonitoringInsert,
-  LocalStudent,
-} from '@/lib/local-db';
 import type {
   ProgressMonitoring,
   ProgressMonitoringInsert,
   ProgressMonitoringWithStudent,
   Student,
 } from '@/lib/supabase/types';
-
-/**
- * Map LocalProgressMonitoring to ProgressMonitoring (API type with string IDs)
- */
-function mapLocalToProgress(local: LocalProgressMonitoring): ProgressMonitoring {
-  if (local.id === undefined) {
-    throw new Error('LocalProgressMonitoring id is undefined');
-  }
-  return {
-    id: String(local.id),
-    group_id: String(local.group_id),
-    student_id: local.student_id !== null ? String(local.student_id) : null,
-    date: local.date,
-    measure_type: local.measure_type,
-    score: local.score,
-    benchmark: local.benchmark,
-    goal: local.goal,
-    notes: local.notes,
-    created_at: local.created_at,
-  };
-}
-
-/**
- * Map LocalStudent to Student (API type with string IDs)
- */
-function mapLocalStudent(student: LocalStudent): Student {
-  if (student.id === undefined) {
-    throw new Error('LocalStudent id is undefined');
-  }
-  return {
-    id: String(student.id),
-    group_id: String(student.group_id),
-    name: student.name,
-    notes: student.notes,
-    created_at: student.created_at,
-  };
-}
-
-/**
- * Map LocalProgressMonitoring with student to ProgressMonitoringWithStudent
- */
-function mapLocalToProgressWithStudent(
-  local: LocalProgressMonitoring,
-  student: LocalStudent | null
-): ProgressMonitoringWithStudent {
-  return {
-    ...mapLocalToProgress(local),
-    student: student ? mapLocalStudent(student) : null,
-  };
-}
 
 interface ProgressState {
   data: ProgressMonitoring[];
@@ -93,37 +32,16 @@ export const useProgressStore = create<ProgressState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericGroupId = toNumericId(groupId);
-      if (numericGroupId === null) {
-        throw new Error('Invalid group ID');
-      }
+      const data = await supabaseService.fetchProgressByGroupId(groupId);
 
-      const localData = await db.progressMonitoring
-        .where('group_id')
-        .equals(numericGroupId)
-        .sortBy('date');
+      // Fetch students for the group to build dataWithStudents
+      const students = await supabaseService.fetchStudentsByGroupId(groupId);
+      const studentMap = new Map(students.map(s => [s.id, s]));
 
-      // Batch fetch all students to avoid N+1 queries
-      const uniqueStudentIds = [...new Set(
-        localData
-          .filter(pm => pm.student_id !== null)
-          .map(pm => pm.student_id as number)
-      )];
-      const students = uniqueStudentIds.length > 0
-        ? await db.students.bulkGet(uniqueStudentIds)
-        : [];
-      const studentMap = new Map(
-        students
-          .filter((s): s is NonNullable<typeof s> => s !== undefined)
-          .map(s => [s.id!, s])
-      );
-
-      const dataWithStudents: ProgressMonitoringWithStudent[] = localData.map(pm => {
-        const student = pm.student_id !== null ? studentMap.get(pm.student_id) || null : null;
-        return mapLocalToProgressWithStudent(pm, student);
-      });
-
-      const data = localData.map(mapLocalToProgress);
+      const dataWithStudents: ProgressMonitoringWithStudent[] = data.map(pm => ({
+        ...pm,
+        student: pm.student_id ? studentMap.get(pm.student_id) || null : null,
+      }));
 
       set({
         data,
@@ -144,17 +62,7 @@ export const useProgressStore = create<ProgressState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericStudentId = toNumericId(studentId);
-      if (numericStudentId === null) {
-        throw new Error('Invalid student ID');
-      }
-
-      const localData = await db.progressMonitoring
-        .where('student_id')
-        .equals(numericStudentId)
-        .sortBy('date');
-
-      const data = localData.map(mapLocalToProgress);
+      const data = await supabaseService.fetchProgressByStudentId(studentId);
       set({ data, isLoading: false });
     } catch (err) {
       set({
@@ -177,45 +85,14 @@ export const useProgressStore = create<ProgressState>((set) => ({
     }
 
     try {
-      const numericGroupId = toNumericId(dataPoint.group_id);
-      if (numericGroupId === null) {
-        throw new Error('Invalid group ID');
-      }
-
-      const numericStudentId = dataPoint.student_id !== null
-        ? toNumericId(dataPoint.student_id)
-        : null;
-
-      if (dataPoint.student_id !== null && numericStudentId === null) {
-        throw new Error('Invalid student ID');
-      }
-
-      const localDataPoint: LocalProgressMonitoringInsert = {
-        group_id: numericGroupId,
-        student_id: numericStudentId,
-        date: dataPoint.date,
-        measure_type: dataPoint.measure_type,
-        score: dataPoint.score,
-        benchmark: dataPoint.benchmark || null,
-        goal: dataPoint.goal || null,
-        notes: dataPoint.notes || null,
-      };
-
-      const id = await createProgressRecord(localDataPoint);
-      const newDataPoint = await db.progressMonitoring.get(id);
-
-      if (!newDataPoint) {
-        throw new Error('Failed to retrieve created progress record');
-      }
-
-      const mappedDataPoint = mapLocalToProgress(newDataPoint);
+      const newDataPoint = await supabaseService.createProgressMonitoring(dataPoint);
 
       set((state) => ({
-        data: [...state.data, mappedDataPoint],
+        data: [...state.data, newDataPoint],
         isLoading: false,
       }));
 
-      return mappedDataPoint;
+      return newDataPoint;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
       return null;
@@ -226,12 +103,7 @@ export const useProgressStore = create<ProgressState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const numericId = toNumericId(id);
-      if (numericId === null) {
-        throw new Error('Invalid progress monitoring ID');
-      }
-
-      await deleteProgressRecordDB(numericId);
+      await supabaseService.deleteProgressMonitoring(id);
 
       set((state) => ({
         data: state.data.filter((d) => d.id !== id),
