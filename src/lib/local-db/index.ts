@@ -24,6 +24,10 @@ import type {
   WilsonLessonElements,
   WilsonLessonPlan,
 } from '../curriculum/wilson-lesson-elements';
+import type {
+  CaminoLessonElements,
+  CaminoLessonPlan,
+} from '../curriculum/camino/camino-lesson-elements';
 
 // ============================================
 // LOCAL DATABASE INTERFACES
@@ -220,6 +224,9 @@ export class EmergeDatabase extends Dexie {
   studentSessionTracking!: Table<LocalStudentSessionTracking, number>;
   wilsonLessonElements!: Table<WilsonLessonElements, number>;
   wilsonLessonPlans!: Table<WilsonLessonPlan, number>;
+  // Camino (Spanish) curriculum tables
+  caminoLessonElements!: Table<CaminoLessonElements, number>;
+  caminoLessonPlans!: Table<CaminoLessonPlan, number>;
   // Schedule builder tables
   interventionists!: Table<LocalInterventionist, number>;
   gradeLevelConstraints!: Table<LocalGradeLevelConstraint, number>;
@@ -286,6 +293,23 @@ export class EmergeDatabase extends Dexie {
       studentSessionTracking: '++id, session_id, student_id, created_at',
       wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
       wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
+      interventionists: '++id, name, email, created_at, updated_at',
+      gradeLevelConstraints: '++id, grade, type, created_at',
+      studentConstraints: '++id, student_id, type, created_at',
+    });
+
+    // Version 6: Add Camino (Spanish) curriculum tables
+    this.version(6).stores({
+      groups: '++id, name, curriculum, tier, grade, interventionist_id, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, series_id, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
+      wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
+      wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
+      caminoLessonElements: '++id, unit, lesson, lessonCode, createdAt, updatedAt',
+      caminoLessonPlans: '++id, sessionId, unit, lesson, lessonCode, createdAt, updatedAt',
       interventionists: '++id, name, email, created_at, updated_at',
       gradeLevelConstraints: '++id, grade, type, created_at',
       studentConstraints: '++id, student_id, type, created_at',

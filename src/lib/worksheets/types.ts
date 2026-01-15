@@ -52,6 +52,11 @@ export interface WorksheetSection {
   items: WorksheetItem[];
 }
 
+export interface WordAnalysis {
+  word: string;
+  status: 'decodable' | 'hf' | 'advanced';
+}
+
 export interface WorksheetItem {
   id: number;
   prompt: string;
@@ -60,6 +65,8 @@ export interface WorksheetItem {
   options?: string[];
   soundBoxes?: SoundBox[];
   syllables?: string[];
+  wordAnalysis?: WordAnalysis[];
+  decodablePercent?: number;
 }
 
 export interface SoundBox {

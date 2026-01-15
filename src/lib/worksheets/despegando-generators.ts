@@ -34,6 +34,11 @@ import type {
   SpanishSentence,
   ElkoninBoxItem,
 } from '@/lib/curriculum/despegando-lesson-elements';
+import {
+  getSpanishMazeSentencesForLesson,
+  getSpanishIllustratableSentences,
+  type SpanishMazeSentence,
+} from './despegando-maze-sentences';
 
 // Spanish worksheet template types
 export type SpanishWorksheetTemplate =
@@ -790,6 +795,7 @@ function generateMixedSpanishWorksheet(
 
 /**
  * Generate Spanish Sentence Completion Worksheet (Finish the Sentence)
+ * Uses curated MAZE sentences from Despegando_MAZE_Sentences.csv
  */
 function generateSpanishSentenceCompletionWorksheet(
   config: SpanishWorksheetConfig,
@@ -804,64 +810,93 @@ function generateSpanishSentenceCompletionWorksheet(
 } {
   const sections: WorksheetSection[] = [];
 
-  // Get words from lesson
-  const words = lessonElements?.realWords?.map(w => w.word) || lessonData.sampleWords;
-  const shuffledWords = shuffleArray(words);
+  // Get curated MAZE sentences for this lesson
+  const mazeSentences = getSpanishMazeSentencesForLesson(config.lesson);
+  const shuffledMaze = shuffleArray([...mazeSentences]);
 
-  // Spanish sentence frames with blanks for word choices
-  const sentenceFrames = [
-    { frame: 'El ___ está en la mesa.', context: 'object' },
-    { frame: 'Mi mamá tiene una ___.', context: 'object' },
-    { frame: 'Yo puedo ___ muy bien.', context: 'action' },
-    { frame: 'La ___ es muy bonita.', context: 'object' },
-    { frame: 'Mira el ___ grande.', context: 'object' },
-    { frame: 'Me gusta la ___.', context: 'object' },
-    { frame: 'El niño ve un ___.', context: 'object' },
-    { frame: 'La ___ está aquí.', context: 'object' },
-  ];
+  // If we have MAZE sentences, use them
+  if (shuffledMaze.length > 0) {
+    const completionItems: WorksheetItem[] = shuffledMaze
+      .slice(0, Math.min(8, shuffledMaze.length))
+      .map((maze, idx) => ({
+        id: idx + 1,
+        prompt: maze.sentence,
+        answer: maze.correct,
+        options: shuffleArray([maze.choiceA, maze.choiceB]),
+      }));
 
-  // Create sentence completion items with two word choices
-  const completionItems: WorksheetItem[] = [];
-  for (let i = 0; i < Math.min(6, shuffledWords.length - 1); i++) {
-    const correctWord = shuffledWords[i];
-    // Get a distractor word from the same lesson (different word)
-    const distractorIndex = (i + Math.floor(shuffledWords.length / 2)) % shuffledWords.length;
-    const distractorWord = shuffledWords[distractorIndex] !== correctWord
-      ? shuffledWords[distractorIndex]
-      : shuffledWords[(distractorIndex + 1) % shuffledWords.length];
+    sections.push({
+      title: 'Finish the Sentence / Completa la Oración',
+      type: 'sentence_choice',
+      items: completionItems,
+    });
 
-    const frame = sentenceFrames[i % sentenceFrames.length];
-    const sentence = frame.frame.replace('___', '_____');
+    // Create word bank from all correct answers and distractors
+    const wordBank = new Set<string>();
+    shuffledMaze.slice(0, 8).forEach(maze => {
+      wordBank.add(maze.correct);
+      wordBank.add(maze.choiceA);
+      wordBank.add(maze.choiceB);
+    });
 
-    // Randomize option order
-    const options = Math.random() > 0.5
-      ? [correctWord, distractorWord]
-      : [distractorWord, correctWord];
+    sections.push({
+      title: 'Word Bank / Banco de Palabras',
+      type: 'word_list',
+      items: shuffleArray([...wordBank]).slice(0, 10).map((word, idx) => ({
+        id: idx + 1,
+        prompt: word,
+        answer: word,
+      })),
+    });
+  } else {
+    // Fallback to generated sentences if no MAZE sentences available
+    const words = lessonElements?.realWords?.map(w => w.word) || lessonData.sampleWords;
+    const shuffledWords = shuffleArray(words);
 
-    completionItems.push({
-      id: i + 1,
-      prompt: sentence,
-      answer: correctWord,
-      options: options,
+    const sentenceFrames = [
+      'El ___ está en la mesa.',
+      'Mi mamá tiene una ___.',
+      'Yo puedo ___ muy bien.',
+      'La ___ es muy bonita.',
+      'Mira el ___ grande.',
+      'Me gusta la ___.',
+    ];
+
+    const completionItems: WorksheetItem[] = [];
+    for (let i = 0; i < Math.min(6, shuffledWords.length - 1); i++) {
+      const correctWord = shuffledWords[i];
+      const distractorIndex = (i + Math.floor(shuffledWords.length / 2)) % shuffledWords.length;
+      const distractorWord = shuffledWords[distractorIndex] !== correctWord
+        ? shuffledWords[distractorIndex]
+        : shuffledWords[(distractorIndex + 1) % shuffledWords.length];
+
+      const sentence = sentenceFrames[i % sentenceFrames.length];
+      const options = shuffleArray([correctWord, distractorWord]);
+
+      completionItems.push({
+        id: i + 1,
+        prompt: sentence,
+        answer: correctWord,
+        options: options,
+      });
+    }
+
+    sections.push({
+      title: 'Finish the Sentence / Completa la Oración',
+      type: 'sentence_choice',
+      items: completionItems,
+    });
+
+    sections.push({
+      title: 'Word Bank / Banco de Palabras',
+      type: 'word_list',
+      items: shuffledWords.slice(0, 8).map((word, idx) => ({
+        id: idx + 1,
+        prompt: word,
+        answer: word,
+      })),
     });
   }
-
-  sections.push({
-    title: 'Finish the Sentence / Completa la Oración',
-    type: 'sentence_choice',
-    items: completionItems,
-  });
-
-  // Add a word bank section for reference
-  sections.push({
-    title: 'Word Bank / Banco de Palabras',
-    type: 'word_list',
-    items: shuffledWords.slice(0, 8).map((word, idx) => ({
-      id: idx + 1,
-      prompt: word,
-      answer: word,
-    })),
-  });
 
   return {
     content: { sections },
@@ -874,6 +909,7 @@ function generateSpanishSentenceCompletionWorksheet(
 
 /**
  * Generate Spanish Draw and Write Worksheet
+ * Uses curated illustratable MAZE sentences from Despegando_MAZE_Sentences.csv
  */
 function generateSpanishDrawAndWriteWorksheet(
   config: SpanishWorksheetConfig,
@@ -888,50 +924,83 @@ function generateSpanishDrawAndWriteWorksheet(
 } {
   const sections: WorksheetSection[] = [];
 
-  // Get words from lesson
-  const words = lessonElements?.realWords?.map(w => w.word) || lessonData.sampleWords;
-  const shuffledWords = shuffleArray(words);
+  // Get only illustratable MAZE sentences for this lesson
+  const illustratableSentences = getSpanishIllustratableSentences(config.lesson);
+  const shuffledSentences = shuffleArray([...illustratableSentences]);
 
-  // Simple decodable Spanish sentence frames
-  const simpleFrames = [
-    'El ___ es grande.',
-    'Yo veo un ___.',
-    'La ___ está aquí.',
-    'Mira el ___.',
-    'Mi ___ es bonito.',
-    'Hay un ___ en la mesa.',
-  ];
+  // If we have illustratable MAZE sentences, use them
+  if (shuffledSentences.length > 0) {
+    // Create complete sentences by filling in the correct answer
+    const drawItems: WorksheetItem[] = shuffledSentences
+      .slice(0, Math.min(4, shuffledSentences.length))
+      .map((maze, idx) => {
+        const completeSentence = maze.sentence.replace('___.', `${maze.correct}.`).replace('___', maze.correct);
+        return {
+          id: idx + 1,
+          prompt: completeSentence,
+          answer: completeSentence,
+        };
+      });
 
-  // Create draw and write items
-  const drawItems: WorksheetItem[] = [];
-  for (let i = 0; i < Math.min(4, shuffledWords.length); i++) {
-    const word = shuffledWords[i];
-    const frame = simpleFrames[i % simpleFrames.length];
-    const sentence = frame.replace('___', word);
+    sections.push({
+      title: 'Read, Draw, and Write / Lee, Dibuja y Escribe',
+      type: 'draw_area',
+      items: drawItems,
+    });
 
-    drawItems.push({
-      id: i + 1,
-      prompt: sentence,
-      answer: sentence,
+    // Copy the sentence section
+    sections.push({
+      title: 'Copy the Sentence / Copia la Oración',
+      type: 'sentences',
+      items: drawItems.slice(0, 2).map((item, idx) => ({
+        id: idx + 1,
+        prompt: `${item.prompt}\n_________________________________________________`,
+        answer: item.answer,
+      })),
+    });
+  } else {
+    // Fallback to generated sentences if no illustratable sentences available
+    const words = lessonElements?.realWords?.map(w => w.word) || lessonData.sampleWords;
+    const shuffledWords = shuffleArray(words);
+
+    const simpleFrames = [
+      'El ___ es grande.',
+      'Yo veo un ___.',
+      'La ___ está aquí.',
+      'Mira el ___.',
+      'Mi ___ es bonito.',
+      'Hay un ___ en la mesa.',
+    ];
+
+    const drawItems: WorksheetItem[] = [];
+    for (let i = 0; i < Math.min(4, shuffledWords.length); i++) {
+      const word = shuffledWords[i];
+      const frame = simpleFrames[i % simpleFrames.length];
+      const sentence = frame.replace('___', word);
+
+      drawItems.push({
+        id: i + 1,
+        prompt: sentence,
+        answer: sentence,
+      });
+    }
+
+    sections.push({
+      title: 'Read, Draw, and Write / Lee, Dibuja y Escribe',
+      type: 'draw_area',
+      items: drawItems,
+    });
+
+    sections.push({
+      title: 'Copy the Sentence / Copia la Oración',
+      type: 'sentences',
+      items: drawItems.slice(0, 2).map((item, idx) => ({
+        id: idx + 1,
+        prompt: `${item.prompt}\n_________________________________________________`,
+        answer: item.answer,
+      })),
     });
   }
-
-  sections.push({
-    title: 'Read, Draw, and Write / Lee, Dibuja y Escribe',
-    type: 'draw_area',
-    items: drawItems,
-  });
-
-  // Copy the sentence section
-  sections.push({
-    title: 'Copy the Sentence / Copia la Oración',
-    type: 'sentences',
-    items: drawItems.slice(0, 2).map((item, idx) => ({
-      id: idx + 1,
-      prompt: `${item.prompt}\n_________________________________________________`,
-      answer: item.answer,
-    })),
-  });
 
   return {
     content: { sections },

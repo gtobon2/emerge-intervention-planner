@@ -18,6 +18,7 @@ import {
   FileText,
   ClipboardList,
   Languages,
+  Package,
   X
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui';
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/error-bank', label: 'Error Bank', icon: BookOpen },
   { href: '/worksheets', label: 'Worksheets', icon: ClipboardList },
   { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
+  { href: '/materials', label: 'Materials', icon: Package },
   { href: '/reports', label: 'Reports', icon: FileText },
 ];
 

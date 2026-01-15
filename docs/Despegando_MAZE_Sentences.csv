@@ -1,0 +1,149 @@
+Sentence,Choice_A,Choice_B,Correct_Answer,Phase,Lesson,Illustratable,Purpose
+Mi ___ me ama.,mamá,mapa,mamá,1,2,Yes,Fill-in-Blank
+Amo a mi ___.,mamá,mimo,mamá,1,2,Yes,Fill-in-Blank
+Ese es mi ___.,mapa,mamá,mapa,1,2,Yes,Fill-in-Blank
+Mamá me ___.,mima,ama,mima,1,2,Yes,Fill-in-Blank
+La ___ es mía.,mesa,mula,mesa,1,2,Yes,Fill-in-Blank
+Mi ___ y mi mamá.,papá,puma,papá,1,3,Yes,Fill-in-Blank
+___ me ama.,Papá,Pipa,Papá,1,3,Yes,Fill-in-Blank
+El ___ es de papá.,mapa,puma,mapa,1,3,Yes,Fill-in-Blank
+Amo a mi ___.,papá,pipa,papá,1,3,Yes,Fill-in-Blank
+El ___ es mío.,puma,papa,puma,1,3,Yes,Fill-in-Blank
+La ___ es de mamá.,sopa,suma,sopa,1,4,Yes,Fill-in-Blank
+Esa es la ___.,mesa,masa,mesa,1,4,Yes,Fill-in-Blank
+El ___ es mío.,sapo,peso,sapo,1,4,Yes,Fill-in-Blank
+Mi mamá ama la ___.,sopa,mesa,sopa,1,4,Yes,Fill-in-Blank
+Eso es la ___.,suma,sopa,suma,1,4,No,Fill-in-Blank
+Mamá ama el ___.,mapa,sapo,mapa,1,5,Yes,Fill-in-Blank
+La ___ de mamá.,sopa,suma,sopa,1,5,Yes,Fill-in-Blank
+Mi papá y mi ___.,mamá,mapa,mamá,1,5,Yes,Fill-in-Blank
+Esa es mi ___.,mesa,masa,mesa,1,5,Yes,Fill-in-Blank
+El ___ es de papá.,peso,paso,peso,1,5,No,Fill-in-Blank
+La ___ sale.,luna,lupa,luna,1,6,Yes,Fill-in-Blank
+El ___ es mío.,palo,pelo,palo,1,6,Yes,Fill-in-Blank
+Esa es la ___.,lima,loma,lima,1,6,Yes,Fill-in-Blank
+Mamá me da la ___.,lupa,luna,lupa,1,6,Yes,Fill-in-Blank
+Sale la ___.,luna,lima,luna,1,6,Yes,Fill-in-Blank
+El ___ de mamá.,pato,tapa,pato,1,7,Yes,Fill-in-Blank
+La ___ de la mesa.,tapa,tela,tapa,1,7,Yes,Fill-in-Blank
+___ la pelota.,Toma,Ata,Toma,1,7,No,Fill-in-Blank
+Papá ___ el pato.,ata,tapa,ata,1,7,Yes,Fill-in-Blank
+La ___ es mía.,tela,tapa,tela,1,7,Yes,Fill-in-Blank
+Mi ___ y mi mano.,dedo,dado,dedo,1,8,Yes,Fill-in-Blank
+El ___ sale de día.,sol,lodo,sol,1,8,Yes,Fill-in-Blank
+La ___ de mamá.,dama,soda,dama,1,8,Yes,Fill-in-Blank
+Esa ___ es mía.,soda,dama,soda,1,8,Yes,Fill-in-Blank
+Mi mamá me ___.,da,di,da,1,8,No,Fill-in-Blank
+La ___ de papá.,pelota,paleta,pelota,1,9,Yes,Fill-in-Blank
+Esa ___ es de mamá.,patata,pelota,patata,1,9,Yes,Fill-in-Blank
+Mi ___ y mi tomate.,paleta,semilla,paleta,1,9,Yes,Fill-in-Blank
+El ___ es mío.,tomate,paleta,tomate,1,9,Yes,Fill-in-Blank
+La ___ de mi papá.,semilla,pelota,semilla,1,9,Yes,Fill-in-Blank
+La ___ nada.,rana,ropa,rana,2,11,Yes,Fill-in-Blank
+El ___ mira.,toro,loro,toro,2,11,Yes,Fill-in-Blank
+Esa ___ es de mamá.,ropa,mora,ropa,2,11,Yes,Fill-in-Blank
+La ___ es mía.,pera,mora,pera,2,11,Yes,Fill-in-Blank
+El ___ es de papá.,loro,toro,loro,2,11,Yes,Fill-in-Blank
+La ___ de mamá.,casa,cama,casa,2,12,Yes,Fill-in-Blank
+El ___ es de papá.,carro,caro,carro,2,12,Yes,Fill-in-Blank
+Mi ___ es mía.,cuna,cama,cuna,2,12,Yes,Fill-in-Blank
+Esa ___ es de mamá.,cama,casa,cama,2,12,Yes,Fill-in-Blank
+La ___ de mi papá.,cola,cosa,cola,2,12,No,Fill-in-Blank
+La ___ de papá.,cena,cine,cena,2,13,Yes,Fill-in-Blank
+El ___ es dulce.,cine,circo,cine,2,13,Yes,Fill-in-Blank
+Son ___.,cinco,cinta,cinco,2,13,No,Fill-in-Blank
+El ___ de mamá.,circo,cena,circo,2,13,Yes,Fill-in-Blank
+La ___ es mía.,cinta,cena,cinta,2,13,Yes,Fill-in-Blank
+La ___ de mamá.,boca,bata,boca,2,14,Yes,Fill-in-Blank
+El ___ es de papá.,lobo,bola,lobo,2,14,Yes,Fill-in-Blank
+Mi ___ es mío.,bebé,boca,bebé,2,14,Yes,Fill-in-Blank
+Esa ___ es de mamá.,bata,boca,bata,2,14,Yes,Fill-in-Blank
+La ___ de mi papá.,bola,bata,bola,2,14,Yes,Fill-in-Blank
+La ___ de canela.,corona,cocina,corona,2,15,Yes,Fill-in-Blank
+Mi ___ es mía.,cocina,corona,cocina,2,15,Yes,Fill-in-Blank
+El ___ de la casa.,canela,corona,canela,2,15,No,Fill-in-Blank
+Esa ___ es de mamá.,naranja,cocina,naranja,2,15,Yes,Fill-in-Blank
+La ___ es de papá.,corona,canela,corona,2,15,Yes,Fill-in-Blank
+La ___ de papá.,foca,foto,foca,2,16,Yes,Fill-in-Blank
+El ___ es de mamá.,café,foca,café,2,16,Yes,Fill-in-Blank
+Mi ___ es mía.,foto,foca,foto,2,16,Yes,Fill-in-Blank
+Esa ___ es de papá.,uva,vaca,uva,2,17,Yes,Fill-in-Blank
+La ___ de mi mamá.,vaca,uva,vaca,2,17,Yes,Fill-in-Blank
+El ___ de mamá.,gato,lago,gato,2,18,Yes,Fill-in-Blank
+La ___ es de papá.,goma,gota,goma,2,18,Yes,Fill-in-Blank
+Mi ___ es mío.,lago,gato,lago,2,18,Yes,Fill-in-Blank
+El ___ de mamá.,zapato,jugo,zapato,2,19,Yes,Fill-in-Blank
+La ___ de papá.,piña,niña,piña,2,19,Yes,Fill-in-Blank
+Mi ___ es mío.,jugo,zapato,jugo,2,19,Yes,Fill-in-Blank
+El ___ de papá.,niño,piña,niño,2,19,Yes,Fill-in-Blank
+La ___ es de mamá.,piña,niña,piña,2,19,Yes,Fill-in-Blank
+El ___ de mamá.,chico,leche,chico,3,21,Yes,Fill-in-Blank
+La ___ es de noche.,leche,mucho,leche,3,21,Yes,Fill-in-Blank
+Son ___.,ocho,noche,ocho,3,21,No,Fill-in-Blank
+El ___ es mío.,coche,noche,coche,3,21,Yes,Fill-in-Blank
+La ___ de mi casa.,noche,leche,noche,3,21,Yes,Fill-in-Blank
+La ___ de mamá.,llama,silla,llama,3,22,Yes,Fill-in-Blank
+El ___ de la calle.,pollo,silla,pollo,3,22,Yes,Fill-in-Blank
+Mi ___ es mía.,silla,calle,silla,3,22,Yes,Fill-in-Blank
+La ___ de papá.,calle,llama,calle,3,22,Yes,Fill-in-Blank
+Esa es ___.,ella,silla,ella,3,22,No,Fill-in-Blank
+El ___ de mamá.,perro,carro,perro,3,23,Yes,Fill-in-Blank
+La ___ es de arroz.,torre,borra,torre,3,23,Yes,Fill-in-Blank
+Mi ___ es mío.,carro,perro,carro,3,23,Yes,Fill-in-Blank
+El ___ de papá.,arroz,torre,arroz,3,23,Yes,Fill-in-Blank
+La ___ de mi casa.,torre,carro,torre,3,23,Yes,Fill-in-Blank
+El ___ de mamá.,queso,pequeño,queso,3,24,Yes,Fill-in-Blank
+La ___ es mía.,máquina,paquete,máquina,3,24,Yes,Fill-in-Blank
+Mi ___ es de papá.,paquete,pequeño,paquete,3,24,Yes,Fill-in-Blank
+El ___ es mío.,pequeño,queso,pequeño,3,24,Yes,Fill-in-Blank
+Esa ___ es de mamá.,quesadilla,maquina,quesadilla,3,24,Yes,Fill-in-Blank
+La ___ de mamá.,mochila,tortilla,mochila,3,25,Yes,Fill-in-Blank
+El ___ es chiquito.,perrito,quesadilla,perrito,3,25,Yes,Fill-in-Blank
+Mi ___ es mía.,tortilla,chaqueta,tortilla,3,25,Yes,Fill-in-Blank
+La ___ de papá.,chaqueta,mochila,chaqueta,3,25,Yes,Fill-in-Blank
+Esa ___ es de mamá.,quesadilla,tortilla,quesadilla,3,25,Yes,Fill-in-Blank
+___ mamá.,Hola,Hora,Hola,3,26,No,Fill-in-Blank
+La ___ es ahora.,hora,hola,hora,3,26,No,Fill-in-Blank
+Mi ___ es mío.,hilo,huevo,hilo,3,26,Yes,Fill-in-Blank
+El ___ de mamá.,huevo,hora,huevo,3,26,Yes,Fill-in-Blank
+Eso es un ___.,hueso,hilo,hueso,3,26,Yes,Fill-in-Blank
+El ___ de mamá.,baile,peine,baile,3,27,Yes,Fill-in-Blank
+La ___ es de Europa.,reina,baile,reina,3,27,Yes,Fill-in-Blank
+Mi ___ es mío.,auto,peine,auto,3,27,Yes,Fill-in-Blank
+El ___ de papá.,peine,baile,peine,3,27,Yes,Fill-in-Blank
+La ___ de mi casa.,reina,auto,reina,3,27,Yes,Fill-in-Blank
+El ___ de mamá.,blanco,clase,blanco,4,29,Yes,Fill-in-Blank
+La ___ es de papá.,flor,plato,flor,4,29,Yes,Fill-in-Blank
+Mi ___ es mío.,globo,blanco,globo,4,29,Yes,Fill-in-Blank
+El ___ de papá.,plato,clase,plato,4,29,Yes,Fill-in-Blank
+La ___ de mi casa.,clase,flor,clase,4,29,Yes,Fill-in-Blank
+El ___ de mamá.,brazo,crema,brazo,4,30,Yes,Fill-in-Blank
+La ___ es de papá.,brisa,cristal,brisa,4,30,Yes,Fill-in-Blank
+Mi ___ es mía.,crema,brazo,crema,4,30,Yes,Fill-in-Blank
+El ___ de papá.,cristal,drama,cristal,4,30,Yes,Fill-in-Blank
+La ___ de mi casa.,brisa,crema,brisa,4,30,Yes,Fill-in-Blank
+La ___ de mamá.,fresa,grande,fresa,4,31,Yes,Fill-in-Blank
+El ___ es de papá.,tren,grupo,tren,4,31,Yes,Fill-in-Blank
+Mi ___ es mío.,primo,fresa,primo,4,31,Yes,Fill-in-Blank
+El ___ de papá.,grupo,grande,grupo,4,31,Yes,Fill-in-Blank
+La ___ es mía.,fresa,grande,fresa,4,31,Yes,Fill-in-Blank
+La ___ de mamá.,biblioteca,problema,biblioteca,4,32,Yes,Fill-in-Blank
+La ___ es de papá.,estrella,cristal,estrella,4,32,Yes,Fill-in-Blank
+El ___ de papá.,problema,cristal,problema,4,32,No,Fill-in-Blank
+Esa ___ es mía.,estrella,biblioteca,estrella,4,32,Yes,Fill-in-Blank
+La ___ de mi casa.,biblioteca,estrella,biblioteca,4,32,Yes,Fill-in-Blank
+La ___ de mamá.,paloma,árbol,paloma,4,33,Yes,Fill-in-Blank
+El ___ es de papá.,pelota,mariposa,pelota,4,33,Yes,Fill-in-Blank
+Mi ___ es mío.,árbol,paloma,árbol,4,33,Yes,Fill-in-Blank
+El ___ de papá.,camino,pelota,camino,4,33,Yes,Fill-in-Blank
+La ___ de mi casa.,mariposa,árbol,mariposa,4,33,Yes,Fill-in-Blank
+El ___ de mamá.,pájaro,teléfono,pájaro,4,34,Yes,Fill-in-Blank
+La ___ es de papá.,música,rápido,música,4,34,No,Fill-in-Blank
+Mi ___ es mío.,café,pájaro,café,4,34,Yes,Fill-in-Blank
+El ___ de papá.,teléfono,música,teléfono,4,34,Yes,Fill-in-Blank
+La ___ de mi casa.,música,café,música,4,34,No,Fill-in-Blank
+La ___ de mamá.,mariposa,elefante,mariposa,4,35,Yes,Fill-in-Blank
+El ___ es de papá.,computadora,refrigerador,computadora,4,35,Yes,Fill-in-Blank
+Mi ___ es mío.,elefante,mariposa,elefante,4,35,Yes,Fill-in-Blank
+La ___ de papá.,biblioteca,computadora,biblioteca,4,35,Yes,Fill-in-Blank
+El ___ de mi casa.,refrigerador,elefante,refrigerador,4,35,Yes,Fill-in-Blank

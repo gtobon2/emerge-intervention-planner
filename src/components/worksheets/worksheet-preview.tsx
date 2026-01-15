@@ -1,7 +1,52 @@
 'use client';
 
 import { Card } from '@/components/ui';
-import type { GeneratedWorksheet, WorksheetSection, WorksheetItem } from '@/lib/worksheets';
+import type { GeneratedWorksheet, WorksheetSection, WorksheetItem, WordAnalysis } from '@/lib/worksheets';
+
+/**
+ * Render text with highlighted words based on word analysis
+ * - Decodable words: normal style
+ * - HF (high-frequency) words: bold
+ * - Advanced (not-yet-decodable) words: italic with underline
+ */
+function HighlightedText({ text, wordAnalysis }: { text: string; wordAnalysis?: WordAnalysis[] }) {
+  if (!wordAnalysis || wordAnalysis.length === 0) {
+    return <>{text}</>;
+  }
+
+  // Create a map for quick lookup
+  const analysisMap = new Map<string, 'decodable' | 'hf' | 'advanced'>();
+  wordAnalysis.forEach(wa => {
+    analysisMap.set(wa.word.toLowerCase(), wa.status);
+  });
+
+  // Split text into words and non-words (punctuation, spaces)
+  const tokens = text.split(/(\s+|[.,!?'"_\-]+)/);
+
+  return (
+    <>
+      {tokens.map((token, idx) => {
+        const cleanWord = token.toLowerCase().replace(/[.,!?'"_\-]/g, '');
+        const status = analysisMap.get(cleanWord);
+
+        if (status === 'hf') {
+          return (
+            <span key={idx} className="font-bold text-amber-700" title="High-frequency word">
+              {token}
+            </span>
+          );
+        } else if (status === 'advanced') {
+          return (
+            <span key={idx} className="italic underline text-red-600" title="Not yet decodable">
+              {token}
+            </span>
+          );
+        }
+        return <span key={idx}>{token}</span>;
+      })}
+    </>
+  );
+}
 
 interface WorksheetPreviewProps {
   worksheet: GeneratedWorksheet;
@@ -30,6 +75,18 @@ export function WorksheetPreview({ worksheet }: WorksheetPreviewProps) {
           {worksheet.instructions}
         </p>
       </div>
+
+      {/* Word Analysis Legend (for AI-generated sentences) */}
+      {worksheet.config.template === 'sentence_completion' || worksheet.config.template === 'draw_and_write' ? (
+        <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-xs font-medium text-blue-800 mb-2">Word Highlighting Key:</p>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <span className="text-gray-700">Regular = Decodable</span>
+            <span className="font-bold text-amber-700">Bold = High-frequency</span>
+            <span className="italic underline text-red-600">Italic = Not yet decodable</span>
+          </div>
+        </div>
+      ) : null}
 
       {/* Sections */}
       <div className="space-y-8">
@@ -213,9 +270,20 @@ function SentenceChoiceSection({ items }: { items: WorksheetItem[] }) {
     <div className="space-y-4">
       {items.map((item) => (
         <div key={item.id} className="p-3 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-700 mb-3">
-            {item.id}. {item.prompt}
-          </p>
+          <div className="flex items-start justify-between mb-3">
+            <p className="text-sm text-gray-700">
+              {item.id}. <HighlightedText text={item.prompt} wordAnalysis={item.wordAnalysis} />
+            </p>
+            {item.decodablePercent !== undefined && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                item.decodablePercent >= 80 ? 'bg-green-100 text-green-700' :
+                item.decodablePercent >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {item.decodablePercent}% decodable
+              </span>
+            )}
+          </div>
           <div className="flex gap-4 ml-4">
             {item.options?.map((option, idx) => (
               <div
@@ -238,9 +306,20 @@ function DrawAreaSection({ items }: { items: WorksheetItem[] }) {
     <div className="space-y-6">
       {items.map((item) => (
         <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-          <p className="text-sm text-gray-700 mb-3 font-medium">
-            {item.id}. Read: &quot;{item.prompt}&quot;
-          </p>
+          <div className="flex items-start justify-between mb-3">
+            <p className="text-sm text-gray-700 font-medium">
+              {item.id}. Read: &quot;<HighlightedText text={item.prompt} wordAnalysis={item.wordAnalysis} />&quot;
+            </p>
+            {item.decodablePercent !== undefined && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                item.decodablePercent >= 80 ? 'bg-green-100 text-green-700' :
+                item.decodablePercent >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {item.decodablePercent}% decodable
+              </span>
+            )}
+          </div>
           <div className="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 h-32 flex items-center justify-center">
             <span className="text-gray-400 text-sm">Draw your picture here</span>
           </div>

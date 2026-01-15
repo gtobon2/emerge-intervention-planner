@@ -406,7 +406,11 @@ export default function GroupDetailPage() {
                   <div className="text-center py-8 text-text-muted">
                     <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm md:text-base">No sessions yet</p>
-                    <Button variant="secondary" className="mt-4 min-h-[44px]">
+                    <Button
+                      variant="secondary"
+                      className="mt-4 min-h-[44px]"
+                      onClick={() => setShowPlanModal(true)}
+                    >
                       Plan First Session
                     </Button>
                   </div>

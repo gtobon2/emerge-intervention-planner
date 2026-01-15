@@ -114,23 +114,27 @@ export default function WorksheetsPage() {
               if (section.type === 'sentence_choice') {
                 return {
                   ...section,
-                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; distractorWord?: string }, idx: number) => ({
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; distractorWord?: string; wordAnalysis?: Array<{word: string; status: string}>; decodablePercent?: number }, idx: number) => ({
                     id: idx + 1,
                     prompt: s.sentence.replace(s.targetWord, '_____'),
                     answer: s.targetWord,
                     options: s.distractorWord
                       ? (Math.random() > 0.5 ? [s.targetWord, s.distractorWord] : [s.distractorWord, s.targetWord])
                       : [s.targetWord, realWords[(idx + 3) % realWords.length]],
+                    wordAnalysis: s.wordAnalysis,
+                    decodablePercent: s.decodablePercent,
                   })),
                 };
               }
               if (section.type === 'draw_area') {
                 return {
                   ...section,
-                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string }, idx: number) => ({
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; wordAnalysis?: Array<{word: string; status: string}>; decodablePercent?: number }, idx: number) => ({
                     id: idx + 1,
                     prompt: s.sentence,
                     answer: s.sentence,
+                    wordAnalysis: s.wordAnalysis,
+                    decodablePercent: s.decodablePercent,
                   })),
                 };
               }
@@ -138,7 +142,14 @@ export default function WorksheetsPage() {
             });
 
             generated.content = updatedContent;
-            setAiStatus(data.source === 'ai' ? '✨ AI-enhanced sentences' : '');
+
+            // Show detailed status
+            if (data.source === 'ai') {
+              const avgDecodable = data.sentences.reduce((sum: number, s: {decodablePercent?: number}) => sum + (s.decodablePercent || 0), 0) / data.sentences.length;
+              setAiStatus(`✨ AI-generated (${Math.round(avgDecodable)}% decodable)`);
+            } else {
+              setAiStatus(`📝 Fallback: ${data.reason || 'AI unavailable'}`);
+            }
           }
         }
       } catch (error) {

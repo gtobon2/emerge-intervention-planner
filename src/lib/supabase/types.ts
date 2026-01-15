@@ -2,9 +2,11 @@
 // Generated from Supabase schema
 
 import type { WilsonLessonPlan, LessonComponentType } from '../curriculum/wilson-lesson-elements';
+import type { CaminoLessonPlan, CaminoLessonComponentType } from '../curriculum/camino/camino-lesson-elements';
 
 // Re-export for convenience
 export type { WilsonLessonPlan, LessonComponentType } from '../curriculum/wilson-lesson-elements';
+export type { CaminoLessonPlan, CaminoLessonComponentType } from '../curriculum/camino/camino-lesson-elements';
 
 // Multi-day Wilson lesson assignment
 export interface WilsonDayAssignment {
@@ -192,6 +194,12 @@ export interface Session {
   // Wilson lesson progress tracking (persists between sessions)
   wilson_lesson_progress?: WilsonLessonProgress | null;
 
+  // Camino-specific lesson plan
+  camino_lesson_plan?: CaminoLessonPlan | null;
+
+  // Camino lesson progress tracking (persists between sessions)
+  camino_lesson_progress?: CaminoLessonProgress | null;
+
   // Multi-day session series (for splitting lessons across days)
   series_id?: string | null;       // Links sessions in a multi-day series
   series_order?: number | null;    // 1, 2, 3 for day order in series
@@ -203,6 +211,15 @@ export interface Session {
 
 // Wilson lesson progress tracking type
 export interface WilsonLessonProgress {
+  [sectionComponent: string]: {
+    completed: boolean;
+    elementsCompleted: string[];
+    activitiesCompleted: number[];
+  };
+}
+
+// Camino lesson progress tracking type
+export interface CaminoLessonProgress {
   [sectionComponent: string]: {
     completed: boolean;
     elementsCompleted: string[];

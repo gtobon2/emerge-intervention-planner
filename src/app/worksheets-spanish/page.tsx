@@ -111,23 +111,27 @@ export default function SpanishWorksheetsPage() {
               if (section.type === 'sentence_choice') {
                 return {
                   ...section,
-                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; distractorWord?: string }, idx: number) => ({
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; distractorWord?: string; wordAnalysis?: Array<{word: string; status: string}>; decodablePercent?: number }, idx: number) => ({
                     id: idx + 1,
                     prompt: s.sentence.replace(s.targetWord, '_____'),
                     answer: s.targetWord,
                     options: s.distractorWord
                       ? (Math.random() > 0.5 ? [s.targetWord, s.distractorWord] : [s.distractorWord, s.targetWord])
                       : [s.targetWord, targetWords[(idx + 3) % targetWords.length]],
+                    wordAnalysis: s.wordAnalysis,
+                    decodablePercent: s.decodablePercent,
                   })),
                 };
               }
               if (section.type === 'draw_area') {
                 return {
                   ...section,
-                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string }, idx: number) => ({
+                  items: data.sentences.slice(0, section.items.length).map((s: { sentence: string; targetWord: string; wordAnalysis?: Array<{word: string; status: string}>; decodablePercent?: number }, idx: number) => ({
                     id: idx + 1,
                     prompt: s.sentence,
                     answer: s.sentence,
+                    wordAnalysis: s.wordAnalysis,
+                    decodablePercent: s.decodablePercent,
                   })),
                 };
               }
@@ -135,7 +139,14 @@ export default function SpanishWorksheetsPage() {
             });
 
             generated.content = updatedContent;
-            setAiStatus(data.source === 'ai' ? '✨ Oraciones mejoradas con IA' : '');
+
+            // Show detailed status
+            if (data.source === 'ai') {
+              const avgDecodable = data.sentences.reduce((sum: number, s: {decodablePercent?: number}) => sum + (s.decodablePercent || 0), 0) / data.sentences.length;
+              setAiStatus(`✨ IA generada (${Math.round(avgDecodable)}% decodificable)`);
+            } else {
+              setAiStatus(`📝 Predeterminado: ${data.reason || 'IA no disponible'}`);
+            }
           }
         }
       } catch (error) {
@@ -466,6 +477,51 @@ export default function SpanishWorksheetsPage() {
 }
 
 /**
+ * Helper: Render text with highlighted words based on word analysis
+ */
+interface WordAnalysis {
+  word: string;
+  status: 'decodable' | 'hf' | 'advanced';
+}
+
+function HighlightedText({ text, wordAnalysis }: { text: string; wordAnalysis?: WordAnalysis[] }) {
+  if (!wordAnalysis || wordAnalysis.length === 0) {
+    return <>{text}</>;
+  }
+
+  const analysisMap = new Map<string, 'decodable' | 'hf' | 'advanced'>();
+  wordAnalysis.forEach(wa => {
+    analysisMap.set(wa.word.toLowerCase(), wa.status);
+  });
+
+  const tokens = text.split(/(\s+|[.,!?'"_\-¿¡]+)/);
+
+  return (
+    <>
+      {tokens.map((token, idx) => {
+        const cleanWord = token.toLowerCase().replace(/[.,!?'"_\-¿¡]/g, '');
+        const status = analysisMap.get(cleanWord);
+
+        if (status === 'hf') {
+          return (
+            <span key={idx} className="font-bold text-amber-700" title="Palabra de alta frecuencia">
+              {token}
+            </span>
+          );
+        } else if (status === 'advanced') {
+          return (
+            <span key={idx} className="italic underline text-red-600" title="Aún no decodificable">
+              {token}
+            </span>
+          );
+        }
+        return <span key={idx}>{token}</span>;
+      })}
+    </>
+  );
+}
+
+/**
  * Spanish Worksheet Preview Component
  */
 function SpanishWorksheetPreview({ worksheet }: { worksheet: GeneratedSpanishWorksheet }) {
@@ -497,6 +553,18 @@ function SpanishWorksheetPreview({ worksheet }: { worksheet: GeneratedSpanishWor
           </p>
         </div>
       </div>
+
+      {/* Word Analysis Legend (for AI-generated sentences) */}
+      {(worksheet.config.template === 'sentence_completion_spanish' || worksheet.config.template === 'draw_and_write_spanish') && (
+        <div className="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-2">Clave de resaltado de palabras:</p>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <span className="text-gray-700 dark:text-gray-300">Normal = Decodificable</span>
+            <span className="font-bold text-amber-700">Negritas = Alta frecuencia</span>
+            <span className="italic underline text-red-600">Itálica = Aún no decodificable</span>
+          </div>
+        </div>
+      )}
 
       {/* Content Sections */}
       <div className="space-y-6">
@@ -608,9 +676,20 @@ function SpanishWorksheetPreview({ worksheet }: { worksheet: GeneratedSpanishWor
               <div className="space-y-4">
                 {section.items.map((item, idx) => (
                   <div key={idx} className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                    <p className="text-text-primary mb-3">
-                      {item.id}. {item.prompt}
-                    </p>
+                    <div className="flex items-start justify-between mb-3">
+                      <p className="text-text-primary">
+                        {item.id}. <HighlightedText text={item.prompt} wordAnalysis={item.wordAnalysis as WordAnalysis[] | undefined} />
+                      </p>
+                      {item.decodablePercent !== undefined && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 ${
+                          item.decodablePercent >= 80 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          item.decodablePercent >= 60 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                          {item.decodablePercent}% decodificable
+                        </span>
+                      )}
+                    </div>
                     <div className="flex gap-4 ml-4">
                       {item.options?.map((option, optIdx) => (
                         <div
@@ -631,9 +710,20 @@ function SpanishWorksheetPreview({ worksheet }: { worksheet: GeneratedSpanishWor
               <div className="space-y-6">
                 {section.items.map((item, idx) => (
                   <div key={idx} className="border border-border-default rounded-lg p-4">
-                    <p className="text-text-primary mb-3 font-medium">
-                      {item.id}. Lee: &quot;{item.prompt}&quot;
-                    </p>
+                    <div className="flex items-start justify-between mb-3">
+                      <p className="text-text-primary font-medium">
+                        {item.id}. Lee: &quot;<HighlightedText text={item.prompt} wordAnalysis={item.wordAnalysis as WordAnalysis[] | undefined} />&quot;
+                      </p>
+                      {item.decodablePercent !== undefined && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 ${
+                          item.decodablePercent >= 80 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          item.decodablePercent >= 60 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                          {item.decodablePercent}% decodificable
+                        </span>
+                      )}
+                    </div>
                     <div className="border-2 border-dashed border-emerald-300 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 h-32 flex items-center justify-center">
                       <span className="text-text-muted text-sm">Dibuja aquí / Draw here</span>
                     </div>

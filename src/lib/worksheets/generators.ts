@@ -23,6 +23,11 @@ import {
   segmentWordToSounds,
 } from './word-utils';
 import { getWilsonSubstep, getWilsonStep, type WilsonSubstep } from '@/lib/curriculum/wilson';
+import {
+  getMazeSentencesForSubstep,
+  getIllustratableSentences,
+  type MazeSentence,
+} from './wilson-maze-sentences';
 
 /**
  * Generate a unique ID
@@ -440,70 +445,101 @@ function generateCombinedWorksheet(
 
 /**
  * Generate Sentence Completion Worksheet (Finish the Sentence)
+ * Uses curated MAZE sentences from Wilson_Database.xlsx
  */
 function generateSentenceCompletionWorksheet(
   config: WorksheetConfig,
   substepData: WilsonSubstep
 ): { content: { sections: WorksheetSection[] }; title: string; instructions: string } {
-  const { realWords } = getWordsForSubstep(config.substep, config.wordCount, false);
-  const shuffledWords = shuffleArray(realWords);
-
-  // Sentence frames with blanks for word choices
-  const sentenceFrames = [
-    { frame: 'The ___ is on the bed.', context: 'object' },
-    { frame: 'I can ___ very fast.', context: 'action' },
-    { frame: 'She has a ___ pet.', context: 'adjective' },
-    { frame: 'We went to the ___.', context: 'place' },
-    { frame: 'The ___ is red.', context: 'object' },
-    { frame: 'He can ___ the ball.', context: 'action' },
-    { frame: 'Look at the big ___.', context: 'object' },
-    { frame: 'I like to ___ at home.', context: 'action' },
-  ];
+  // Get curated MAZE sentences for this substep
+  const mazeSentences = getMazeSentencesForSubstep(config.substep);
+  const shuffledMaze = shuffleArray([...mazeSentences]);
 
   const sections: WorksheetSection[] = [];
 
-  // Create sentence completion items with two word choices
-  const completionItems: WorksheetItem[] = [];
-  for (let i = 0; i < Math.min(6, shuffledWords.length - 1); i++) {
-    const correctWord = shuffledWords[i];
-    // Get a distractor word from the same substep (different word)
-    const distractorIndex = (i + Math.floor(shuffledWords.length / 2)) % shuffledWords.length;
-    const distractorWord = shuffledWords[distractorIndex] !== correctWord
-      ? shuffledWords[distractorIndex]
-      : shuffledWords[(distractorIndex + 1) % shuffledWords.length];
+  // If we have MAZE sentences, use them
+  if (shuffledMaze.length > 0) {
+    const completionItems: WorksheetItem[] = shuffledMaze
+      .slice(0, Math.min(8, shuffledMaze.length))
+      .map((maze, idx) => ({
+        id: idx + 1,
+        prompt: maze.sentence,
+        answer: maze.correct,
+        options: shuffleArray([maze.choiceA, maze.choiceB]),
+      }));
 
-    const frame = sentenceFrames[i % sentenceFrames.length];
-    const sentence = frame.frame.replace('___', '_____');
+    sections.push({
+      title: 'Finish the Sentence',
+      type: 'sentence_choice',
+      items: completionItems,
+    });
 
-    // Randomize option order
-    const options = Math.random() > 0.5
-      ? [correctWord, distractorWord]
-      : [distractorWord, correctWord];
+    // Create word bank from all correct answers and distractors
+    const wordBank = new Set<string>();
+    shuffledMaze.slice(0, 8).forEach(maze => {
+      wordBank.add(maze.correct);
+      wordBank.add(maze.choiceA);
+      wordBank.add(maze.choiceB);
+    });
 
-    completionItems.push({
-      id: i + 1,
-      prompt: sentence,
-      answer: correctWord,
-      options: options,
+    sections.push({
+      title: 'Word Bank',
+      type: 'word_list',
+      items: shuffleArray([...wordBank]).slice(0, 10).map((word, idx) => ({
+        id: idx + 1,
+        prompt: word,
+        answer: word,
+      })),
+    });
+  } else {
+    // Fallback to generated sentences if no MAZE sentences available
+    const { realWords } = getWordsForSubstep(config.substep, config.wordCount, false);
+    const shuffledWords = shuffleArray(realWords);
+
+    const sentenceFrames = [
+      'The ___ is on the bed.',
+      'I can ___ very fast.',
+      'She has a ___ pet.',
+      'We went to the ___.',
+      'The ___ is red.',
+      'He can ___ the ball.',
+    ];
+
+    const completionItems: WorksheetItem[] = [];
+    for (let i = 0; i < Math.min(6, shuffledWords.length - 1); i++) {
+      const correctWord = shuffledWords[i];
+      const distractorIndex = (i + Math.floor(shuffledWords.length / 2)) % shuffledWords.length;
+      const distractorWord = shuffledWords[distractorIndex] !== correctWord
+        ? shuffledWords[distractorIndex]
+        : shuffledWords[(distractorIndex + 1) % shuffledWords.length];
+
+      const sentence = sentenceFrames[i % sentenceFrames.length];
+      const options = shuffleArray([correctWord, distractorWord]);
+
+      completionItems.push({
+        id: i + 1,
+        prompt: sentence,
+        answer: correctWord,
+        options: options,
+      });
+    }
+
+    sections.push({
+      title: 'Finish the Sentence',
+      type: 'sentence_choice',
+      items: completionItems,
+    });
+
+    sections.push({
+      title: 'Word Bank',
+      type: 'word_list',
+      items: shuffledWords.slice(0, 8).map((word, idx) => ({
+        id: idx + 1,
+        prompt: word,
+        answer: word,
+      })),
     });
   }
-
-  sections.push({
-    title: 'Finish the Sentence',
-    type: 'sentence_choice',
-    items: completionItems,
-  });
-
-  // Add a word bank section for reference
-  sections.push({
-    title: 'Word Bank',
-    type: 'word_list',
-    items: shuffledWords.slice(0, 8).map((word, idx) => ({
-      id: idx + 1,
-      prompt: word,
-      answer: word,
-    })),
-  });
 
   return {
     content: { sections },
@@ -514,56 +550,91 @@ function generateSentenceCompletionWorksheet(
 
 /**
  * Generate Draw and Write Worksheet
+ * Uses curated illustratable MAZE sentences from Wilson_Database.xlsx
  */
 function generateDrawAndWriteWorksheet(
   config: WorksheetConfig,
   substepData: WilsonSubstep
 ): { content: { sections: WorksheetSection[] }; title: string; instructions: string } {
-  const { realWords } = getWordsForSubstep(config.substep, config.wordCount, false);
-  const shuffledWords = shuffleArray(realWords);
-
-  // Simple decodable sentence frames
-  const simpleFrames = [
-    'The ___ is big.',
-    'I see a ___.',
-    'The ___ can run.',
-    'Look at the ___.',
-    'A ___ is here.',
-    'The ___ is fun.',
-  ];
+  // Get only illustratable MAZE sentences for this substep
+  const illustratableSentences = getIllustratableSentences(config.substep);
+  const shuffledSentences = shuffleArray([...illustratableSentences]);
 
   const sections: WorksheetSection[] = [];
 
-  // Create draw and write items
-  const drawItems: WorksheetItem[] = [];
-  for (let i = 0; i < Math.min(4, shuffledWords.length); i++) {
-    const word = shuffledWords[i];
-    const frame = simpleFrames[i % simpleFrames.length];
-    const sentence = frame.replace('___', word);
+  // If we have illustratable MAZE sentences, use them
+  if (shuffledSentences.length > 0) {
+    // Create complete sentences by filling in the correct answer
+    const drawItems: WorksheetItem[] = shuffledSentences
+      .slice(0, Math.min(4, shuffledSentences.length))
+      .map((maze, idx) => {
+        const completeSentence = maze.sentence.replace('___.', `${maze.correct}.`).replace('___', maze.correct);
+        return {
+          id: idx + 1,
+          prompt: completeSentence,
+          answer: completeSentence,
+        };
+      });
 
-    drawItems.push({
-      id: i + 1,
-      prompt: sentence,
-      answer: sentence,
+    sections.push({
+      title: 'Read, Draw, and Write',
+      type: 'draw_area',
+      items: drawItems,
+    });
+
+    // Copy the sentence section
+    sections.push({
+      title: 'Copy the Sentence',
+      type: 'sentences',
+      items: drawItems.slice(0, 2).map((item, idx) => ({
+        id: idx + 1,
+        prompt: `${item.prompt}\n_________________________________________________`,
+        answer: item.answer,
+      })),
+    });
+  } else {
+    // Fallback to generated sentences if no illustratable sentences available
+    const { realWords } = getWordsForSubstep(config.substep, config.wordCount, false);
+    const shuffledWords = shuffleArray(realWords);
+
+    const simpleFrames = [
+      'The ___ is big.',
+      'I see a ___.',
+      'The ___ can run.',
+      'Look at the ___.',
+      'A ___ is here.',
+      'The ___ is fun.',
+    ];
+
+    const drawItems: WorksheetItem[] = [];
+    for (let i = 0; i < Math.min(4, shuffledWords.length); i++) {
+      const word = shuffledWords[i];
+      const frame = simpleFrames[i % simpleFrames.length];
+      const sentence = frame.replace('___', word);
+
+      drawItems.push({
+        id: i + 1,
+        prompt: sentence,
+        answer: sentence,
+      });
+    }
+
+    sections.push({
+      title: 'Read, Draw, and Write',
+      type: 'draw_area',
+      items: drawItems,
+    });
+
+    sections.push({
+      title: 'Copy the Sentence',
+      type: 'sentences',
+      items: drawItems.slice(0, 2).map((item, idx) => ({
+        id: idx + 1,
+        prompt: `${item.prompt}\n_________________________________________________`,
+        answer: item.answer,
+      })),
     });
   }
-
-  sections.push({
-    title: 'Read, Draw, and Write',
-    type: 'draw_area',
-    items: drawItems,
-  });
-
-  // Copy the sentence section
-  sections.push({
-    title: 'Copy the Sentence',
-    type: 'sentences',
-    items: drawItems.slice(0, 2).map((item, idx) => ({
-      id: idx + 1,
-      prompt: `${item.prompt}\n_________________________________________________`,
-      answer: item.answer,
-    })),
-  });
 
   return {
     content: { sections },

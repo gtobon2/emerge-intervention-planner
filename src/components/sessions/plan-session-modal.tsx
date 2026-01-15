@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Calendar, Target, AlertTriangle, Plus, Trash2, BookOpen } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, Calendar, Target, AlertTriangle, Plus, Trash2, BookOpen, CalendarDays, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { Group, Curriculum, AnticipatedError, CurriculumPosition } from '@/lib/supabase/types';
-import { getCurriculumLabel, isWilsonPosition } from '@/lib/supabase/types';
+import { getCurriculumLabel, isWilsonPosition, isCaminoPosition, isDespegandoPosition } from '@/lib/supabase/types';
 import { WilsonLessonBuilder, MultiDayWilsonLessonPlan } from '@/components/wilson-planner';
+import { CaminoLessonBuilder } from '@/components/camino-planner';
 import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
+import type { CaminoLessonPlan } from '@/lib/curriculum/camino/camino-lesson-elements';
 
 interface PlanSessionModalProps {
   group: Group;
@@ -26,6 +28,7 @@ export interface SessionPlanData {
   anticipated_errors: AnticipatedError[];
   notes?: string;
   wilson_lesson_plan?: WilsonLessonPlan;
+  camino_lesson_plan?: CaminoLessonPlan;
   // Multi-day series fields
   series_id?: string;
   series_order?: number;
@@ -54,11 +57,45 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   const [newErrorCorrection, setNewErrorCorrection] = useState('');
   const [notes, setNotes] = useState('');
   const [showLessonBuilder, setShowLessonBuilder] = useState(false);
+  const [showCaminoLessonBuilder, setShowCaminoLessonBuilder] = useState(false);
   const [wilsonLessonPlan, setWilsonLessonPlan] = useState<WilsonLessonPlan | null>(null);
+  const [caminoLessonPlan, setCaminoLessonPlan] = useState<CaminoLessonPlan | null>(null);
   const [multiDayPlan, setMultiDayPlan] = useState<MultiDayWilsonLessonPlan | null>(null);
 
+  // Multi-day planning mode
+  const [isMultiDayMode, setIsMultiDayMode] = useState(false);
+  const [numberOfDays, setNumberOfDays] = useState(3);
+  const [skipWeekends, setSkipWeekends] = useState(true);
+  const [repeatActivities, setRepeatActivities] = useState(true);
+
   const isWilsonCurriculum = group.curriculum === 'wilson';
-  const isMultiDay = multiDayPlan !== null && multiDayPlan.days > 1;
+  const isCaminoCurriculum = group.curriculum === 'camino' || group.curriculum === 'despegando';
+  const isMultiDay = isMultiDayMode || (multiDayPlan !== null && multiDayPlan.days > 1);
+
+  // Calculate session dates for multi-day planning
+  const scheduledDates = useMemo(() => {
+    if (!isMultiDayMode) return [date];
+
+    const dates: string[] = [];
+    let currentDate = new Date(date);
+    let daysAdded = 0;
+
+    while (daysAdded < numberOfDays) {
+      const dayOfWeek = currentDate.getDay();
+
+      // Skip weekends if enabled
+      if (skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        continue;
+      }
+
+      dates.push(currentDate.toISOString().split('T')[0]);
+      daysAdded++;
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return dates;
+  }, [date, numberOfDays, skipWeekends, isMultiDayMode]);
 
   if (!isOpen) return null;
 
@@ -115,14 +152,14 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   };
 
   const handleSave = () => {
-    if (isMultiDay && multiDayPlan) {
-      // Multi-day: create multiple linked sessions
+    // Multi-day Wilson lesson plan (from Wilson Lesson Builder)
+    if (multiDayPlan && multiDayPlan.days > 1) {
       const seriesId = crypto.randomUUID();
       const totalDays = multiDayPlan.days;
 
       multiDayPlan.plans.forEach((plan, index) => {
         const sessionData: SessionPlanData = {
-          date: addDays(date, index), // Consecutive days
+          date: addDays(date, index),
           time,
           curriculum_position: group.current_position,
           planned_otr_target: otrTarget,
@@ -137,8 +174,33 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
         };
         onSave(sessionData);
       });
-    } else {
-      // Single day: create one session
+    }
+    // Generic multi-day mode (any curriculum)
+    else if (isMultiDayMode && numberOfDays > 1) {
+      const seriesId = crypto.randomUUID();
+      const totalDays = scheduledDates.length;
+
+      scheduledDates.forEach((sessionDate, index) => {
+        const sessionData: SessionPlanData = {
+          date: sessionDate,
+          time,
+          curriculum_position: group.current_position,
+          planned_otr_target: otrTarget,
+          planned_practice_items: repeatActivities ? practiceItems.filter((p) => p.item.trim()) : [],
+          planned_response_formats: responseFormats,
+          anticipated_errors: repeatActivities ? anticipatedErrors : [],
+          notes: notes ? `${notes} (Day ${index + 1}/${totalDays})` : `Day ${index + 1}/${totalDays}`,
+          wilson_lesson_plan: index === 0 ? (wilsonLessonPlan || undefined) : undefined,
+          camino_lesson_plan: index === 0 ? (caminoLessonPlan || undefined) : undefined,
+          series_id: seriesId,
+          series_order: index + 1,
+          series_total: totalDays,
+        };
+        onSave(sessionData);
+      });
+    }
+    // Single day: create one session
+    else {
       const sessionData: SessionPlanData = {
         date,
         time,
@@ -149,6 +211,7 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
         anticipated_errors: anticipatedErrors,
         notes: notes || undefined,
         wilson_lesson_plan: wilsonLessonPlan || undefined,
+        camino_lesson_plan: caminoLessonPlan || undefined,
       };
       onSave(sessionData);
     }
@@ -167,6 +230,11 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
       setMultiDayPlan(null);
     }
     setShowLessonBuilder(false);
+  };
+
+  const handleCaminoLessonPlanSave = (plan: CaminoLessonPlan) => {
+    setCaminoLessonPlan(plan);
+    setShowCaminoLessonBuilder(false);
   };
 
   return (
@@ -195,11 +263,44 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {/* Planning Mode Toggle */}
+          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-gray-600" />
+              <span className="text-sm font-medium text-gray-700">Planning Mode:</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMultiDayMode(false)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  !isMultiDayMode
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                }`}
+              >
+                Single Session
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsMultiDayMode(true)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                  isMultiDayMode
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                }`}
+              >
+                <Repeat className="w-4 h-4" />
+                Multi-day Planning
+              </button>
+            </div>
+          </div>
+
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date
+                {isMultiDayMode ? 'Start Date' : 'Date'}
               </label>
               <input
                 type="date"
@@ -220,6 +321,70 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
               />
             </div>
           </div>
+
+          {/* Multi-day Options */}
+          {isMultiDayMode && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-4">
+              <div className="flex items-center gap-2 text-blue-800">
+                <CalendarDays className="w-5 h-5" />
+                <span className="font-medium">Multi-day Session Planning</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-blue-800 mb-1">
+                    Number of Sessions
+                  </label>
+                  <select
+                    value={numberOfDays}
+                    onChange={(e) => setNumberOfDays(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    {[2, 3, 4, 5, 6, 7, 10, 14].map((n) => (
+                      <option key={n} value={n}>
+                        {n} sessions
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col justify-end gap-2">
+                  <label className="flex items-center gap-2 text-sm text-blue-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={skipWeekends}
+                      onChange={(e) => setSkipWeekends(e.target.checked)}
+                      className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Skip weekends
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-blue-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={repeatActivities}
+                      onChange={(e) => setRepeatActivities(e.target.checked)}
+                      className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Repeat activities for all days
+                  </label>
+                </div>
+              </div>
+
+              {/* Preview scheduled dates */}
+              <div className="pt-3 border-t border-blue-200">
+                <p className="text-sm font-medium text-blue-800 mb-2">Scheduled Dates:</p>
+                <div className="flex flex-wrap gap-2">
+                  {scheduledDates.map((d, idx) => (
+                    <span
+                      key={d}
+                      className="px-3 py-1 bg-white rounded-full text-sm text-blue-700 border border-blue-200"
+                    >
+                      Day {idx + 1}: {new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Wilson Lesson Builder - Only for Wilson curriculum */}
           {isWilsonCurriculum && (
@@ -275,6 +440,41 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                   <div className="text-sm text-purple-800">
                     <strong>{wilsonLessonPlan.sections.filter(s => s.elements.length > 0).length}</strong> sections with elements,{' '}
                     <strong>{wilsonLessonPlan.totalDuration}</strong> min total
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Camino Lesson Builder - For Camino and Despegando curriculum */}
+          {isCaminoCurriculum && (
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-orange-900 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5" />
+                    Camino Lesson Builder
+                  </h3>
+                  <p className="text-sm text-orange-700 mt-1">
+                    {caminoLessonPlan
+                      ? `Plan de lección creado - ${caminoLessonPlan.lessonName}`
+                      : 'Construye un plan de lección detallado con elementos arrastrables'}
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowCaminoLessonBuilder(true)}
+                  className="bg-orange-500 hover:bg-orange-600"
+                >
+                  {caminoLessonPlan ? 'Editar Plan' : 'Crear Lección'}
+                </Button>
+              </div>
+              {caminoLessonPlan && (
+                <div className="mt-3 pt-3 border-t border-orange-200">
+                  <div className="text-sm text-orange-800">
+                    <strong>{caminoLessonPlan.sections.filter(s => s.elements.length > 0).length}</strong> secciones con elementos,{' '}
+                    <strong>{caminoLessonPlan.totalDuration}</strong> min total
                   </div>
                 </div>
               )}
@@ -452,7 +652,11 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
           </Button>
           <Button variant="primary" onClick={handleSave}>
             <Calendar className="w-4 h-4 mr-1" />
-            {isMultiDay ? `Schedule ${multiDayPlan?.days} Sessions` : 'Schedule Session'}
+            {isMultiDayMode
+              ? `Schedule ${scheduledDates.length} Sessions`
+              : isMultiDay
+              ? `Schedule ${multiDayPlan?.days} Sessions`
+              : 'Schedule Session'}
           </Button>
         </div>
       </div>
@@ -469,6 +673,24 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
               initialSubstep={isWilsonPosition(group.current_position) ? group.current_position.substep : '1.1'}
               onSave={handleLessonPlanSave}
               onClose={() => setShowLessonBuilder(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Camino Lesson Builder Modal */}
+      {showCaminoLessonBuilder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowCaminoLessonBuilder(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden">
+            <CaminoLessonBuilder
+              initialUnit={isCaminoPosition(group.current_position) ? 1 : isDespegandoPosition(group.current_position) ? group.current_position.phase : 1}
+              initialLesson={isCaminoPosition(group.current_position) ? group.current_position.lesson : isDespegandoPosition(group.current_position) ? group.current_position.lesson % 10 || 1 : 1}
+              onSave={handleCaminoLessonPlanSave}
+              onClose={() => setShowCaminoLessonBuilder(false)}
             />
           </div>
         </div>

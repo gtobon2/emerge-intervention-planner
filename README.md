@@ -121,6 +121,14 @@ npm run dev
 - Users see real names; AI only sees anonymized identifiers
 - Privacy legend shows the mapping for reference
 
+### Wilson Lesson Tracker (NEW)
+- **Live lesson reference** during sessions with full lesson plan display
+- **Cross-off as you go** - Click elements and activities to mark complete
+- **Progress persistence** - Pick up exactly where you left off next session
+- **Print functionality** - Clean printable lesson plan
+- **Continue button** - Jump to next incomplete section
+- See `docs/WILSON_LESSON_TRACKER.md` for full documentation
+
 ### Curricula Supported
 - Wilson Reading System (Steps 1-6)
 - Delta Math (Grades 3-5 standards)

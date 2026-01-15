@@ -36,6 +36,8 @@ import type {
   MasteryLevel,
   ObservedError,
   AnticipatedError,
+  WilsonLessonProgress,
+  CaminoLessonProgress,
 } from '@/lib/supabase/types';
 import { formatCurriculumPosition, getCurriculumLabel } from '@/lib/supabase/types';
 import { AIErrorSuggestions, AISessionSummary } from '@/components/ai';
@@ -49,6 +51,8 @@ import {
   SessionNotesPanel,
   WILSON_LESSON_COMPONENTS,
 } from '@/components/sessions';
+import { WilsonLessonTracker } from '@/components/sessions/tracking/WilsonLessonTracker';
+import { CaminoLessonTracker } from '@/components/sessions/tracking/CaminoLessonTracker';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, useAIContextStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
@@ -131,6 +135,12 @@ export default function SessionPage({
   const [studentOTRs, setStudentOTRs] = useState<Record<string, number>>({}); // studentId -> count
   const [errorStudents, setErrorStudents] = useState<Record<string, string[]>>({}); // errorId -> studentIds[]
 
+  // Wilson lesson progress tracking
+  const [wilsonLessonProgress, setWilsonLessonProgress] = useState<WilsonLessonProgress>({});
+
+  // Camino lesson progress tracking
+  const [caminoLessonProgress, setCaminoLessonProgress] = useState<CaminoLessonProgress>({});
+
   // UI state
   const [showErrorPanel, setShowErrorPanel] = useState(true);
   const [showNewErrorForm, setShowNewErrorForm] = useState(false);
@@ -187,6 +197,14 @@ export default function SessionPage({
     if (selectedSession) {
       setSession(selectedSession);
       setAnticipatedErrors(selectedSession.anticipated_errors || []);
+      // Load Wilson lesson progress if available
+      if (selectedSession.wilson_lesson_progress) {
+        setWilsonLessonProgress(selectedSession.wilson_lesson_progress as WilsonLessonProgress);
+      }
+      // Load Camino lesson progress if available
+      if (selectedSession.camino_lesson_progress) {
+        setCaminoLessonProgress(selectedSession.camino_lesson_progress as CaminoLessonProgress);
+      }
     }
   }, [selectedSession]);
 
@@ -262,6 +280,44 @@ export default function SessionPage({
 
   const handleStartSession = () => {
     setIsSessionActive(true);
+  };
+
+  /**
+   * Handle Wilson lesson progress changes
+   * Auto-saves to database so progress persists between sessions
+   */
+  const handleWilsonProgressChange = async (newProgress: WilsonLessonProgress) => {
+    setWilsonLessonProgress(newProgress);
+
+    // Auto-save to database
+    if (session) {
+      try {
+        await updateSession(session.id.toString(), {
+          wilson_lesson_progress: newProgress,
+        });
+      } catch (error) {
+        console.error('Error saving Wilson lesson progress:', error);
+      }
+    }
+  };
+
+  /**
+   * Handle Camino lesson progress changes
+   * Auto-saves to database so progress persists between sessions
+   */
+  const handleCaminoProgressChange = async (newProgress: CaminoLessonProgress) => {
+    setCaminoLessonProgress(newProgress);
+
+    // Auto-save to database
+    if (session) {
+      try {
+        await updateSession(session.id.toString(), {
+          camino_lesson_progress: newProgress,
+        });
+      } catch (error) {
+        console.error('Error saving Camino lesson progress:', error);
+      }
+    }
   };
 
   /**
@@ -804,12 +860,34 @@ export default function SessionPage({
                 </CardContent>
               </Card>
 
-              {/* Lesson Components Checklist */}
-              <LessonComponentsPanel
-                components={WILSON_LESSON_COMPONENTS}
-                completedComponents={componentsCompleted}
-                onToggle={handleComponentToggle}
-              />
+              {/* Wilson Lesson Tracker - Shows full lesson plan with cross-off */}
+              {session.wilson_lesson_plan && (
+                <WilsonLessonTracker
+                  sessionId={toNumericId(session.id) || 0}
+                  lessonPlan={session.wilson_lesson_plan}
+                  progress={wilsonLessonProgress}
+                  onProgressChange={handleWilsonProgressChange}
+                />
+              )}
+
+              {/* Camino Lesson Tracker - Shows full lesson plan with cross-off */}
+              {session.camino_lesson_plan && (
+                <CaminoLessonTracker
+                  sessionId={toNumericId(session.id) || 0}
+                  lessonPlan={session.camino_lesson_plan}
+                  progress={caminoLessonProgress}
+                  onProgressChange={handleCaminoProgressChange}
+                />
+              )}
+
+              {/* Fallback: Basic Lesson Components Checklist (when no Wilson or Camino plan) */}
+              {!session.wilson_lesson_plan && !session.camino_lesson_plan && (
+                <LessonComponentsPanel
+                  components={WILSON_LESSON_COMPONENTS}
+                  completedComponents={componentsCompleted}
+                  onToggle={handleComponentToggle}
+                />
+              )}
 
               {/* Notes */}
               <SessionNotesPanel
