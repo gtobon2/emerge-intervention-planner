@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { X, Calendar, Target, AlertTriangle, Plus, Trash2, BookOpen, CalendarDays, Repeat } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { X, Calendar, Target, AlertTriangle, Plus, Trash2, BookOpen, CalendarDays, Repeat, CheckCircle2, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { Group, Curriculum, AnticipatedError, CurriculumPosition } from '@/lib/supabase/types';
-import { getCurriculumLabel, isWilsonPosition, isCaminoPosition, isDespegandoPosition } from '@/lib/supabase/types';
+import { getCurriculumLabel, isWilsonPosition, isCaminoPosition, isDespegandoPosition, formatCurriculumPosition } from '@/lib/supabase/types';
 import { WilsonLessonBuilder, MultiDayWilsonLessonPlan } from '@/components/wilson-planner';
 import { CaminoLessonBuilder } from '@/components/camino-planner';
 import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
 import type { CaminoLessonPlan } from '@/lib/curriculum/camino/camino-lesson-elements';
+import { getErrorsForPosition, type ErrorBankSeedEntry } from '@/lib/error-banks';
 
 interface PlanSessionModalProps {
   group: Group;
@@ -68,7 +69,21 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   const [skipWeekends, setSkipWeekends] = useState(true);
   const [repeatActivities, setRepeatActivities] = useState(true);
 
+  // Error bank suggestions
+  const [suggestedErrors, setSuggestedErrors] = useState<ErrorBankSeedEntry[]>([]);
+  const [selectedSuggestedErrors, setSelectedSuggestedErrors] = useState<Set<number>>(new Set());
+
   const isWilsonCurriculum = group.curriculum === 'wilson';
+
+  // Fetch suggested errors from error bank based on current position
+  useEffect(() => {
+    if (isOpen && group.current_position) {
+      const errors = getErrorsForPosition(group.curriculum, group.current_position);
+      setSuggestedErrors(errors);
+      // Auto-select all errors by default
+      setSelectedSuggestedErrors(new Set(errors.map((_, idx) => idx)));
+    }
+  }, [isOpen, group.curriculum, group.current_position]);
   const isCaminoCurriculum = group.curriculum === 'camino' || group.curriculum === 'despegando';
   const isMultiDay = isMultiDayMode || (multiDayPlan !== null && multiDayPlan.days > 1);
 
@@ -142,6 +157,35 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
 
   const handleRemoveError = (id: string) => {
     setAnticipatedErrors((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  // Toggle suggested error selection
+  const toggleSuggestedError = (index: number) => {
+    setSelectedSuggestedErrors((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  // Add all selected suggested errors to anticipated errors
+  const addSelectedSuggestionsToAnticipated = () => {
+    const errorsToAdd = suggestedErrors
+      .filter((_, idx) => selectedSuggestedErrors.has(idx))
+      .filter((error) => !anticipatedErrors.some((ae) => ae.error_pattern === error.error_pattern))
+      .map((error) => ({
+        id: `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        error_pattern: error.error_pattern,
+        correction_protocol: error.correction_protocol,
+      }));
+
+    if (errorsToAdd.length > 0) {
+      setAnticipatedErrors((prev) => [...prev, ...errorsToAdd]);
+    }
   };
 
   // Helper to add days to a date string
@@ -574,11 +618,97 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
             </div>
           </div>
 
+          {/* Suggested Errors from Error Bank */}
+          {suggestedErrors.length > 0 && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-blue-600" />
+                  <span className="font-medium text-blue-900">
+                    Suggested Errors for {formatCurriculumPosition(group.curriculum, group.current_position)}
+                  </span>
+                </div>
+                <span className="text-xs text-blue-600">
+                  {selectedSuggestedErrors.size} of {suggestedErrors.length} selected
+                </span>
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {suggestedErrors.map((error, idx) => {
+                  const isSelected = selectedSuggestedErrors.has(idx);
+                  const isAlreadyAdded = anticipatedErrors.some(ae => ae.error_pattern === error.error_pattern);
+                  return (
+                    <label
+                      key={idx}
+                      className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                        isAlreadyAdded
+                          ? 'bg-green-100 border border-green-200'
+                          : isSelected
+                          ? 'bg-blue-100 border border-blue-300'
+                          : 'bg-white border border-blue-100 hover:bg-blue-50'
+                      }`}
+                    >
+                      {isAlreadyAdded ? (
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-600 flex-shrink-0" />
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSuggestedError(idx)}
+                          className="mt-0.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${isAlreadyAdded ? 'text-green-800' : 'text-blue-900'}`}>
+                          {error.error_pattern}
+                        </p>
+                        <p className={`text-xs ${isAlreadyAdded ? 'text-green-600' : 'text-blue-600'} truncate`}>
+                          {error.correction_protocol}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-3 pt-3 border-t border-blue-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSuggestedErrors(new Set(suggestedErrors.map((_, i) => i)))}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-blue-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSuggestedErrors(new Set())}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Select None
+                  </button>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={addSelectedSuggestionsToAnticipated}
+                  disabled={selectedSuggestedErrors.size === 0}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Add Selected ({selectedSuggestedErrors.size})
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Anticipated Errors */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <AlertTriangle className="w-4 h-4 inline mr-1 text-amber-500" />
               Anticipated Errors
+              {anticipatedErrors.length > 0 && (
+                <span className="ml-2 text-xs text-gray-500">({anticipatedErrors.length} errors)</span>
+              )}
             </label>
 
             {anticipatedErrors.length > 0 && (

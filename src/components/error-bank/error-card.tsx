@@ -1,15 +1,78 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Copy, Edit2, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Edit2, Check, MapPin } from 'lucide-react';
 import { Card, CardContent, Button, Badge, CurriculumBadge } from '@/components/ui';
 import type { ErrorBankSeedEntry } from '@/lib/error-banks';
-import type { Curriculum } from '@/lib/supabase/types';
+import type { Curriculum, CurriculumPosition } from '@/lib/supabase/types';
 
 interface ErrorCardProps {
   error: ErrorBankSeedEntry;
   isCustom?: boolean;
   onEdit?: () => void;
+}
+
+/**
+ * Format position for display based on curriculum type
+ */
+function formatPosition(curriculum: Curriculum, position: CurriculumPosition | null): string | null {
+  if (!position) return null;
+
+  switch (curriculum) {
+    case 'wilson': {
+      const pos = position as { step?: number; substep?: string; stepRange?: [number, number] };
+      if (pos.stepRange) {
+        return `Steps ${pos.stepRange[0]}-${pos.stepRange[1]}`;
+      }
+      if (pos.step !== undefined && pos.substep !== undefined) {
+        return `Step ${pos.substep}`;
+      }
+      if (pos.step !== undefined) {
+        return `Step ${pos.step}`;
+      }
+      return null;
+    }
+    case 'camino':
+    case 'despegando': {
+      const pos = position as { lesson?: number; unit?: number; lessonRange?: [number, number] };
+      if (pos.lessonRange) {
+        return `Lessons ${pos.lessonRange[0]}-${pos.lessonRange[1]}`;
+      }
+      if (pos.unit !== undefined && pos.lesson !== undefined) {
+        return `Unit ${pos.unit}, Lesson ${pos.lesson}`;
+      }
+      if (pos.lesson !== undefined) {
+        return `Lesson ${pos.lesson}`;
+      }
+      return null;
+    }
+    case 'delta_math': {
+      const pos = position as { standard?: string; module?: number };
+      if (pos.standard) {
+        return pos.standard;
+      }
+      if (pos.module !== undefined) {
+        return `Module ${pos.module}`;
+      }
+      return null;
+    }
+    case 'wordgen': {
+      const pos = position as { unit?: number; day?: number };
+      if (pos.unit !== undefined && pos.day !== undefined) {
+        return `Unit ${pos.unit}, Day ${pos.day}`;
+      }
+      return null;
+    }
+    case 'amira': {
+      const pos = position as { level?: string };
+      if (pos.level) {
+        return pos.level;
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
 }
 
 export function ErrorCard({ error, isCustom = false, onEdit }: ErrorCardProps) {
@@ -22,6 +85,8 @@ export function ErrorCard({ error, isCustom = false, onEdit }: ErrorCardProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const positionLabel = formatPosition(error.curriculum, error.position);
+
   return (
     <Card className="hover:border-movement/20 transition-all">
       <CardContent>
@@ -31,6 +96,17 @@ export function ErrorCard({ error, isCustom = false, onEdit }: ErrorCardProps) {
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <CurriculumBadge curriculum={error.curriculum} />
+                {positionLabel && (
+                  <Badge className="bg-surface border-text-muted/20 text-text-primary flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {positionLabel}
+                  </Badge>
+                )}
+                {!positionLabel && (
+                  <Badge className="bg-gray-100 border-gray-200 text-gray-500">
+                    Universal
+                  </Badge>
+                )}
                 {isCustom && (
                   <Badge className="bg-breakthrough/20 text-breakthrough border-breakthrough/30">
                     Custom

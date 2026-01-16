@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Modal, Input, Select, Textarea, Button } from '@/components/ui';
-import type { Curriculum } from '@/lib/supabase/types';
+import type { Curriculum, CurriculumPosition } from '@/lib/supabase/types';
 
 interface AddErrorModalProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface AddErrorModalProps {
 
 export interface NewErrorData {
   curriculum: Curriculum;
+  position: CurriculumPosition | null;
   error_pattern: string;
   underlying_gap: string;
   correction_protocol: string;
@@ -28,9 +29,46 @@ const curriculumOptions = [
   { value: 'amira', label: 'Amira Learning' },
 ];
 
+// Wilson step options (1-6)
+const wilsonStepOptions = [
+  { value: '', label: 'All Steps (Universal)' },
+  ...Array.from({ length: 6 }, (_, i) => ({ value: String(i + 1), label: `Step ${i + 1}` }))
+];
+
+// Wilson substep options (varies by step, but commonly .1-.6)
+const wilsonSubstepOptions = [
+  { value: '', label: 'All Substeps' },
+  { value: '1', label: '.1' },
+  { value: '2', label: '.2' },
+  { value: '3', label: '.3' },
+  { value: '4', label: '.4' },
+  { value: '5', label: '.5' },
+  { value: '6', label: '.6' },
+];
+
+// Camino lesson options (1-40)
+const caminoLessonOptions = [
+  { value: '', label: 'All Lessons (Universal)' },
+  ...Array.from({ length: 40 }, (_, i) => ({ value: String(i + 1), label: `Lesson ${i + 1}` }))
+];
+
+// Delta Math standard options (common standards)
+const deltaMathStandardOptions = [
+  { value: '', label: 'All Standards (Universal)' },
+  { value: '3.NBT.1', label: '3.NBT.1 - Place Value' },
+  { value: '3.NBT.2', label: '3.NBT.2 - Addition/Subtraction' },
+  { value: '4.NF.1', label: '4.NF.1 - Equivalent Fractions' },
+  { value: '4.NF.2', label: '4.NF.2 - Comparing Fractions' },
+  { value: '4.NF.3c', label: '4.NF.3c - Adding Fractions' },
+  { value: '5.NBT.3', label: '5.NBT.3 - Decimals' },
+  { value: '5.NF.1', label: '5.NF.1 - Adding Fractions (Unlike)' },
+  { value: '5.NBT.7', label: '5.NBT.7 - Decimal Operations' },
+];
+
 export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
   const [formData, setFormData] = useState<NewErrorData>({
     curriculum: 'wilson',
+    position: null,
     error_pattern: '',
     underlying_gap: '',
     correction_protocol: '',
@@ -40,6 +78,41 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
   });
   const [promptsText, setPromptsText] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Position form state
+  const [wilsonStep, setWilsonStep] = useState('');
+  const [wilsonSubstep, setWilsonSubstep] = useState('');
+  const [caminoLesson, setCaminoLesson] = useState('');
+  const [deltaStandard, setDeltaStandard] = useState('');
+  const [useRange, setUseRange] = useState(false);
+  const [rangeEnd, setRangeEnd] = useState('');
+
+  // Build position from form fields
+  const buildPosition = (): CurriculumPosition | null => {
+    switch (formData.curriculum) {
+      case 'wilson':
+        if (!wilsonStep) return null;
+        if (useRange && rangeEnd) {
+          return { step: parseInt(wilsonStep), substep: wilsonStep, stepRange: [parseInt(wilsonStep), parseInt(rangeEnd)] as [number, number] };
+        }
+        return {
+          step: parseInt(wilsonStep),
+          substep: wilsonSubstep ? `${wilsonStep}.${wilsonSubstep}` : wilsonStep
+        };
+      case 'camino':
+      case 'despegando':
+        if (!caminoLesson) return null;
+        if (useRange && rangeEnd) {
+          return { lesson: parseInt(caminoLesson), lessonRange: [parseInt(caminoLesson), parseInt(rangeEnd)] as [number, number] };
+        }
+        return { lesson: parseInt(caminoLesson) };
+      case 'delta_math':
+        if (!deltaStandard) return null;
+        return { standard: deltaStandard };
+      default:
+        return null;
+    }
+  };
 
   const handleSubmit = () => {
     const newErrors: Record<string, string> = {};
@@ -66,14 +139,23 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
       .map(p => p.trim())
       .filter(p => p.length > 0);
 
+    // Build position from form fields
+    const position = buildPosition();
+
     onSave({
       ...formData,
+      position,
       correction_prompts: prompts,
     });
 
     // Reset form
+    resetForm();
+  };
+
+  const resetForm = () => {
     setFormData({
       curriculum: 'wilson',
+      position: null,
       error_pattern: '',
       underlying_gap: '',
       correction_protocol: '',
@@ -83,21 +165,28 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
     });
     setPromptsText('');
     setErrors({});
+    setWilsonStep('');
+    setWilsonSubstep('');
+    setCaminoLesson('');
+    setDeltaStandard('');
+    setUseRange(false);
+    setRangeEnd('');
   };
 
   const handleClose = () => {
-    setFormData({
-      curriculum: 'wilson',
-      error_pattern: '',
-      underlying_gap: '',
-      correction_protocol: '',
-      correction_prompts: [],
-      visual_cues: '',
-      kinesthetic_cues: '',
-    });
-    setPromptsText('');
-    setErrors({});
+    resetForm();
     onClose();
+  };
+
+  // Reset position fields when curriculum changes
+  const handleCurriculumChange = (curriculum: Curriculum) => {
+    setFormData({ ...formData, curriculum });
+    setWilsonStep('');
+    setWilsonSubstep('');
+    setCaminoLesson('');
+    setDeltaStandard('');
+    setUseRange(false);
+    setRangeEnd('');
   };
 
   return (
@@ -108,9 +197,120 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
           label="Curriculum"
           options={curriculumOptions}
           value={formData.curriculum}
-          onChange={(e) => setFormData({ ...formData, curriculum: e.target.value as Curriculum })}
+          onChange={(e) => handleCurriculumChange(e.target.value as Curriculum)}
           error={errors.curriculum}
         />
+
+        {/* Position Editor - Wilson */}
+        {formData.curriculum === 'wilson' && (
+          <div className="p-4 bg-purple-50 rounded-lg space-y-3">
+            <label className="block text-sm font-medium text-purple-800">
+              Position (Step/Substep)
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                label=""
+                options={wilsonStepOptions}
+                value={wilsonStep}
+                onChange={(e) => {
+                  setWilsonStep(e.target.value);
+                  if (!e.target.value) setWilsonSubstep('');
+                }}
+              />
+              {wilsonStep && (
+                <Select
+                  label=""
+                  options={wilsonSubstepOptions}
+                  value={wilsonSubstep}
+                  onChange={(e) => setWilsonSubstep(e.target.value)}
+                />
+              )}
+            </div>
+            {wilsonStep && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="wilsonRange"
+                  checked={useRange}
+                  onChange={(e) => setUseRange(e.target.checked)}
+                  className="rounded border-purple-300"
+                />
+                <label htmlFor="wilsonRange" className="text-sm text-purple-700">
+                  Apply to range of steps
+                </label>
+                {useRange && (
+                  <Select
+                    label=""
+                    options={wilsonStepOptions.filter(opt => opt.value !== '' && parseInt(opt.value) > parseInt(wilsonStep))}
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.target.value)}
+                  />
+                )}
+              </div>
+            )}
+            <p className="text-xs text-purple-600">
+              Leave blank to apply to all steps (universal error)
+            </p>
+          </div>
+        )}
+
+        {/* Position Editor - Camino */}
+        {(formData.curriculum === 'camino' || formData.curriculum === 'despegando') && (
+          <div className="p-4 bg-orange-50 rounded-lg space-y-3">
+            <label className="block text-sm font-medium text-orange-800">
+              Position (Lesson)
+            </label>
+            <Select
+              label=""
+              options={caminoLessonOptions}
+              value={caminoLesson}
+              onChange={(e) => setCaminoLesson(e.target.value)}
+            />
+            {caminoLesson && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="caminoRange"
+                  checked={useRange}
+                  onChange={(e) => setUseRange(e.target.checked)}
+                  className="rounded border-orange-300"
+                />
+                <label htmlFor="caminoRange" className="text-sm text-orange-700">
+                  Apply to range of lessons
+                </label>
+                {useRange && (
+                  <Select
+                    label=""
+                    options={caminoLessonOptions.filter(opt => opt.value !== '' && parseInt(opt.value) > parseInt(caminoLesson))}
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.target.value)}
+                  />
+                )}
+              </div>
+            )}
+            <p className="text-xs text-orange-600">
+              Leave blank to apply to all lessons (universal error)
+            </p>
+          </div>
+        )}
+
+        {/* Position Editor - Delta Math */}
+        {formData.curriculum === 'delta_math' && (
+          <div className="p-4 bg-blue-50 rounded-lg space-y-3">
+            <label className="block text-sm font-medium text-blue-800">
+              Position (Standard)
+            </label>
+            <Select
+              label=""
+              options={deltaMathStandardOptions}
+              value={deltaStandard}
+              onChange={(e) => setDeltaStandard(e.target.value)}
+            />
+            <p className="text-xs text-blue-600">
+              Leave blank to apply to all standards (universal error)
+            </p>
+          </div>
+        )}
 
         {/* Error Pattern */}
         <Input

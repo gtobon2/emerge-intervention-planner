@@ -31,6 +31,7 @@ export type PMTrend = 'improving' | 'flat' | 'declining';
 export interface WilsonPosition {
   step: number;
   substep: string;
+  stepRange?: [number, number]; // Optional range for errors that apply to multiple steps
 }
 
 export interface DeltaMathPosition {
@@ -41,6 +42,7 @@ export interface DeltaMathPosition {
 
 export interface CaminoPosition {
   lesson: number;
+  lessonRange?: [number, number]; // Optional range for errors that apply to multiple lessons
 }
 
 export interface WordGenPosition {

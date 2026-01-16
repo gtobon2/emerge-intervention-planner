@@ -61,7 +61,7 @@ export default function ErrorBankPage() {
   const handleAddError = (errorData: NewErrorData) => {
     const newError: ErrorBankSeedEntry = {
       curriculum: errorData.curriculum,
-      position: null,
+      position: errorData.position,
       error_pattern: errorData.error_pattern,
       underlying_gap: errorData.underlying_gap,
       correction_protocol: errorData.correction_protocol,
