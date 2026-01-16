@@ -2,8 +2,8 @@
 export { Button } from './button';
 export type { ButtonProps } from './button';
 
-export { Card, CardHeader, CardTitle, CardContent, CardFooter } from './card';
-export type { CardProps, CardHeaderProps, CardTitleProps, CardContentProps, CardFooterProps } from './card';
+export { Card, CardHeader, CardTitle, CardContent, CardFooter, StatCard } from './card';
+export type { CardProps, CardHeaderProps, CardTitleProps, CardContentProps, CardFooterProps, StatCardProps } from './card';
 
 export { Badge, CurriculumBadge, TierBadge, StatusBadge } from './badge';
 export type { BadgeProps } from './badge';

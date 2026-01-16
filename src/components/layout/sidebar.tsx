@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Languages,
   Package,
+  Shield,
   X
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui';
@@ -35,6 +36,7 @@ const navItems = [
   { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
   { href: '/materials', label: 'Materials', icon: Package },
   { href: '/reports', label: 'Reports', icon: FileText },
+  { href: '/admin', label: 'Admin', icon: Shield },
 ];
 
 export function Sidebar() {
