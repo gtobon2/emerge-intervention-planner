@@ -4,9 +4,28 @@ import { supabase } from '@/lib/supabase/client';
 import { isMockMode } from '@/lib/supabase/config';
 import type { User, Session } from '@supabase/supabase-js';
 
+// User roles for access control
+export type UserRole = 'admin' | 'interventionist' | 'teacher';
+
+// Demo users for role-based login
+export interface DemoUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export const DEMO_USERS: DemoUser[] = [
+  { id: 'admin-1', name: 'Admin User', email: 'admin@emerge.edu', role: 'admin' },
+  { id: 'interventionist-1', name: 'Sarah Martinez', email: 'sarah@emerge.edu', role: 'interventionist' },
+  { id: 'teacher-1', name: 'John Smith', email: 'john@emerge.edu', role: 'teacher' },
+];
+
 interface AuthState {
   user: User | null;
   session: Session | null;
+  userRole: UserRole | null;
+  currentDemoUser: DemoUser | null;
   isLoading: boolean;
   error: string | null;
   isInitialized: boolean;
@@ -14,12 +33,14 @@ interface AuthState {
   // Actions
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInAsDemoUser: (demoUser: DemoUser) => Promise<void>;
   signUp: (email: string, password: string, fullName?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   updateProfile: (updates: { full_name?: string; email?: string }) => Promise<void>;
   clearError: () => void;
+  isAdmin: () => boolean;
 }
 
 // Mock user for development when Supabase is not configured
@@ -46,6 +67,8 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       session: null,
+      userRole: null,
+      currentDemoUser: null,
       isLoading: false,
       error: null,
       isInitialized: false,
@@ -57,11 +80,35 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           if (isMockMode()) {
-            // Mock mode: auto-login with demo user
-            console.warn('⚠️ Running in mock mode - Supabase not configured');
+            // Mock mode: check if we have a saved demo user in localStorage
+            const savedDemoUser = get().currentDemoUser;
+            if (savedDemoUser) {
+              // Restore the saved demo user session
+              const mockUser: User = {
+                id: savedDemoUser.id,
+                email: savedDemoUser.email,
+                app_metadata: {},
+                user_metadata: { full_name: savedDemoUser.name, role: savedDemoUser.role },
+                aud: 'authenticated',
+                created_at: new Date().toISOString(),
+              } as User;
+
+              set({
+                user: mockUser,
+                session: { ...MOCK_SESSION, user: mockUser },
+                userRole: savedDemoUser.role,
+                isLoading: false,
+                isInitialized: true,
+              });
+              return;
+            }
+
+            // No saved user - require login
+            console.warn('⚠️ Running in mock mode - Please select a user to login');
             set({
-              user: MOCK_USER,
-              session: MOCK_SESSION,
+              user: null,
+              session: null,
+              userRole: null,
               isLoading: false,
               isInitialized: true,
             });
@@ -101,11 +148,36 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           if (isMockMode()) {
-            // Mock mode: accept any credentials
-            await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
+            // Mock mode: find matching demo user by email
+            const demoUser = DEMO_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
+            if (demoUser) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              const mockUser: User = {
+                id: demoUser.id,
+                email: demoUser.email,
+                app_metadata: {},
+                user_metadata: { full_name: demoUser.name, role: demoUser.role },
+                aud: 'authenticated',
+                created_at: new Date().toISOString(),
+              } as User;
+
+              set({
+                user: mockUser,
+                session: { ...MOCK_SESSION, user: mockUser },
+                userRole: demoUser.role,
+                currentDemoUser: demoUser,
+                isLoading: false,
+              });
+              return;
+            }
+
+            // No matching demo user - use default mock user as admin
+            await new Promise(resolve => setTimeout(resolve, 500));
             set({
               user: MOCK_USER,
               session: MOCK_SESSION,
+              userRole: 'admin',
+              currentDemoUser: DEMO_USERS[0],
               isLoading: false,
             });
             return;
@@ -118,9 +190,44 @@ export const useAuthStore = create<AuthState>()(
 
           if (error) throw error;
 
+          // Extract role from user metadata if available
+          const role = data.user?.user_metadata?.role as UserRole | undefined;
+
           set({
             user: data.user,
             session: data.session,
+            userRole: role || 'interventionist',
+            isLoading: false,
+          });
+        } catch (error: any) {
+          set({
+            error: error.message || 'Failed to sign in',
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      signInAsDemoUser: async (demoUser: DemoUser) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300)); // Simulate brief delay
+
+          const mockUser: User = {
+            id: demoUser.id,
+            email: demoUser.email,
+            app_metadata: {},
+            user_metadata: { full_name: demoUser.name, role: demoUser.role },
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+          } as User;
+
+          set({
+            user: mockUser,
+            session: { ...MOCK_SESSION, user: mockUser },
+            userRole: demoUser.role,
+            currentDemoUser: demoUser,
             isLoading: false,
           });
         } catch (error: any) {
@@ -181,6 +288,8 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               session: null,
+              userRole: null,
+              currentDemoUser: null,
               isLoading: false,
             });
             return;
@@ -193,6 +302,8 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             session: null,
+            userRole: null,
+            currentDemoUser: null,
             isLoading: false,
           });
         } catch (error: any) {
@@ -305,12 +416,18 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => {
         set({ error: null });
       },
+
+      isAdmin: () => {
+        return get().userRole === 'admin';
+      },
     }),
     {
       name: 'emerge-auth-store',
       partialize: (state) => ({
-        // Only persist initialization status
+        // Persist initialization status and demo user for session restoration
         isInitialized: state.isInitialized,
+        currentDemoUser: state.currentDemoUser,
+        userRole: state.userRole,
       }),
     }
   )

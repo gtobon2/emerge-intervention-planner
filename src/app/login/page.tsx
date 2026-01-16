@@ -3,25 +3,44 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle, Shield, Users, GraduationCap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth, type DemoUser } from '@/hooks/use-auth';
 import { isMockMode } from '@/lib/supabase/config';
+
+// Icon mapping for demo users based on role
+const roleIcons = {
+  admin: Shield,
+  interventionist: Users,
+  teacher: GraduationCap,
+};
+
+const roleColors = {
+  admin: 'text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500/20',
+  interventionist: 'text-movement bg-movement/10 border-movement/30 hover:bg-movement/20',
+  teacher: 'text-blue-500 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20',
+};
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, isLoading, error, clearError, isAuthenticated } = useAuth();
+  const { signIn, signInAsDemoUser, isLoading, error, clearError, isAuthenticated, demoUsers, userRole } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showEmailForm, setShowEmailForm] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/');
+      // Redirect admin to admin page, others to home
+      if (userRole === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/');
+      }
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, userRole, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,10 +48,20 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
-      router.push('/');
+      // Redirect will happen via useEffect
     } catch (error) {
       // Error is handled by the store
       console.error('Login failed:', error);
+    }
+  };
+
+  const handleDemoUserSelect = async (demoUser: DemoUser) => {
+    clearError();
+    try {
+      await signInAsDemoUser(demoUser);
+      // Redirect will happen via useEffect
+    } catch (error) {
+      console.error('Demo login failed:', error);
     }
   };
 
@@ -54,21 +83,6 @@ export default function LoginPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Mock Mode Warning */}
-            {isMockMode() && (
-              <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="text-yellow-500 font-medium mb-1">Mock Mode</p>
-                    <p className="text-text-muted">
-                      Supabase not configured. Enter any credentials to continue.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Error Message */}
             {error && (
               <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -79,61 +93,132 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Login Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                label="Email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-                autoComplete="email"
-              />
+            {/* Demo User Selection - for mock mode */}
+            {isMockMode() && !showEmailForm && (
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <p className="text-sm text-text-muted mb-2">Select a user to continue:</p>
+                </div>
 
-              <Input
-                label="Password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                autoComplete="current-password"
-              />
+                <div className="space-y-3">
+                  {demoUsers.map((demoUser) => {
+                    const Icon = roleIcons[demoUser.role];
+                    return (
+                      <button
+                        key={demoUser.id}
+                        onClick={() => handleDemoUserSelect(demoUser)}
+                        disabled={isLoading}
+                        className={`
+                          w-full p-4 rounded-lg border-2 transition-all
+                          flex items-center gap-4
+                          ${roleColors[demoUser.role]}
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                        `}
+                      >
+                        <div className="p-2 rounded-full bg-white/50">
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="text-left flex-1">
+                          <p className="font-medium">{demoUser.name}</p>
+                          <p className="text-xs opacity-75 capitalize">{demoUser.role}</p>
+                        </div>
+                        {demoUser.role === 'admin' && (
+                          <span className="text-xs px-2 py-1 bg-white/50 rounded-full">
+                            Full Access
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-              <div className="flex items-center justify-end">
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-movement hover:text-movement/80 transition-colors"
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-text-muted/20" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-surface text-text-muted">or</span>
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowEmailForm(true)}
                 >
-                  Forgot password?
-                </Link>
+                  Sign in with Email
+                </Button>
               </div>
+            )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                isLoading={isLoading}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Signing in...' : 'Sign In'}
-              </Button>
-            </form>
+            {/* Email/Password Form - shown in non-mock mode or when user chooses email */}
+            {(!isMockMode() || showEmailForm) && (
+              <>
+                {isMockMode() && showEmailForm && (
+                  <button
+                    onClick={() => setShowEmailForm(false)}
+                    className="text-sm text-movement hover:text-movement/80 mb-4 flex items-center gap-1"
+                  >
+                    ← Back to user selection
+                  </button>
+                )}
 
-            {/* Sign Up Link */}
-            <div className="mt-6 text-center">
-              <p className="text-sm text-text-muted">
-                Don&apos;t have an account?{' '}
-                <Link
-                  href="/signup"
-                  className="text-movement hover:text-movement/80 transition-colors font-medium"
-                >
-                  Sign up
-                </Link>
-              </p>
-            </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={isLoading}
+                    autoComplete="email"
+                  />
+
+                  <Input
+                    label="Password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                    autoComplete="current-password"
+                  />
+
+                  <div className="flex items-center justify-end">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-movement hover:text-movement/80 transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    isLoading={isLoading}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </form>
+
+                {/* Sign Up Link */}
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-text-muted">
+                    Don&apos;t have an account?{' '}
+                    <Link
+                      href="/signup"
+                      className="text-movement hover:text-movement/80 transition-colors font-medium"
+                    >
+                      Sign up
+                    </Link>
+                  </p>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

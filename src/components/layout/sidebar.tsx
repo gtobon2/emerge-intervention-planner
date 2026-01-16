@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect } from 'react';
 import {
@@ -20,11 +20,20 @@ import {
   Languages,
   Package,
   Shield,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui';
+import { useAuth } from '@/hooks/use-auth';
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/groups', label: 'Groups', icon: Users },
   { href: '/students', label: 'Students', icon: UserCheck },
@@ -36,12 +45,31 @@ const navItems = [
   { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
   { href: '/materials', label: 'Materials', icon: Package },
   { href: '/reports', label: 'Reports', icon: FileText },
-  { href: '/admin', label: 'Admin', icon: Shield },
+  { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { sidebarOpen, sidebarCollapsed, toggleSidebar, setSidebarCollapsed } = useUIStore();
+  const { isAdmin, signOut, currentDemoUser, userRole, isLoading } = useAuth();
+
+  // Filter nav items based on user role
+  const filteredNavItems = navItems.filter(item => {
+    if (item.adminOnly && !isAdmin) {
+      return false;
+    }
+    return true;
+  });
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -115,7 +143,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const isActive = pathname === item.href ||
               (item.href !== '/' && pathname.startsWith(item.href));
 
@@ -141,8 +169,8 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Settings */}
-        <div className="p-3 border-t border-text-muted/10">
+        {/* Settings & User */}
+        <div className="p-3 border-t border-text-muted/10 space-y-1">
           <Link
             href="/settings"
             className={`
@@ -157,6 +185,30 @@ export function Sidebar() {
             <Settings className="w-5 h-5 flex-shrink-0" />
             {!sidebarCollapsed && <span className="font-medium">Settings</span>}
           </Link>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            disabled={isLoading}
+            className="
+              w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
+              transition-colors min-h-[44px]
+              text-text-muted hover:text-red-500 hover:bg-red-500/10
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {!sidebarCollapsed && <span className="font-medium">Logout</span>}
+          </button>
+
+          {/* Current User Info (collapsed shows just badge, expanded shows name) */}
+          {currentDemoUser && !sidebarCollapsed && (
+            <div className="mt-3 px-3 py-2 bg-foundation/50 rounded-lg">
+              <p className="text-xs text-text-muted">Signed in as</p>
+              <p className="text-sm font-medium truncate">{currentDemoUser.name}</p>
+              <p className="text-xs text-text-muted capitalize">{userRole}</p>
+            </div>
+          )}
         </div>
 
         {/* Collapse toggle - desktop only */}

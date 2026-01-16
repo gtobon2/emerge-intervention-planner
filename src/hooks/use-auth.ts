@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore, DEMO_USERS, type UserRole, type DemoUser } from '@/stores/auth';
 
 /**
  * Hook to access authentication state and actions
@@ -11,17 +11,21 @@ export function useAuth() {
   const {
     user,
     session,
+    userRole,
+    currentDemoUser,
     isLoading,
     error,
     isInitialized,
     initialize,
     signIn,
+    signInAsDemoUser,
     signUp,
     signOut,
     resetPassword,
     updatePassword,
     updateProfile,
     clearError,
+    isAdmin,
   } = useAuthStore();
 
   // Initialize auth on mount
@@ -34,11 +38,16 @@ export function useAuth() {
   return {
     user,
     session,
+    userRole,
+    currentDemoUser,
     isLoading,
     error,
     isAuthenticated: !!user,
     isInitialized,
+    isAdmin: isAdmin(),
+    demoUsers: DEMO_USERS,
     signIn,
+    signInAsDemoUser,
     signUp,
     signOut,
     resetPassword,
@@ -47,3 +56,5 @@ export function useAuth() {
     clearError,
   };
 }
+
+export type { UserRole, DemoUser };
