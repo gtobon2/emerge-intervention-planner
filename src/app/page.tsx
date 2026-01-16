@@ -97,34 +97,63 @@ export default function DashboardPage() {
   }, [groups]);
 
   // Filter sessions to only include sessions from user's groups
+  // IMPORTANT: Non-admins should ONLY see sessions from groups they own
   const filteredAllSessions = useMemo(() => {
+    // If no user role yet, don't show any sessions (security default)
+    if (!userRole) {
+      return [];
+    }
+    // Admins see all sessions
     if (userRole === 'admin') {
       return allSessions;
     }
-    // For non-admins, filter to only sessions from groups they own
+    // Non-admins: if groups haven't loaded yet, show nothing
+    if (userGroupIds.size === 0) {
+      return [];
+    }
+    // Filter to only sessions from groups this user owns
     return allSessions.filter(session => userGroupIds.has(session.group_id));
   }, [allSessions, userGroupIds, userRole]);
 
   // Filter today's sessions to only include sessions from user's groups
+  // IMPORTANT: Non-admins should ONLY see today's sessions from their groups
   const filteredTodaySessions = useMemo(() => {
+    // If no user role yet, don't show any sessions (security default)
+    if (!userRole) {
+      return [];
+    }
+    // Admins see all today's sessions
     if (userRole === 'admin') {
       return todaySessions;
     }
-    // For non-admins, filter to only sessions from groups they own
+    // Non-admins: if groups haven't loaded yet, show nothing
+    if (userGroupIds.size === 0) {
+      return [];
+    }
+    // Filter to only sessions from groups this user owns
     return todaySessions.filter(session => userGroupIds.has(session.groupId));
   }, [todaySessions, userGroupIds, userRole]);
 
   // Calculate the number of students the user has access to
+  // IMPORTANT: Non-admins should ONLY see students they have access to
   const displayStudentsCount = useMemo(() => {
+    // If no user role yet, show 0 (security default)
+    if (!userRole) {
+      return 0;
+    }
+    // Admins see all students
     if (userRole === 'admin') {
       return allStudents.length;
     }
+    // Teachers see students in their grade level only
     if (userRole === 'teacher' && userProfile?.grade_level) {
       return allStudents.filter(s => s.grade_level === userProfile.grade_level).length;
     }
+    // Interventionists see only their assigned students
     if (userRole === 'interventionist') {
       return assignedStudents.length;
     }
+    // Default: show 0 for users without proper role
     return 0;
   }, [userRole, userProfile, allStudents, assignedStudents]);
 
