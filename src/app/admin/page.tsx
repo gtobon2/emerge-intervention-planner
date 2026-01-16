@@ -17,6 +17,7 @@ import {
   UserPlus,
   Clock,
   Loader2,
+  Link2,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import {
@@ -32,6 +33,7 @@ import {
   ConfirmModal,
   Switch,
 } from '@/components/ui';
+import { StudentAssignmentManager } from '@/components/admin';
 import { useGroupsStore } from '@/stores/groups';
 import { useStudentsStore } from '@/stores/students';
 import { useSessionsStore } from '@/stores/sessions';
@@ -39,14 +41,17 @@ import { useSettings } from '@/hooks/use-settings';
 import { useAuthStore } from '@/stores/auth';
 import { exportToFile, clearAllData } from '@/lib/local-db/backup';
 import { isMockMode } from '@/lib/supabase/config';
-import type { Group, Student, SessionWithGroup } from '@/lib/supabase/types';
+import type { Group, Student, SessionWithGroup, GradeLevel, GRADE_LEVELS } from '@/lib/supabase/types';
 import type { Profile, UserRole } from '@/lib/supabase/profiles';
 
 // ============================================
 // TYPES
 // ============================================
 
-type AdminTab = 'overview' | 'users' | 'students' | 'data' | 'settings';
+type AdminTab = 'overview' | 'users' | 'students' | 'assignments' | 'data' | 'settings';
+
+// Grade level options
+const GRADE_LEVEL_OPTIONS: GradeLevel[] = ['Pre-K', 'K', '1', '2', '3', '4', '5', '6', '7', '8'];
 
 // User type for display (maps Profile to our UI needs)
 interface User {
@@ -54,6 +59,7 @@ interface User {
   name: string;
   email: string;
   role: UserRole;
+  gradeLevel?: GradeLevel | null;
   createdAt: string;
   createdBy?: string | null;
 }
@@ -101,6 +107,7 @@ export default function AdminPage() {
     name: '',
     email: '',
     role: 'interventionist' as User['role'],
+    gradeLevel: '' as GradeLevel | '',
   });
   const [studentForm, setStudentForm] = useState({
     name: '',
@@ -116,9 +123,9 @@ export default function AdminPage() {
     if (isMockMode()) {
       // In mock mode, use demo users
       setUsers([
-        { id: '1', name: 'Admin User', email: 'admin@school.edu', role: 'admin', createdAt: new Date().toISOString() },
-        { id: '2', name: 'Sarah Martinez', email: 'sarah@emerge.edu', role: 'interventionist', createdAt: new Date().toISOString() },
-        { id: '3', name: 'John Smith', email: 'john@emerge.edu', role: 'teacher', createdAt: new Date().toISOString() },
+        { id: '1', name: 'Admin User', email: 'admin@school.edu', role: 'admin', gradeLevel: null, createdAt: new Date().toISOString() },
+        { id: '2', name: 'Sarah Martinez', email: 'sarah@emerge.edu', role: 'interventionist', gradeLevel: null, createdAt: new Date().toISOString() },
+        { id: '3', name: 'John Smith', email: 'john@emerge.edu', role: 'teacher', gradeLevel: '3', createdAt: new Date().toISOString() },
       ]);
       return;
     }
@@ -138,6 +145,7 @@ export default function AdminPage() {
         name: profile.full_name,
         email: profile.email,
         role: profile.role,
+        gradeLevel: profile.grade_level,
         createdAt: profile.created_at,
         createdBy: profile.created_by,
       }));
@@ -219,13 +227,13 @@ export default function AdminPage() {
   // User handlers
   const handleAddUser = () => {
     setEditingUser(null);
-    setUserForm({ name: '', email: '', role: 'interventionist' });
+    setUserForm({ name: '', email: '', role: 'interventionist', gradeLevel: '' });
     setShowUserModal(true);
   };
 
   const handleEditUser = (user: User) => {
     setEditingUser(user);
-    setUserForm({ name: user.name, email: user.email, role: user.role });
+    setUserForm({ name: user.name, email: user.email, role: user.role, gradeLevel: user.gradeLevel || '' });
     setShowUserModal(true);
   };
 
@@ -241,7 +249,7 @@ export default function AdminPage() {
         setUsers(prev =>
           prev.map(u =>
             u.id === editingUser.id
-              ? { ...u, name: userForm.name, email: userForm.email, role: userForm.role }
+              ? { ...u, name: userForm.name, email: userForm.email, role: userForm.role, gradeLevel: userForm.gradeLevel || null }
               : u
           )
         );
@@ -252,6 +260,7 @@ export default function AdminPage() {
           name: userForm.name,
           email: userForm.email,
           role: userForm.role,
+          gradeLevel: userForm.gradeLevel || null,
           createdAt: new Date().toISOString(),
           createdBy: 'admin',
         };
@@ -273,6 +282,7 @@ export default function AdminPage() {
             user_id: editingUser.id,
             full_name: userForm.name,
             role: userForm.role,
+            grade_level: userForm.role === 'teacher' ? userForm.gradeLevel || null : null,
           }),
         });
 
@@ -292,6 +302,7 @@ export default function AdminPage() {
             email: userForm.email,
             full_name: userForm.name,
             role: userForm.role,
+            grade_level: userForm.role === 'teacher' ? userForm.gradeLevel || null : null,
             created_by: currentUser?.id || null,
           }),
         });
@@ -540,11 +551,12 @@ export default function AdminPage() {
 
   const renderTabs = () => (
     <div className="border-b border-border mb-6">
-      <nav className="-mb-px flex space-x-8">
+      <nav className="-mb-px flex space-x-8 overflow-x-auto">
         {[
           { id: 'overview', label: 'Overview', icon: Activity },
           { id: 'users', label: 'Users', icon: Users },
           { id: 'students', label: 'Students', icon: GraduationCap },
+          { id: 'assignments', label: 'Assignments', icon: Link2 },
           { id: 'data', label: 'Data', icon: Download },
           { id: 'settings', label: 'Settings', icon: SettingsIcon },
         ].map(tab => (
@@ -692,6 +704,7 @@ export default function AdminPage() {
                     <th className="text-left py-3 px-4 font-medium text-text-muted">Name</th>
                     <th className="text-left py-3 px-4 font-medium text-text-muted">Email</th>
                     <th className="text-left py-3 px-4 font-medium text-text-muted">Role</th>
+                    <th className="text-left py-3 px-4 font-medium text-text-muted">Grade Level</th>
                     <th className="text-left py-3 px-4 font-medium text-text-muted">Created</th>
                     <th className="text-right py-3 px-4 font-medium text-text-muted">Actions</th>
                   </tr>
@@ -715,6 +728,11 @@ export default function AdminPage() {
                         >
                           {user.role}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-text-muted text-sm">
+                        {user.role === 'teacher' && user.gradeLevel
+                          ? `Grade ${user.gradeLevel}`
+                          : '-'}
                       </td>
                       <td className="py-3 px-4 text-text-muted text-sm">
                         {new Date(user.createdAt).toLocaleDateString()}
@@ -827,6 +845,10 @@ export default function AdminPage() {
         </CardContent>
       </Card>
     </div>
+  );
+
+  const renderAssignments = () => (
+    <StudentAssignmentManager currentUserId={currentUser?.id} />
   );
 
   const renderData = () => (
@@ -1002,6 +1024,7 @@ export default function AdminPage() {
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'users' && renderUsers()}
         {activeTab === 'students' && renderStudents()}
+        {activeTab === 'assignments' && renderAssignments()}
         {activeTab === 'data' && renderData()}
         {activeTab === 'settings' && renderSettings()}
       </div>
@@ -1032,7 +1055,7 @@ export default function AdminPage() {
           <Select
             label="Role"
             value={userForm.role}
-            onChange={e => setUserForm({ ...userForm, role: e.target.value as User['role'] })}
+            onChange={e => setUserForm({ ...userForm, role: e.target.value as User['role'], gradeLevel: '' })}
             options={[
               { value: 'admin', label: 'Admin' },
               { value: 'interventionist', label: 'Interventionist' },
@@ -1040,6 +1063,19 @@ export default function AdminPage() {
             ]}
             disabled={isLoading}
           />
+          {userForm.role === 'teacher' && (
+            <Select
+              label="Grade Level"
+              value={userForm.gradeLevel}
+              onChange={e => setUserForm({ ...userForm, gradeLevel: e.target.value as GradeLevel | '' })}
+              options={[
+                { value: '', label: 'Select grade level...' },
+                ...GRADE_LEVEL_OPTIONS.map(g => ({ value: g, label: `Grade ${g}` })),
+              ]}
+              disabled={isLoading}
+              helperText="Teachers can only see students in their assigned grade level"
+            />
+          )}
           {!editingUser && !isMockMode() && (
             <p className="text-sm text-text-muted">
               The user will receive an email to set their password.

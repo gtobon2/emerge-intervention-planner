@@ -4,8 +4,16 @@ import { validateGroup } from '@/lib/supabase/validation';
 import type { Curriculum } from '@/lib/local-db';
 import type { Group, GroupInsert, GroupUpdate, GroupWithStudents, Student } from '@/lib/supabase/types';
 
+export type UserRole = 'admin' | 'interventionist' | 'teacher';
+
+// Extended group with visibility info
+export interface GroupWithVisibility extends Group {
+  isOwn: boolean; // Whether the current user owns/created this group
+}
+
 interface GroupsState {
   groups: Group[];
+  visibleGroups: GroupWithVisibility[]; // Groups with visibility info
   selectedGroup: GroupWithStudents | null;
   isLoading: boolean;
   error: string | null;
@@ -17,8 +25,11 @@ interface GroupsState {
 
   // Actions
   fetchGroups: () => Promise<void>;
+  fetchGroupsByRole: (role: UserRole, userId: string) => Promise<void>;
+  fetchGroupsWithVisibility: (role: UserRole, userId: string) => Promise<void>;
   fetchGroupById: (id: string) => Promise<void>;
   createGroup: (group: GroupInsert) => Promise<Group | null>;
+  createGroupWithOwner: (group: GroupInsert, creatorId: string) => Promise<Group | null>;
   updateGroup: (id: string, updates: GroupUpdate) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
   setFilter: (filter: Partial<GroupsState['filter']>) => void;
@@ -28,6 +39,7 @@ interface GroupsState {
 
 export const useGroupsStore = create<GroupsState>((set, get) => ({
   groups: [],
+  visibleGroups: [],
   selectedGroup: null,
   isLoading: false,
   error: null,
@@ -48,6 +60,36 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
         error: (err as Error).message,
         isLoading: false,
         groups: []
+      });
+    }
+  },
+
+  fetchGroupsByRole: async (role: UserRole, userId: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const groups = await supabaseService.fetchGroupsByRole(role, userId);
+      set({ groups, isLoading: false });
+    } catch (err) {
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        groups: []
+      });
+    }
+  },
+
+  fetchGroupsWithVisibility: async (role: UserRole, userId: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const groupsWithVisibility = await supabaseService.fetchGroupsWithVisibility(role, userId);
+      set({ visibleGroups: groupsWithVisibility, groups: groupsWithVisibility, isLoading: false });
+    } catch (err) {
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        visibleGroups: []
       });
     }
   },
@@ -98,6 +140,38 @@ export const useGroupsStore = create<GroupsState>((set, get) => ({
 
       set((state) => ({
         groups: [newGroup, ...state.groups],
+        isLoading: false,
+      }));
+
+      return newGroup;
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false });
+      return null;
+    }
+  },
+
+  createGroupWithOwner: async (group: GroupInsert, creatorId: string) => {
+    set({ isLoading: true, error: null });
+
+    // Validate group data
+    const validation = validateGroup(group);
+    if (!validation.isValid) {
+      const errorMessage = validation.errors.join(', ');
+      set({ error: errorMessage, isLoading: false });
+      return null;
+    }
+
+    try {
+      const newGroup = await supabaseService.createGroupWithOwner(group, creatorId);
+
+      const groupWithVisibility: GroupWithVisibility = {
+        ...newGroup,
+        isOwn: true,
+      };
+
+      set((state) => ({
+        groups: [newGroup, ...state.groups],
+        visibleGroups: [groupWithVisibility, ...state.visibleGroups],
         isLoading: false,
       }));
 

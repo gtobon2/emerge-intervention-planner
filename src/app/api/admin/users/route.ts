@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     const body = await request.json();
 
-    const { email, full_name, role, created_by } = body;
+    const { email, full_name, role, grade_level, created_by } = body;
 
     if (!email || !full_name || !role) {
       return NextResponse.json(
@@ -66,6 +66,15 @@ export async function POST(request: NextRequest) {
     if (!['admin', 'interventionist', 'teacher'].includes(role)) {
       return NextResponse.json(
         { error: 'Invalid role. Must be admin, interventionist, or teacher' },
+        { status: 400 }
+      );
+    }
+
+    // Validate grade_level if provided
+    const validGradeLevels = ['Pre-K', 'K', '1', '2', '3', '4', '5', '6', '7', '8'];
+    if (grade_level && !validGradeLevels.includes(grade_level)) {
+      return NextResponse.json(
+        { error: 'Invalid grade level' },
         { status: 400 }
       );
     }
@@ -96,13 +105,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update the profile with the correct role and created_by
+    // Update the profile with the correct role, grade_level, and created_by
     // (The trigger sets defaults, we need to update with actual values)
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .update({
         full_name,
         role,
+        grade_level: role === 'teacher' ? grade_level || null : null,
         created_by: created_by || null,
       })
       .eq('id', authData.user.id)
@@ -152,7 +162,7 @@ export async function PATCH(request: NextRequest) {
     const supabase = createAdminClient();
     const body = await request.json();
 
-    const { user_id, role, full_name } = body;
+    const { user_id, role, full_name, grade_level } = body;
 
     if (!user_id) {
       return NextResponse.json(
@@ -162,7 +172,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Build update object
-    const updates: { role?: string; full_name?: string } = {};
+    const updates: { role?: string; full_name?: string; grade_level?: string | null } = {};
 
     if (role) {
       if (!['admin', 'interventionist', 'teacher'].includes(role)) {
@@ -172,6 +182,23 @@ export async function PATCH(request: NextRequest) {
         );
       }
       updates.role = role;
+
+      // If role is changing to teacher and grade_level is provided, set it
+      // If role is changing from teacher, clear grade_level
+      if (role === 'teacher') {
+        const validGradeLevels = ['Pre-K', 'K', '1', '2', '3', '4', '5', '6', '7', '8'];
+        if (grade_level && validGradeLevels.includes(grade_level)) {
+          updates.grade_level = grade_level;
+        }
+      } else {
+        updates.grade_level = null;
+      }
+    } else if (grade_level !== undefined) {
+      // Only update grade_level if explicitly provided and role is teacher
+      const validGradeLevels = ['Pre-K', 'K', '1', '2', '3', '4', '5', '6', '7', '8'];
+      if (grade_level === null || validGradeLevels.includes(grade_level)) {
+        updates.grade_level = grade_level;
+      }
     }
 
     if (full_name) {

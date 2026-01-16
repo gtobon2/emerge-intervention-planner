@@ -16,6 +16,12 @@ export interface WilsonDayAssignment {
 
 export type Curriculum = 'wilson' | 'delta_math' | 'camino' | 'wordgen' | 'amira' | 'despegando';
 export type Tier = 2 | 3;
+
+// Grade levels for students and teachers
+export type GradeLevel = 'Pre-K' | 'K' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8';
+
+// All grade level options for UI selectors
+export const GRADE_LEVELS: GradeLevel[] = ['Pre-K', 'K', '1', '2', '3', '4', '5', '6', '7', '8'];
 export type SessionStatus = 'planned' | 'completed' | 'cancelled';
 export type Pacing = 'too_slow' | 'just_right' | 'too_fast';
 export type MasteryLevel = 'yes' | 'no' | 'partial';
@@ -138,6 +144,7 @@ export interface Group {
   grade: number;
   current_position: CurriculumPosition;
   schedule: GroupSchedule | null;
+  created_by: string | null; // User ID of who created the group
   created_at: string;
   updated_at: string;
 }
@@ -147,7 +154,38 @@ export interface Student {
   group_id: string;
   name: string;
   notes: string | null;
+  grade_level: GradeLevel | null; // Student's grade level for teacher visibility
   created_at: string;
+}
+
+// Student assignment to interventionists (allows multiple interventionists per student)
+export interface StudentAssignment {
+  id: string;
+  student_id: string;
+  interventionist_id: string;
+  assigned_by: string | null;
+  assigned_at: string;
+  created_at: string;
+}
+
+export type StudentAssignmentInsert = Omit<StudentAssignment, 'id' | 'assigned_at' | 'created_at'>;
+
+// Student with assignment info for UI display
+export interface StudentWithAssignments extends Student {
+  assignments: StudentAssignment[];
+  interventionists?: { id: string; full_name: string }[];
+}
+
+// Student group status for interventionists
+export interface StudentGroupStatus {
+  student_id: string;
+  student_name: string;
+  grade_level: GradeLevel | null;
+  group_id: string | null;
+  current_group_name: string | null;
+  current_curriculum: Curriculum | null;
+  group_owner_id: string | null;
+  is_in_group: boolean;
 }
 
 export interface Session {
@@ -294,8 +332,15 @@ export interface AILog {
 // INSERT TYPES (for creating new records)
 // ===========================================
 
-export type GroupInsert = Omit<Group, 'id' | 'created_at' | 'updated_at'>;
-export type StudentInsert = Omit<Student, 'id' | 'created_at'>;
+// GroupInsert: created_by is optional since it can be set automatically by the service layer
+export type GroupInsert = Omit<Group, 'id' | 'created_at' | 'updated_at' | 'created_by'> & {
+  created_by?: string | null;
+};
+
+// StudentInsert: grade_level is optional
+export type StudentInsert = Omit<Student, 'id' | 'created_at' | 'grade_level'> & {
+  grade_level?: GradeLevel | null;
+};
 export type SessionInsert = Omit<Session, 'id' | 'created_at' | 'updated_at'>;
 export type ProgressMonitoringInsert = Omit<ProgressMonitoring, 'id' | 'created_at'>;
 export type ErrorBankInsert = Omit<ErrorBankEntry, 'id' | 'created_at'>;

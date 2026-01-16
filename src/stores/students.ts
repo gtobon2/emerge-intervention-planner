@@ -1,17 +1,21 @@
 import { create } from 'zustand';
 import * as supabaseService from '@/lib/supabase/services';
 import { validateStudent } from '@/lib/supabase/validation';
-import type { Student, StudentInsert, StudentUpdate } from '@/lib/supabase/types';
+import type { Student, StudentInsert, StudentUpdate, GradeLevel } from '@/lib/supabase/types';
+
+export type UserRole = 'admin' | 'interventionist' | 'teacher';
 
 interface StudentsState {
   students: Student[];
   allStudents: Student[];
+  visibleStudents: Student[]; // Students visible based on role
   isLoading: boolean;
   error: string | null;
 
   // Actions
   fetchStudentsForGroup: (groupId: string) => Promise<void>;
   fetchAllStudents: () => Promise<void>;
+  fetchStudentsByRole: (role: UserRole, userId: string, gradeLevel?: GradeLevel | null) => Promise<void>;
   createStudent: (student: StudentInsert) => Promise<Student | null>;
   updateStudent: (id: string, updates: StudentUpdate) => Promise<void>;
   deleteStudent: (id: string) => Promise<void>;
@@ -21,6 +25,7 @@ interface StudentsState {
 export const useStudentsStore = create<StudentsState>((set) => ({
   students: [],
   allStudents: [],
+  visibleStudents: [],
   isLoading: false,
   error: null,
 
@@ -44,12 +49,27 @@ export const useStudentsStore = create<StudentsState>((set) => ({
 
     try {
       const students = await supabaseService.fetchAllStudents();
-      set({ allStudents: students, isLoading: false });
+      set({ allStudents: students, visibleStudents: students, isLoading: false });
     } catch (err) {
       set({
         error: (err as Error).message,
         isLoading: false,
         allStudents: []
+      });
+    }
+  },
+
+  fetchStudentsByRole: async (role: UserRole, userId: string, gradeLevel?: GradeLevel | null) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const students = await supabaseService.fetchStudentsByRole(role, userId, gradeLevel);
+      set({ visibleStudents: students, isLoading: false });
+    } catch (err) {
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        visibleStudents: []
       });
     }
   },

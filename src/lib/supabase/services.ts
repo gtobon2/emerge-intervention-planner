@@ -334,3 +334,120 @@ export async function deleteError(id: string): Promise<void> {
 export function useSupabase(): boolean {
   return isSupabaseConfigured();
 }
+
+// ============================================
+// ROLE-BASED QUERIES
+// ============================================
+
+/**
+ * Fetch students based on user role
+ * - Admin: All students
+ * - Interventionist: Students assigned to them
+ * - Teacher: Students in their grade level
+ */
+export async function fetchStudentsByRole(
+  role: 'admin' | 'interventionist' | 'teacher',
+  userId: string,
+  gradeLevel?: string | null
+): Promise<Student[]> {
+  if (role === 'admin') {
+    return fetchAllStudents();
+  }
+
+  if (role === 'interventionist') {
+    // Fetch students assigned to this interventionist
+    const { data, error } = await supabase
+      .from('student_assignments')
+      .select(`
+        students (*)
+      `)
+      .eq('interventionist_id', userId);
+
+    if (error) throw new Error(error.message);
+
+    // Extract students from the result
+    const students = (data || [])
+      .map((row: any) => row.students)
+      .filter((s: any) => s !== null) as Student[];
+
+    return students;
+  }
+
+  if (role === 'teacher' && gradeLevel) {
+    // Fetch students in teacher's grade level
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('grade_level', gradeLevel)
+      .order('name');
+
+    if (error) throw new Error(error.message);
+    return (data || []) as Student[];
+  }
+
+  return [];
+}
+
+/**
+ * Fetch groups based on user role
+ * - Admin: All groups
+ * - Interventionist: Groups they created + limited view of other groups
+ * - Teacher: All groups (read-only view)
+ */
+export async function fetchGroupsByRole(
+  role: 'admin' | 'interventionist' | 'teacher',
+  userId: string
+): Promise<Group[]> {
+  if (role === 'admin' || role === 'teacher') {
+    return fetchAllGroups();
+  }
+
+  if (role === 'interventionist') {
+    // Fetch groups created by this interventionist
+    const { data, error } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return (data || []) as Group[];
+  }
+
+  return [];
+}
+
+/**
+ * Fetch groups with visibility info for interventionists
+ * Includes "in_another_group" status without revealing details
+ */
+export async function fetchGroupsWithVisibility(
+  role: 'admin' | 'interventionist' | 'teacher',
+  userId: string
+): Promise<(Group & { isOwn: boolean })[]> {
+  const { data, error } = await supabase
+    .from('groups')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data || []).map((group: any) => ({
+    ...group,
+    isOwn: role === 'admin' || group.created_by === userId,
+  })) as (Group & { isOwn: boolean })[];
+}
+
+/**
+ * Create a group with the current user as owner
+ */
+export async function createGroupWithOwner(group: GroupInsert, creatorId: string): Promise<Group> {
+  const { data, error } = await supabase
+    .from('groups')
+    .insert({ ...group, created_by: creatorId })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as Group;
+}

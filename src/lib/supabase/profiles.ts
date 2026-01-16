@@ -1,5 +1,6 @@
 // Profiles table types and CRUD operations
 import { supabase } from './client';
+import type { GradeLevel } from './types';
 
 // User role type (matches auth.ts)
 export type UserRole = 'admin' | 'interventionist' | 'teacher';
@@ -10,6 +11,7 @@ export interface Profile {
   full_name: string;
   email: string;
   role: UserRole;
+  grade_level: GradeLevel | null; // Grade level for teachers (Pre-K, K, 1-8)
   created_at: string;
   created_by: string | null; // uuid of admin who created the user, null for self-signup
 }
@@ -133,6 +135,42 @@ export async function deleteProfile(userId: string): Promise<void> {
     console.error('Error deleting profile:', error);
     throw error;
   }
+}
+
+/**
+ * Fetch all interventionists from the database
+ */
+export async function fetchInterventionists(): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'interventionist')
+    .order('full_name');
+
+  if (error) {
+    console.error('Error fetching interventionists:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
+ * Fetch all teachers from the database
+ */
+export async function fetchTeachers(): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'teacher')
+    .order('full_name');
+
+  if (error) {
+    console.error('Error fetching teachers:', error);
+    throw error;
+  }
+
+  return data || [];
 }
 
 // ============================================
