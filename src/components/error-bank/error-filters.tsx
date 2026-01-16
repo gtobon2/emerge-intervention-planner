@@ -1,6 +1,6 @@
 'use client';
 
-import { Search } from 'lucide-react';
+import { Search, MapPin } from 'lucide-react';
 import { Input, Select } from '@/components/ui';
 import type { Curriculum } from '@/lib/supabase/types';
 
@@ -11,6 +11,9 @@ interface ErrorFiltersProps {
   onCurriculumChange: (value: Curriculum | 'all') => void;
   sortBy: 'alphabetical' | 'most_used' | 'most_effective';
   onSortChange: (value: 'alphabetical' | 'most_used' | 'most_effective') => void;
+  // Position filtering
+  selectedPosition?: string;
+  onPositionChange?: (value: string) => void;
 }
 
 const curriculumOptions = [
@@ -28,6 +31,44 @@ const sortOptions = [
   { value: 'most_effective', label: 'Most Effective' },
 ];
 
+// Position options by curriculum
+const wilsonPositionOptions = [
+  { value: '', label: 'All Steps' },
+  { value: '1', label: 'Step 1' },
+  { value: '2', label: 'Step 2' },
+  { value: '3', label: 'Step 3' },
+  { value: '4', label: 'Step 4' },
+  { value: '5', label: 'Step 5' },
+  { value: '6', label: 'Step 6' },
+];
+
+const caminoPositionOptions = [
+  { value: '', label: 'All Lessons' },
+  ...Array.from({ length: 40 }, (_, i) => ({ value: String(i + 1), label: `Lesson ${i + 1}` }))
+];
+
+const deltaMathPositionOptions = [
+  { value: '', label: 'All Standards' },
+  { value: '3.NBT', label: '3.NBT Standards' },
+  { value: '4.NF', label: '4.NF Standards' },
+  { value: '5.NBT', label: '5.NBT Standards' },
+  { value: '5.NF', label: '5.NF Standards' },
+];
+
+function getPositionOptions(curriculum: Curriculum | 'all') {
+  switch (curriculum) {
+    case 'wilson':
+      return wilsonPositionOptions;
+    case 'camino':
+    case 'despegando':
+      return caminoPositionOptions;
+    case 'delta_math':
+      return deltaMathPositionOptions;
+    default:
+      return [];
+  }
+}
+
 export function ErrorFilters({
   searchQuery,
   onSearchChange,
@@ -35,7 +76,12 @@ export function ErrorFilters({
   onCurriculumChange,
   sortBy,
   onSortChange,
+  selectedPosition = '',
+  onPositionChange,
 }: ErrorFiltersProps) {
+  const positionOptions = getPositionOptions(selectedCurriculum);
+  const showPositionFilter = positionOptions.length > 0 && onPositionChange;
+
   return (
     <div className="flex flex-wrap items-center gap-4 p-4 bg-surface rounded-xl">
       {/* Search Input */}
@@ -58,6 +104,19 @@ export function ErrorFilters({
         onChange={(e) => onCurriculumChange(e.target.value as Curriculum | 'all')}
         className="w-52"
       />
+
+      {/* Position Filter - Only shows when a specific curriculum is selected */}
+      {showPositionFilter && (
+        <div className="relative">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
+          <Select
+            options={positionOptions}
+            value={selectedPosition}
+            onChange={(e) => onPositionChange(e.target.value)}
+            className="w-40 pl-9"
+          />
+        </div>
+      )}
 
       {/* Sort Options */}
       <Select

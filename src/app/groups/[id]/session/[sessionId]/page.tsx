@@ -747,98 +747,249 @@ export default function SessionPage({
 
       <div className="max-w-7xl mx-auto px-4 py-4 md:py-6">
         {!isSessionActive ? (
-          // Pre-session view
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Session Plan */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="w-5 h-5 text-movement" />
-                  Session Plan
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-medium text-sm text-gray-700 mb-2">
-                    Planned Practice Items
-                  </h4>
-                  <ul className="space-y-1">
-                    {session.planned_practice_items?.map((item, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm">
-                        <Badge variant="default">
-                          {item.type}
-                        </Badge>
-                        {item.item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-sm text-gray-700 mb-2">
-                    Response Formats
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {session.planned_response_formats?.map((format) => (
-                      <Badge key={format} variant="default">
-                        {format}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-sm text-gray-700 mb-2">
-                    OTR Target
-                  </h4>
-                  <p className="text-2xl font-bold text-movement">
-                    {session.planned_otr_target}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Anticipated Errors */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-500" />
-                    Anticipated Errors
-                  </CardTitle>
-                  <AIErrorSuggestions
-                    curriculum={group.curriculum}
-                    position={session.curriculum_position}
-                    previousErrors={anticipatedErrors.map((e) => e.error_pattern)}
-                    onAddError={handleAddAIError}
-                    onAddAllErrors={handleAddAllAIErrors}
-                  />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {anticipatedErrors.length > 0 ? (
-                  <div className="space-y-3">
-                    {anticipatedErrors.map((error) => (
-                      <div
-                        key={error.id}
-                        className="p-3 bg-amber-50 border border-amber-200 rounded-lg"
-                      >
-                        <p className="font-medium text-amber-900">
-                          {error.error_pattern}
-                        </p>
-                        <p className="text-sm text-amber-700 mt-1">
-                          <strong>Correction:</strong> {error.correction_protocol}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    No anticipated errors yet. Use AI to generate suggestions or add manually.
-                  </p>
+          // Pre-session view - Full session preview
+          <div className="space-y-6">
+            {/* Session Header Info */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white rounded-lg p-4 border">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Position</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {formatCurriculumPosition(group.curriculum, session.curriculum_position)}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">OTR Target</p>
+                <p className="text-2xl font-bold text-movement">
+                  {session.planned_otr_target || 40}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Scheduled</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {new Date(session.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </p>
+                {session.time && (
+                  <p className="text-sm text-gray-600">{session.time}</p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              <div className="bg-white rounded-lg p-4 border">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Duration</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {group.schedule?.duration || 45} min
+                </p>
+              </div>
+            </div>
+
+            {/* Wilson Lesson Plan Preview */}
+            {session.wilson_lesson_plan && (
+              <Card className="border-purple-200 bg-purple-50/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-purple-900">
+                    <Target className="w-5 h-5 text-purple-600" />
+                    Wilson Lesson Plan - {session.wilson_lesson_plan.substep}
+                    <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200">
+                      {session.wilson_lesson_plan.totalDuration} min
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {session.wilson_lesson_plan.sections
+                      .filter(section => section.elements.length > 0)
+                      .map((section, idx) => (
+                        <div key={idx} className="bg-white rounded-lg p-3 border border-purple-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-sm text-purple-900">{section.componentName}</h4>
+                            <span className="text-xs text-purple-600 bg-purple-100 px-2 py-0.5 rounded">
+                              {section.duration} min
+                            </span>
+                          </div>
+                          <ul className="space-y-1">
+                            {section.elements.slice(0, 4).map((element, i) => (
+                              <li key={i} className="text-xs text-gray-600 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                {element.value}
+                              </li>
+                            ))}
+                            {section.elements.length > 4 && (
+                              <li className="text-xs text-purple-600 font-medium">
+                                +{section.elements.length - 4} more items
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Camino Lesson Plan Preview */}
+            {session.camino_lesson_plan && (
+              <Card className="border-orange-200 bg-orange-50/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-900">
+                    <Target className="w-5 h-5 text-orange-600" />
+                    Plan de Lección - {session.camino_lesson_plan.lessonName}
+                    <Badge className="ml-2 bg-orange-100 text-orange-800 border-orange-200">
+                      {session.camino_lesson_plan.totalDuration} min
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {session.camino_lesson_plan.sections
+                      .filter(section => section.elements.length > 0)
+                      .map((section, idx) => (
+                        <div key={idx} className="bg-white rounded-lg p-3 border border-orange-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-sm text-orange-900">{section.componentName}</h4>
+                            <span className="text-xs text-orange-600 bg-orange-100 px-2 py-0.5 rounded">
+                              {section.duration} min
+                            </span>
+                          </div>
+                          <ul className="space-y-1">
+                            {section.elements.slice(0, 4).map((element, i) => (
+                              <li key={i} className="text-xs text-gray-600 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                                {element.value}
+                              </li>
+                            ))}
+                            {section.elements.length > 4 && (
+                              <li className="text-xs text-orange-600 font-medium">
+                                +{section.elements.length - 4} más
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Session Plan Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="w-5 h-5 text-movement" />
+                    Session Plan
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {session.planned_practice_items && session.planned_practice_items.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">
+                        Planned Practice Items
+                      </h4>
+                      <ul className="space-y-1">
+                        {session.planned_practice_items.map((item, i) => (
+                          <li key={i} className="flex items-center gap-2 text-sm">
+                            <Badge variant="default">
+                              {item.type}
+                            </Badge>
+                            {item.item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {session.planned_response_formats && session.planned_response_formats.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">
+                        Response Formats
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {session.planned_response_formats.map((format) => (
+                          <Badge key={format} variant="default">
+                            {format}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Students in Group */}
+                  <div>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">
+                      Students ({students.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {students.map((student, idx) => (
+                        <span
+                          key={student.id}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                            STUDENT_COLORS[idx % STUDENT_COLORS.length]
+                          }`}
+                        >
+                          {student.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {session.notes && (
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">
+                        Planning Notes
+                      </h4>
+                      <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                        {session.notes}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Anticipated Errors */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-500" />
+                      Anticipated Errors
+                      {anticipatedErrors.length > 0 && (
+                        <Badge className="ml-1 bg-amber-100 text-amber-800 border-amber-200">
+                          {anticipatedErrors.length}
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <AIErrorSuggestions
+                      curriculum={group.curriculum}
+                      position={session.curriculum_position}
+                      previousErrors={anticipatedErrors.map((e) => e.error_pattern)}
+                      onAddError={handleAddAIError}
+                      onAddAllErrors={handleAddAllAIErrors}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {anticipatedErrors.length > 0 ? (
+                    <div className="space-y-3">
+                      {anticipatedErrors.map((error) => (
+                        <div
+                          key={error.id}
+                          className="p-3 bg-amber-50 border border-amber-200 rounded-lg"
+                        >
+                          <p className="font-medium text-amber-900">
+                            {error.error_pattern}
+                          </p>
+                          <p className="text-sm text-amber-700 mt-1">
+                            <strong>Correction:</strong> {error.correction_protocol}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No anticipated errors yet. Use AI to generate suggestions or add manually.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         ) : (
           // Active session view

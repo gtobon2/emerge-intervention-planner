@@ -6,12 +6,44 @@ import { AppLayout } from '@/components/layout';
 import { Button } from '@/components/ui';
 import { ErrorFilters, ErrorCard, AddErrorModal } from '@/components/error-bank';
 import { ALL_ERRORS, type ErrorBankSeedEntry } from '@/lib/error-banks';
-import type { Curriculum } from '@/lib/supabase/types';
+import type { Curriculum, CurriculumPosition } from '@/lib/supabase/types';
 import type { NewErrorData } from '@/components/error-bank';
+
+/**
+ * Check if an error's position matches the selected position filter
+ */
+function matchesPosition(
+  error: ErrorBankSeedEntry,
+  curriculum: Curriculum | 'all',
+  positionFilter: string
+): boolean {
+  if (!positionFilter) return true; // No filter = show all
+  if (!error.position) return false; // Universal errors don't match specific position
+
+  switch (curriculum) {
+    case 'wilson': {
+      const pos = error.position as { step?: number; substep?: string };
+      return pos.step === parseInt(positionFilter);
+    }
+    case 'camino':
+    case 'despegando': {
+      const pos = error.position as { lesson?: number };
+      return pos.lesson === parseInt(positionFilter);
+    }
+    case 'delta_math': {
+      const pos = error.position as { standard?: string };
+      // Match partial standard (e.g., "3.NBT" matches "3.NBT.1", "3.NBT.2", etc.)
+      return pos.standard?.startsWith(positionFilter) || false;
+    }
+    default:
+      return true;
+  }
+}
 
 export default function ErrorBankPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCurriculum, setSelectedCurriculum] = useState<Curriculum | 'all'>('all');
+  const [selectedPosition, setSelectedPosition] = useState('');
   const [sortBy, setSortBy] = useState<'alphabetical' | 'most_used' | 'most_effective'>('alphabetical');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [customErrors, setCustomErrors] = useState<ErrorBankSeedEntry[]>([]);
@@ -21,6 +53,12 @@ export default function ErrorBankPage() {
     return [...ALL_ERRORS, ...customErrors];
   }, [customErrors]);
 
+  // Reset position filter when curriculum changes
+  const handleCurriculumChange = (curriculum: Curriculum | 'all') => {
+    setSelectedCurriculum(curriculum);
+    setSelectedPosition(''); // Reset position when curriculum changes
+  };
+
   // Filter and sort errors
   const filteredErrors = useMemo(() => {
     let filtered = allErrors;
@@ -28,6 +66,13 @@ export default function ErrorBankPage() {
     // Filter by curriculum
     if (selectedCurriculum !== 'all') {
       filtered = filtered.filter(error => error.curriculum === selectedCurriculum);
+    }
+
+    // Filter by position
+    if (selectedPosition) {
+      filtered = filtered.filter(error =>
+        matchesPosition(error, selectedCurriculum, selectedPosition)
+      );
     }
 
     // Filter by search query
@@ -56,7 +101,7 @@ export default function ErrorBankPage() {
     }
 
     return filtered;
-  }, [allErrors, selectedCurriculum, searchQuery, sortBy]);
+  }, [allErrors, selectedCurriculum, selectedPosition, searchQuery, sortBy]);
 
   const handleAddError = (errorData: NewErrorData) => {
     const newError: ErrorBankSeedEntry = {
@@ -151,9 +196,11 @@ export default function ErrorBankPage() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           selectedCurriculum={selectedCurriculum}
-          onCurriculumChange={setSelectedCurriculum}
+          onCurriculumChange={handleCurriculumChange}
           sortBy={sortBy}
           onSortChange={setSortBy}
+          selectedPosition={selectedPosition}
+          onPositionChange={setSelectedPosition}
         />
 
         {/* Error Cards Grid */}
