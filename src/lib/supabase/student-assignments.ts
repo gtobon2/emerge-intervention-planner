@@ -404,7 +404,6 @@ export async function getStudentGroupStatusForInterventionist(
 ): Promise<StudentGroupStatus[]> {
   // First get students assigned to this interventionist
   const assignedStudents = await fetchStudentsForInterventionist(interventionistId);
-  const assignedStudentIds = new Set(assignedStudents.map(s => s.id));
 
   // Then get full student list with group info
   const { data, error } = await supabase
@@ -417,7 +416,7 @@ export async function getStudentGroupStatusForInterventionist(
       groups (
         name,
         curriculum,
-        created_by
+        owner_id
       )
     `)
     .order('name');
@@ -429,7 +428,7 @@ export async function getStudentGroupStatusForInterventionist(
 
   return (data || []).map(student => {
     const group = (student as any).groups;
-    const isOwnGroup = group?.created_by === interventionistId;
+    const isOwnGroup = group?.owner_id === interventionistId;
 
     return {
       student_id: student.id,
@@ -439,8 +438,145 @@ export async function getStudentGroupStatusForInterventionist(
       // Only show group details if it's their own group
       current_group_name: isOwnGroup ? group?.name : (group ? 'In another group' : null),
       current_curriculum: isOwnGroup ? group?.curriculum : null,
-      group_owner_id: group?.created_by || null,
+      group_owner_id: group?.owner_id || null,
       is_in_group: !!group,
     };
   }) as StudentGroupStatus[];
+}
+
+// ============================================
+// STUDENT GROUP MEMBERSHIP INFO
+// ============================================
+
+export interface StudentGroupInfo {
+  groupId: string;
+  groupName: string;
+  curriculum: Curriculum;
+  isOwnGroup: boolean;
+  ownerName?: string;
+}
+
+export interface StudentWithGroupInfo extends StudentWithAssignments {
+  groupInfo: StudentGroupInfo[];
+}
+
+/**
+ * Fetch assigned students for an interventionist with their group membership info
+ * This shows each student's groups (can be in multiple groups for different curricula)
+ */
+export async function fetchAssignedStudentsWithGroupInfo(
+  interventionistId: string
+): Promise<StudentWithGroupInfo[]> {
+  // Get students assigned to this interventionist
+  const assignedStudents = await fetchStudentsForInterventionist(interventionistId);
+
+  if (assignedStudents.length === 0) {
+    return [];
+  }
+
+  // Get all groups with owner info for these students
+  const { data: allStudentsWithGroups, error } = await supabase
+    .from('students')
+    .select(`
+      id,
+      group_id,
+      groups (
+        id,
+        name,
+        curriculum,
+        owner_id,
+        profiles:owner_id (full_name)
+      )
+    `)
+    .in('id', assignedStudents.map(s => s.id));
+
+  if (error) {
+    console.error('Error fetching group info:', error);
+    throw error;
+  }
+
+  // Build a map of student_id -> group info
+  const groupInfoMap = new Map<string, StudentGroupInfo[]>();
+
+  for (const row of (allStudentsWithGroups || [])) {
+    const group = (row as any).groups;
+    if (group) {
+      const info: StudentGroupInfo = {
+        groupId: group.id,
+        groupName: group.name,
+        curriculum: group.curriculum as Curriculum,
+        isOwnGroup: group.owner_id === interventionistId,
+        ownerName: group.profiles?.full_name,
+      };
+
+      if (groupInfoMap.has(row.id)) {
+        groupInfoMap.get(row.id)!.push(info);
+      } else {
+        groupInfoMap.set(row.id, [info]);
+      }
+    }
+  }
+
+  // Merge with assigned students
+  return assignedStudents.map(student => ({
+    ...student,
+    groupInfo: groupInfoMap.get(student.id) || [],
+  }));
+}
+
+/**
+ * Enhanced intervention conflict check that uses owner_id
+ */
+export async function checkInterventionConflictWithOwner(
+  studentId: string,
+  curriculum: Curriculum,
+  currentUserId: string,
+  excludeGroupId?: string
+): Promise<{
+  hasConflict: boolean;
+  conflictingGroupName?: string;
+  ownerName?: string;
+  isSameOwner?: boolean;
+}> {
+  // Build query to check for existing group membership with same curriculum
+  let query = supabase
+    .from('students')
+    .select(`
+      id,
+      group_id,
+      groups!inner (
+        id,
+        name,
+        curriculum,
+        owner_id,
+        profiles:owner_id (full_name)
+      )
+    `)
+    .eq('id', studentId)
+    .eq('groups.curriculum', curriculum);
+
+  // Exclude the current group if provided (for editing scenarios)
+  if (excludeGroupId) {
+    query = query.neq('group_id', excludeGroupId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error checking intervention conflict:', error);
+    throw error;
+  }
+
+  if (data && data.length > 0) {
+    const group = (data[0] as any).groups;
+    const profile = group?.profiles;
+    return {
+      hasConflict: true,
+      conflictingGroupName: group?.name,
+      ownerName: profile?.full_name,
+      isSameOwner: group?.owner_id === currentUserId,
+    };
+  }
+
+  return { hasConflict: false };
 }

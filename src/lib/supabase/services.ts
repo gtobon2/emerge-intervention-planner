@@ -391,23 +391,35 @@ export async function fetchStudentsByRole(
 /**
  * Fetch groups based on user role
  * - Admin: All groups
- * - Interventionist: Groups they created + limited view of other groups
- * - Teacher: All groups (read-only view)
+ * - Interventionist: Groups they own
+ * - Teacher: Groups for viewing (read-only)
  */
 export async function fetchGroupsByRole(
   role: 'admin' | 'interventionist' | 'teacher',
   userId: string
 ): Promise<Group[]> {
-  if (role === 'admin' || role === 'teacher') {
+  if (role === 'admin') {
     return fetchAllGroups();
   }
 
   if (role === 'interventionist') {
-    // Fetch groups created by this interventionist
+    // Fetch groups owned by this interventionist
     const { data, error } = await supabase
       .from('groups')
       .select('*')
-      .eq('created_by', userId)
+      .eq('owner_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return (data || []) as Group[];
+  }
+
+  if (role === 'teacher') {
+    // Teachers see groups they own only
+    const { data, error } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('owner_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
@@ -419,23 +431,32 @@ export async function fetchGroupsByRole(
 
 /**
  * Fetch groups with visibility info for interventionists
- * Includes "in_another_group" status without revealing details
+ * Includes "isOwn" flag based on owner_id
  */
 export async function fetchGroupsWithVisibility(
   role: 'admin' | 'interventionist' | 'teacher',
   userId: string
 ): Promise<(Group & { isOwn: boolean })[]> {
+  if (role === 'admin') {
+    // Admins see all groups and can edit all
+    const { data, error } = await supabase
+      .from('groups')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return (data || []).map((g: any) => ({ ...g, isOwn: true }));
+  }
+
+  // Non-admins see only their own groups
   const { data, error } = await supabase
     .from('groups')
     .select('*')
+    .eq('owner_id', userId)
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-
-  return (data || []).map((group: any) => ({
-    ...group,
-    isOwn: role === 'admin' || group.created_by === userId,
-  })) as (Group & { isOwn: boolean })[];
+  return (data || []).map((g: any) => ({ ...g, isOwn: true }));
 }
 
 /**
@@ -444,10 +465,110 @@ export async function fetchGroupsWithVisibility(
 export async function createGroupWithOwner(group: GroupInsert, creatorId: string): Promise<Group> {
   const { data, error } = await supabase
     .from('groups')
-    .insert({ ...group, created_by: creatorId })
+    .insert({ ...group, owner_id: creatorId, created_by: creatorId })
     .select()
     .single();
 
   if (error) throw new Error(error.message);
   return data as Group;
+}
+
+// ============================================
+// GROUP OWNERSHIP MANAGEMENT
+// ============================================
+
+/**
+ * Fetch all groups with owner information (for admin)
+ */
+export async function fetchAllGroupsWithOwners(): Promise<(Group & { owner?: { id: string; full_name: string; email: string } | null })[]> {
+  const { data, error } = await supabase
+    .from('groups')
+    .select(`
+      *,
+      owner:profiles!groups_owner_id_fkey (id, full_name, email)
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    // If the foreign key relationship doesn't exist yet, fall back to manual join
+    if (error.message.includes('groups_owner_id_fkey')) {
+      const groupsData = await fetchAllGroups();
+      return groupsData.map(g => ({ ...g, owner: null }));
+    }
+    throw new Error(error.message);
+  }
+  return (data || []).map((g: any) => ({
+    ...g,
+    owner: g.owner || null,
+  }));
+}
+
+/**
+ * Transfer group ownership to another user (admin only)
+ */
+export async function transferGroupOwnership(groupId: string, newOwnerId: string): Promise<Group> {
+  const { data, error } = await supabase
+    .from('groups')
+    .update({ owner_id: newOwnerId, updated_at: new Date().toISOString() })
+    .eq('id', groupId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as Group;
+}
+
+/**
+ * Fetch groups owned by a specific user
+ */
+export async function fetchGroupsByOwner(ownerId: string): Promise<Group[]> {
+  const { data, error } = await supabase
+    .from('groups')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as Group[];
+}
+
+/**
+ * Check if user can access a group (owner or admin)
+ */
+export async function canUserAccessGroup(groupId: string, userId: string, userRole: string): Promise<boolean> {
+  if (userRole === 'admin') return true;
+
+  const { data, error } = await supabase
+    .from('groups')
+    .select('owner_id')
+    .eq('id', groupId)
+    .single();
+
+  if (error) return false;
+  return data?.owner_id === userId;
+}
+
+/**
+ * Fetch group with owner details
+ */
+export async function fetchGroupWithOwner(groupId: string): Promise<(Group & { owner?: { id: string; full_name: string } | null }) | null> {
+  const { data, error } = await supabase
+    .from('groups')
+    .select(`
+      *,
+      owner:profiles!groups_owner_id_fkey (id, full_name)
+    `)
+    .eq('id', groupId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    // If foreign key doesn't exist, fall back
+    if (error.message.includes('groups_owner_id_fkey')) {
+      const group = await fetchGroupById(groupId);
+      return group ? { ...group, owner: null } : null;
+    }
+    throw new Error(error.message);
+  }
+  return { ...data, owner: data.owner || null };
 }

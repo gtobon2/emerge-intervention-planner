@@ -18,6 +18,7 @@ import {
   Clock,
   Loader2,
   Link2,
+  Layers,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import {
@@ -33,7 +34,7 @@ import {
   ConfirmModal,
   Switch,
 } from '@/components/ui';
-import { StudentAssignmentManager } from '@/components/admin';
+import { StudentAssignmentManager, GroupManagementTab } from '@/components/admin';
 import { useGroupsStore } from '@/stores/groups';
 import { useStudentsStore } from '@/stores/students';
 import { useSessionsStore } from '@/stores/sessions';
@@ -48,7 +49,7 @@ import type { Profile, UserRole } from '@/lib/supabase/profiles';
 // TYPES
 // ============================================
 
-type AdminTab = 'overview' | 'users' | 'students' | 'assignments' | 'data' | 'settings';
+type AdminTab = 'overview' | 'users' | 'students' | 'assignments' | 'groups' | 'data' | 'settings';
 
 // Grade level options
 const GRADE_LEVEL_OPTIONS: GradeLevel[] = ['Pre-K', 'K', '1', '2', '3', '4', '5', '6', '7', '8'];
@@ -557,6 +558,7 @@ export default function AdminPage() {
           { id: 'users', label: 'Users', icon: Users },
           { id: 'students', label: 'Students', icon: GraduationCap },
           { id: 'assignments', label: 'Assignments', icon: Link2 },
+          { id: 'groups', label: 'Manage Groups', icon: Layers },
           { id: 'data', label: 'Data', icon: Download },
           { id: 'settings', label: 'Settings', icon: SettingsIcon },
         ].map(tab => (
@@ -1025,6 +1027,7 @@ export default function AdminPage() {
         {activeTab === 'users' && renderUsers()}
         {activeTab === 'students' && renderStudents()}
         {activeTab === 'assignments' && renderAssignments()}
+        {activeTab === 'groups' && <GroupManagementTab />}
         {activeTab === 'data' && renderData()}
         {activeTab === 'settings' && renderSettings()}
       </div>

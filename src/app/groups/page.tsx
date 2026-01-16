@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, AlertCircle } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Input, Select, Modal } from '@/components/ui';
 import { GroupCard } from '@/components/dashboard';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
+import { useAuthStore } from '@/stores/auth';
 import type { Curriculum, CurriculumPosition } from '@/lib/supabase/types';
 
 const curriculumOptions = [
@@ -13,6 +14,7 @@ const curriculumOptions = [
   { value: 'wilson', label: 'Wilson Reading' },
   { value: 'delta_math', label: 'Delta Math' },
   { value: 'camino', label: 'Camino a la Lectura' },
+  { value: 'despegando', label: 'Despegando' },
   { value: 'wordgen', label: 'WordGen' },
   { value: 'amira', label: 'Amira Learning' },
 ];
@@ -32,6 +34,8 @@ function getDefaultPosition(curriculum: Curriculum): CurriculumPosition {
       return { standard: '1.OA.1', session: 1, phase: 'concrete' };
     case 'camino':
       return { lesson: 1 };
+    case 'despegando':
+      return { phase: 1, lesson: 1 };
     case 'wordgen':
       return { unit: 1, day: 1 };
     case 'amira':
@@ -42,8 +46,9 @@ function getDefaultPosition(curriculum: Curriculum): CurriculumPosition {
 }
 
 export default function GroupsPage() {
-  const { fetchGroups, createGroup, isLoading, error, filter, setFilter } = useGroupsStore();
+  const { fetchGroupsWithVisibility, createGroupWithOwner, isLoading, error, filter, setFilter, visibleGroups } = useGroupsStore();
   const filteredGroups = useFilteredGroups();
+  const { user, userRole } = useAuthStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -55,25 +60,31 @@ export default function GroupsPage() {
     grade: '',
   });
 
+  // Fetch groups based on user role
   useEffect(() => {
-    fetchGroups();
-  }, [fetchGroups]);
+    if (user && userRole) {
+      fetchGroupsWithVisibility(userRole as 'admin' | 'interventionist' | 'teacher', user.id);
+    }
+  }, [fetchGroupsWithVisibility, user, userRole]);
 
   const handleCreateGroup = async () => {
-    if (!formData.name || !formData.curriculum || !formData.tier || !formData.grade) {
+    if (!formData.name || !formData.curriculum || !formData.tier || !formData.grade || !user) {
       return;
     }
 
     setIsSaving(true);
     try {
-      const result = await createGroup({
-        name: formData.name,
-        curriculum: formData.curriculum as Curriculum,
-        tier: parseInt(formData.tier) as 2 | 3,
-        grade: parseInt(formData.grade),
-        current_position: getDefaultPosition(formData.curriculum as Curriculum),
-        schedule: null,
-      });
+      const result = await createGroupWithOwner(
+        {
+          name: formData.name,
+          curriculum: formData.curriculum as Curriculum,
+          tier: parseInt(formData.tier) as 2 | 3,
+          grade: parseInt(formData.grade),
+          current_position: getDefaultPosition(formData.curriculum as Curriculum),
+          schedule: null,
+        },
+        user.id
+      );
 
       if (result) {
         setIsCreateModalOpen(false);
@@ -86,15 +97,21 @@ export default function GroupsPage() {
 
   const isFormValid = formData.name && formData.curriculum && formData.tier && formData.grade;
 
+  // Check if user has no groups and is not admin
+  const hasNoGroups = filteredGroups.length === 0 && !isLoading;
+  const isNonAdmin = userRole !== 'admin';
+
   return (
     <AppLayout>
       <div className="space-y-4 md:space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-text-primary">Groups</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary">My Groups</h1>
             <p className="text-sm md:text-base text-text-muted mt-1">
-              Manage your intervention groups
+              {userRole === 'admin'
+                ? 'Manage all intervention groups'
+                : 'Manage your intervention groups'}
             </p>
           </div>
           <Button className="gap-2 w-full sm:w-auto min-h-[44px]" onClick={() => setIsCreateModalOpen(true)}>
@@ -144,16 +161,39 @@ export default function GroupsPage() {
               <div key={i} className="h-32 bg-surface rounded-xl animate-pulse" />
             ))}
           </div>
-        ) : filteredGroups.length === 0 ? (
+        ) : hasNoGroups ? (
           <div className="text-center py-12 md:py-16 bg-surface rounded-xl px-4">
-            <p className="text-text-muted mb-4">
-              {filter.searchQuery || filter.curriculum !== 'all' || filter.tier !== 'all'
-                ? 'No groups match your filters'
-                : 'No groups yet'}
-            </p>
-            <Button onClick={() => setIsCreateModalOpen(true)} className="min-h-[44px]">
-              Create Your First Group
-            </Button>
+            {filter.searchQuery || filter.curriculum !== 'all' || filter.tier !== 'all' ? (
+              <>
+                <p className="text-text-muted mb-4">No groups match your filters</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => setFilter({ searchQuery: '', curriculum: 'all', tier: 'all' })}
+                  className="min-h-[44px]"
+                >
+                  Clear Filters
+                </Button>
+              </>
+            ) : isNonAdmin ? (
+              <>
+                <AlertCircle className="w-12 h-12 mx-auto mb-4 text-text-muted opacity-50" />
+                <p className="text-lg font-medium text-text-primary mb-2">No groups yet</p>
+                <p className="text-text-muted mb-4 max-w-md mx-auto">
+                  Create a group using students assigned to you by your administrator.
+                  Groups you create will appear here.
+                </p>
+                <Button onClick={() => setIsCreateModalOpen(true)} className="min-h-[44px]">
+                  Create Your First Group
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-text-muted mb-4">No groups yet</p>
+                <Button onClick={() => setIsCreateModalOpen(true)} className="min-h-[44px]">
+                  Create Your First Group
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

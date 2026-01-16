@@ -15,7 +15,9 @@ import {
   Trash2,
   Edit,
   XCircle,
-  MoreVertical
+  MoreVertical,
+  ShieldAlert,
+  Eye,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
@@ -24,7 +26,9 @@ import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useAIContextStore } from '@/stores/ai-context';
+import { useAuthStore } from '@/stores/auth';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
+import { canUserAccessGroup } from '@/lib/supabase/services';
 import { db } from '@/lib/local-db';
 import { toNumericId } from '@/lib/utils/id';
 import type { Session, PMTrend } from '@/lib/supabase/types';
@@ -37,6 +41,8 @@ export default function GroupDetailPage() {
   const { selectedGroup, fetchGroupById, updateGroup, deleteGroup, isLoading: groupLoading } = useGroupsStore();
   const { sessions, fetchSessionsForGroup, createSession, updateSession, cancelSession, isLoading: sessionsLoading } = useSessionsStore();
   const { setContext, clearContext } = useAIContextStore();
+  const { user, userRole } = useAuthStore();
+
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -46,13 +52,39 @@ export default function GroupDetailPage() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pmTrend, setPmTrend] = useState<PMTrend | null>(null);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+
+  // Check if user has access to this group
+  useEffect(() => {
+    async function checkAccess() {
+      if (!user || !userRole || !groupId) {
+        setAccessChecked(true);
+        return;
+      }
+
+      try {
+        const canAccess = await canUserAccessGroup(groupId, user.id, userRole);
+        setHasAccess(canAccess);
+      } catch {
+        setHasAccess(false);
+      } finally {
+        setAccessChecked(true);
+      }
+    }
+
+    checkAccess();
+  }, [groupId, user, userRole]);
+
+  // Determine if current user can edit this group
+  const canEdit = userRole === 'admin' || (selectedGroup?.owner_id === user?.id);
 
   useEffect(() => {
-    if (groupId) {
+    if (groupId && hasAccess) {
       fetchGroupById(groupId);
       fetchSessionsForGroup(groupId);
     }
-  }, [groupId, fetchGroupById, fetchSessionsForGroup]);
+  }, [groupId, hasAccess, fetchGroupById, fetchSessionsForGroup]);
 
   // Set AI context when group and sessions load
   useEffect(() => {
@@ -250,13 +282,54 @@ export default function GroupDetailPage() {
     }
   };
 
-  if (groupLoading || !selectedGroup) {
+  // Show loading state while checking access
+  if (!accessChecked || groupLoading) {
     return (
       <AppLayout>
         <div className="animate-pulse space-y-6">
           <div className="h-8 w-48 bg-surface rounded" />
           <div className="h-48 bg-surface rounded-xl" />
           <div className="h-64 bg-surface rounded-xl" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Show access denied if user doesn't have access
+  if (accessChecked && hasAccess === false) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center py-16 px-4">
+          <ShieldAlert className="w-16 h-16 text-red-400 mb-4" />
+          <h1 className="text-xl font-bold text-text-primary mb-2">Access Denied</h1>
+          <p className="text-text-muted text-center mb-6 max-w-md">
+            You don&apos;t have permission to view this group. You can only view groups that you own or manage.
+          </p>
+          <Link href="/groups">
+            <Button variant="secondary">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to My Groups
+            </Button>
+          </Link>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!selectedGroup) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center py-16 px-4">
+          <h1 className="text-xl font-bold text-text-primary mb-2">Group Not Found</h1>
+          <p className="text-text-muted text-center mb-6">
+            The group you&apos;re looking for doesn&apos;t exist or has been deleted.
+          </p>
+          <Link href="/groups">
+            <Button variant="secondary">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to My Groups
+            </Button>
+          </Link>
         </div>
       </AppLayout>
     );
@@ -299,30 +372,39 @@ export default function GroupDetailPage() {
             </div>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <Button
-              variant="secondary"
-              className="gap-2 flex-1 md:flex-initial min-h-[44px]"
-              onClick={() => setShowEditGroupModal(true)}
-            >
-              <Settings className="w-4 h-4" />
-              <span>Edit</span>
-            </Button>
-            <Button
-              variant="secondary"
-              className="gap-2 min-h-[44px]"
-              onClick={() => setShowDeleteModal(true)}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span className="hidden md:inline">Delete</span>
-            </Button>
-            <Button
-              className="gap-2 flex-1 md:flex-initial min-h-[44px]"
-              onClick={() => setShowPlanModal(true)}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Plan Session</span>
-              <span className="sm:hidden">Plan</span>
-            </Button>
+            {canEdit ? (
+              <>
+                <Button
+                  variant="secondary"
+                  className="gap-2 flex-1 md:flex-initial min-h-[44px]"
+                  onClick={() => setShowEditGroupModal(true)}
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Edit</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="gap-2 min-h-[44px]"
+                  onClick={() => setShowDeleteModal(true)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden md:inline">Delete</span>
+                </Button>
+                <Button
+                  className="gap-2 flex-1 md:flex-initial min-h-[44px]"
+                  onClick={() => setShowPlanModal(true)}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Plan Session</span>
+                  <span className="sm:hidden">Plan</span>
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 bg-foundation rounded-lg text-sm text-text-muted">
+                <Eye className="w-4 h-4" />
+                <span>View Only</span>
+              </div>
+            )}
           </div>
         </div>
 

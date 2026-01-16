@@ -144,7 +144,8 @@ export interface Group {
   grade: number;
   current_position: CurriculumPosition;
   schedule: GroupSchedule | null;
-  created_by: string | null; // User ID of who created the group
+  owner_id: string | null; // User ID who owns/manages the group (for RBAC)
+  created_by: string | null; // User ID of who created the group (historical tracking)
   created_at: string;
   updated_at: string;
 }
@@ -332,8 +333,9 @@ export interface AILog {
 // INSERT TYPES (for creating new records)
 // ===========================================
 
-// GroupInsert: created_by is optional since it can be set automatically by the service layer
-export type GroupInsert = Omit<Group, 'id' | 'created_at' | 'updated_at' | 'created_by'> & {
+// GroupInsert: owner_id and created_by are optional since they can be set automatically by the service layer
+export type GroupInsert = Omit<Group, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'created_by'> & {
+  owner_id?: string | null;
   created_by?: string | null;
 };
 
@@ -361,6 +363,14 @@ export type ErrorBankUpdate = Partial<ErrorBankInsert>;
 
 export interface GroupWithStudents extends Group {
   students: Student[];
+}
+
+export interface GroupWithOwner extends Group {
+  owner?: {
+    id: string;
+    full_name: string;
+    email: string;
+  } | null;
 }
 
 export interface GroupWithSessions extends Group {
