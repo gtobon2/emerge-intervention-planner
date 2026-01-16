@@ -87,12 +87,17 @@ export default function DashboardPage() {
       const role = userRole as 'admin' | 'interventionist' | 'teacher';
       fetchSessionsByRole(role, user.id);
       fetchTodaySessionsByRole(role, user.id);
-    }
 
-    fetchAllStudents();
+      // Fetch students based on role
+      // Admins get all students, teachers need all students to filter by grade level
+      if (role === 'admin' || role === 'teacher') {
+        fetchAllStudents();
+      }
 
-    if (userRole === 'interventionist') {
-      fetchAssignedStudentsData();
+      // Interventionists fetch their assigned students
+      if (role === 'interventionist') {
+        fetchAssignedStudentsData();
+      }
     }
   }, [fetchSessionsByRole, fetchTodaySessionsByRole, fetchAllStudents, user, userRole, fetchAssignedStudentsData]);
 
