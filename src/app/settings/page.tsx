@@ -18,6 +18,9 @@ import {
   Monitor,
   BookOpen,
   ChevronRight,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout';
@@ -35,6 +38,7 @@ import {
 } from '@/components/ui';
 import { ImportStudentsModal } from '@/components/students';
 import { useSettings } from '@/hooks/use-settings';
+import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui';
 import { useStudentsStore } from '@/stores/students';
 import { useGroupsStore } from '@/stores/groups';
@@ -67,6 +71,16 @@ export default function SettingsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const { setSidebarCollapsed } = useUIStore();
+
+  // Password change state
+  const { updatePassword } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   const groups = useGroupsStore((state) => state.groups);
   const fetchGroups = useGroupsStore((state) => state.fetchGroups);
@@ -202,6 +216,37 @@ export default function SettingsPage() {
     }
   };
 
+  const handleChangePassword = async () => {
+    setPasswordError('');
+
+    // Validation
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await updatePassword(newPassword);
+      setSuccessMessage('Password changed successfully!');
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+      // Clear form
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error: any) {
+      setPasswordError(error.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const roleOptions = [
     { value: 'interventionist', label: 'Interventionist' },
     { value: 'coach', label: 'Coach' },
@@ -311,6 +356,67 @@ export default function SettingsPage() {
               <Button onClick={handleSaveProfile} isLoading={isSaving} className="gap-2">
                 <Save className="w-4 h-4" />
                 Save Profile
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Security Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-movement" />
+              <CardTitle>Security</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-text-muted">
+              Change your password to keep your account secure.
+            </p>
+
+            {passwordError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-sm text-red-500">{passwordError}</p>
+              </div>
+            )}
+
+            <div className="relative">
+              <Input
+                label="New Password"
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                disabled={isChangingPassword}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-9 text-text-muted hover:text-text-primary"
+              >
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <Input
+              label="Confirm New Password"
+              type="password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              placeholder="Confirm new password"
+              disabled={isChangingPassword}
+              helperText="Minimum 6 characters"
+            />
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleChangePassword}
+                isLoading={isChangingPassword}
+                disabled={!newPassword || !confirmNewPassword}
+                className="gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                Change Password
               </Button>
             </div>
           </CardContent>
