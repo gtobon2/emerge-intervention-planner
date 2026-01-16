@@ -81,8 +81,12 @@ export async function POST(request: NextRequest) {
 
     // Create auth user with Supabase Admin API
     // This will trigger the handle_new_user trigger to create the profile
+    // Set a temporary password that the admin will share with the user
+    const tempPassword = 'Welcome123!';
+
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
+      password: tempPassword,
       email_confirm: true, // Auto-confirm email
       user_metadata: {
         full_name,
@@ -125,17 +129,6 @@ export async function POST(request: NextRequest) {
       // Return success anyway since auth user exists
     }
 
-    // Send password reset email so user can set their password
-    const { error: resetError } = await supabase.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-    });
-
-    if (resetError) {
-      console.error('Error generating password reset link:', resetError);
-      // Don't fail the request, user was created successfully
-    }
-
     return NextResponse.json({
       user: profile || {
         id: authData.user.id,
@@ -145,7 +138,8 @@ export async function POST(request: NextRequest) {
         created_at: authData.user.created_at,
         created_by: created_by || null,
       },
-      message: 'User created successfully. They will receive an email to set their password.',
+      tempPassword,
+      message: `User created successfully. Temporary password: ${tempPassword}`,
     });
   } catch (error) {
     console.error('Error in POST /api/admin/users:', error);
