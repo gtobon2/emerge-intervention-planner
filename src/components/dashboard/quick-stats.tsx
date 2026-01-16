@@ -7,12 +7,13 @@ import type { QuickStats as QuickStatsType } from '@/lib/supabase/types';
 interface QuickStatsProps {
   stats: QuickStatsType;
   isLoading?: boolean;
+  isAdmin?: boolean;
 }
 
-export function QuickStats({ stats, isLoading }: QuickStatsProps) {
+export function QuickStats({ stats, isLoading, isAdmin = false }: QuickStatsProps) {
   const statItems = [
     {
-      label: 'Sessions This Week',
+      label: isAdmin ? 'All Sessions This Week' : 'Your Sessions This Week',
       value: stats.sessionsThisWeek,
       icon: Calendar,
       color: 'text-movement'
@@ -24,13 +25,13 @@ export function QuickStats({ stats, isLoading }: QuickStatsProps) {
       color: 'text-green-500'
     },
     {
-      label: 'Needs Attention',
+      label: isAdmin ? 'Groups Need Attention' : 'Your Groups Need Attention',
       value: stats.groupsNeedingAttention,
       icon: AlertTriangle,
       color: stats.groupsNeedingAttention > 0 ? 'text-tier3' : 'text-text-muted'
     },
     {
-      label: 'PM Data Due',
+      label: isAdmin ? 'All PM Data Due' : 'Your PM Data Due',
       value: stats.pmDataPointsDue,
       icon: TrendingUp,
       color: stats.pmDataPointsDue > 0 ? 'text-tier2' : 'text-text-muted'
