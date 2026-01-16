@@ -416,6 +416,9 @@ export interface TodaySession {
 }
 
 export interface QuickStats {
+  totalStudents: number;
+  totalGroups: number;
+  totalSessions: number;
   sessionsThisWeek: number;
   sessionsCompleted: number;
   groupsNeedingAttention: number;

@@ -243,12 +243,18 @@ export default function DashboardPage() {
   /**
    * Dashboard Statistics
    *
+   * - totalStudents: Total students visible to the user
+   * - totalGroups: Total groups visible to the user
+   * - totalSessions: Total sessions from user's groups
    * - sessionsThisWeek: Total sessions scheduled for current week (Sun-Sat)
    * - sessionsCompleted: Sessions marked as completed this week
    * - groupsNeedingAttention: Groups with no sessions in 7 days OR recent 'no' mastery
    * - pmDataPointsDue: Students needing PM data (Tier 3: weekly, Tier 2: bi-weekly)
    */
   const stats: QuickStatsType = {
+    totalStudents: displayStudentsCount,
+    totalGroups: groups.length,
+    totalSessions: filteredAllSessions.length,
     sessionsThisWeek: weekSessions.total,
     sessionsCompleted: weekSessions.completed,
     groupsNeedingAttention,
