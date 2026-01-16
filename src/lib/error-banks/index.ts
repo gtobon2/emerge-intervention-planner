@@ -315,6 +315,8 @@ export const ALL_ERRORS: ErrorBankSeedEntry[] = [
 ];
 
 // Helper function to get errors for a curriculum and position
+// Returns errors that match the exact position, errors that fall within a range,
+// and universal errors (no position specified)
 export function getErrorsForPosition(
   curriculum: Curriculum,
   position: CurriculumPosition
@@ -325,20 +327,44 @@ export function getErrorsForPosition(
 
     // Match position based on curriculum type
     if (curriculum === 'wilson') {
-      const errPos = error.position as { step: number; substep: string };
+      const errPos = error.position as { step: number; substep: string; stepRange?: [number, number] };
       const curPos = position as { step: number; substep: string };
+
+      // Check if error applies to a range of steps
+      if (errPos.stepRange) {
+        return curPos.step >= errPos.stepRange[0] && curPos.step <= errPos.stepRange[1];
+      }
+
+      // Match by exact substep if available (e.g., "1.3" matches "1.3")
+      if (errPos.substep && curPos.substep) {
+        // Exact substep match
+        if (errPos.substep === curPos.substep) return true;
+        // Also include errors for the same step number (e.g., step 1 errors apply to 1.1, 1.2, etc.)
+        return errPos.step === curPos.step;
+      }
+
+      // Fall back to step-level matching
       return errPos.step === curPos.step;
     }
 
     if (curriculum === 'delta_math') {
       const errPos = error.position as { standard: string };
       const curPos = position as { standard: string };
-      return errPos.standard === curPos.standard;
+      // Exact match or partial match (e.g., "3.NBT" matches "3.NBT.1")
+      return errPos.standard === curPos.standard ||
+             curPos.standard?.startsWith(errPos.standard) ||
+             errPos.standard?.startsWith(curPos.standard);
     }
 
-    if (curriculum === 'camino') {
-      const errPos = error.position as { lesson: number };
+    if (curriculum === 'camino' || curriculum === 'despegando') {
+      const errPos = error.position as { lesson: number; lessonRange?: [number, number] };
       const curPos = position as { lesson: number };
+
+      // Check if error applies to a range of lessons
+      if (errPos.lessonRange) {
+        return curPos.lesson >= errPos.lessonRange[0] && curPos.lesson <= errPos.lessonRange[1];
+      }
+
       return errPos.lesson === curPos.lesson;
     }
 
