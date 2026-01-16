@@ -39,40 +39,20 @@ import {
   calculateLessonDuration,
   generateElementId,
 } from '@/lib/curriculum/wilson-lesson-elements';
+import { WILSON_STEPS, getWilsonSubstep } from '@/lib/curriculum/wilson';
 
-// Wilson substep definitions
-const WILSON_SUBSTEPS = [
-  { value: '1.1', label: '1.1 - Short Vowels a, i', step: 1 },
-  { value: '1.2', label: '1.2 - Short Vowels o, u, e', step: 1 },
-  { value: '1.3', label: '1.3 - Digraphs sh, th, wh, ch, ck', step: 1 },
-  { value: '1.4', label: '1.4 - Blends', step: 1 },
-  { value: '1.5', label: '1.5 - Three-Sound Review', step: 1 },
-  { value: '1.6', label: '1.6 - Glued Sounds ang, ing, ong, ung, ank, ink, onk, unk', step: 1 },
-  { value: '2.1', label: '2.1 - Closed Syllable Exceptions', step: 2 },
-  { value: '2.2', label: '2.2 - Suffix -s, Plurals', step: 2 },
-  { value: '2.3', label: '2.3 - Suffix -es', step: 2 },
-  { value: '2.4', label: '2.4 - Suffix -ed', step: 2 },
-  { value: '2.5', label: '2.5 - Suffix -ing', step: 2 },
-  { value: '2.6', label: '2.6 - Suffix Review', step: 2 },
-  { value: '3.1', label: '3.1 - Closed Syllable Division', step: 3 },
-  { value: '3.2', label: '3.2 - Vowel-Consonant-e Syllable', step: 3 },
-  { value: '3.3', label: '3.3 - Open Syllable', step: 3 },
-  { value: '3.4', label: '3.4 - Syllable Division Review', step: 3 },
-  { value: '4.1', label: '4.1 - R-Controlled ar', step: 4 },
-  { value: '4.2', label: '4.2 - R-Controlled or', step: 4 },
-  { value: '4.3', label: '4.3 - R-Controlled er, ir, ur', step: 4 },
-  { value: '4.4', label: '4.4 - R-Controlled Review', step: 4 },
-  { value: '5.1', label: '5.1 - Vowel Team ai, ay', step: 5 },
-  { value: '5.2', label: '5.2 - Vowel Team ee, ea', step: 5 },
-  { value: '5.3', label: '5.3 - Vowel Team oi, oy', step: 5 },
-  { value: '5.4', label: '5.4 - Vowel Team oa, ow, oe', step: 5 },
-  { value: '5.5', label: '5.5 - Vowel Team ou, oo, ew, au, aw', step: 5 },
-  { value: '5.6', label: '5.6 - Vowel Team Review', step: 5 },
-  { value: '6.1', label: '6.1 - Consonant-le Syllable', step: 6 },
-  { value: '6.2', label: '6.2 - Advanced Suffixes -tion, -sion', step: 6 },
-  { value: '6.3', label: '6.3 - Prefixes', step: 6 },
-  { value: '6.4', label: '6.4 - Multisyllable Review', step: 6 },
-];
+// Helper function to get substep info by substep value (e.g., '1.1')
+function getSubstepInfo(substepValue: string) {
+  const substep = getWilsonSubstep(substepValue);
+  if (substep) {
+    return {
+      value: substep.substep,
+      label: `${substep.substep}: ${substep.name}`,
+      name: substep.name,
+    };
+  }
+  return null;
+}
 
 // Multi-day lesson plan with day assignments
 export interface MultiDayWilsonLessonPlan {
@@ -204,10 +184,10 @@ export function WilsonLessonBuilder({
         setLessonElements(elements || null);
 
         // Initialize empty lesson plan
-        const substepInfo = WILSON_SUBSTEPS.find((s) => s.value === selectedSubstep);
+        const substepInfo = getSubstepInfo(selectedSubstep);
         const newPlan = createEmptyLessonPlan(
           selectedSubstep,
-          substepInfo?.label.split(' - ')[1] || ''
+          substepInfo?.name || ''
         );
         if (sessionId) {
           newPlan.sessionId = sessionId;
@@ -535,8 +515,8 @@ export function WilsonLessonBuilder({
 
     setIsGeneratingAI(true);
     try {
-      const substepInfo = WILSON_SUBSTEPS.find((s) => s.value === selectedSubstep);
-      const substepName = substepInfo?.label.split(' - ')[1] || '';
+      const substepInfo = getSubstepInfo(selectedSubstep);
+      const substepName = substepInfo?.name || '';
 
       const response = await fetch('/api/ai/generate-wilson-lesson', {
         method: 'POST',
@@ -582,10 +562,14 @@ export function WilsonLessonBuilder({
             onChange={(e) => setSelectedSubstep(e.target.value)}
             className="px-3 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            {WILSON_SUBSTEPS.map((substep) => (
-              <option key={substep.value} value={substep.value}>
-                {substep.label}
-              </option>
+            {WILSON_STEPS.map((step) => (
+              <optgroup key={step.step} label={`Step ${step.step}: ${step.name}`}>
+                {step.substeps.map((substep) => (
+                  <option key={substep.substep} value={substep.substep}>
+                    {substep.substep}: {substep.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <div className="flex items-center gap-2 border-l pl-4">
