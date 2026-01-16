@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase/client';
 import { isMockMode } from '@/lib/supabase/config';
+import { fetchProfileById, type Profile } from '@/lib/supabase/profiles';
 import type { User, Session } from '@supabase/supabase-js';
 
 // User roles for access control
@@ -25,6 +26,7 @@ interface AuthState {
   user: User | null;
   session: Session | null;
   userRole: UserRole | null;
+  userProfile: Profile | null;
   currentDemoUser: DemoUser | null;
   isLoading: boolean;
   error: string | null;
@@ -39,6 +41,7 @@ interface AuthState {
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   updateProfile: (updates: { full_name?: string; email?: string }) => Promise<void>;
+  fetchUserProfile: () => Promise<void>;
   clearError: () => void;
   isAdmin: () => boolean;
 }
@@ -68,6 +71,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       session: null,
       userRole: null,
+      userProfile: null,
       currentDemoUser: null,
       isLoading: false,
       error: null,
@@ -120,18 +124,50 @@ export const useAuthStore = create<AuthState>()(
 
           if (error) throw error;
 
+          // If we have a session, fetch the user's profile
+          let profile: Profile | null = null;
+          let role: UserRole | null = null;
+
+          if (session?.user) {
+            try {
+              profile = await fetchProfileById(session.user.id);
+              role = profile?.role || (session.user.user_metadata?.role as UserRole) || 'interventionist';
+            } catch (profileError) {
+              console.error('Error fetching profile during init:', profileError);
+              // Fall back to user metadata role
+              role = (session.user.user_metadata?.role as UserRole) || 'interventionist';
+            }
+          }
+
           set({
             user: session?.user ?? null,
             session: session ?? null,
+            userRole: role,
+            userProfile: profile,
             isLoading: false,
             isInitialized: true,
           });
 
           // Set up auth state listener
-          supabase.auth.onAuthStateChange((_event, session) => {
+          supabase.auth.onAuthStateChange(async (_event, session) => {
+            let newProfile: Profile | null = null;
+            let newRole: UserRole | null = null;
+
+            if (session?.user) {
+              try {
+                newProfile = await fetchProfileById(session.user.id);
+                newRole = newProfile?.role || (session.user.user_metadata?.role as UserRole) || 'interventionist';
+              } catch (profileError) {
+                console.error('Error fetching profile on auth change:', profileError);
+                newRole = (session.user.user_metadata?.role as UserRole) || 'interventionist';
+              }
+            }
+
             set({
               user: session?.user ?? null,
               session: session ?? null,
+              userRole: newRole,
+              userProfile: newProfile,
             });
           });
         } catch (error: any) {
@@ -190,13 +226,25 @@ export const useAuthStore = create<AuthState>()(
 
           if (error) throw error;
 
-          // Extract role from user metadata if available
-          const role = data.user?.user_metadata?.role as UserRole | undefined;
+          // Fetch profile from database to get role
+          let profile: Profile | null = null;
+          let role: UserRole = 'interventionist';
+
+          if (data.user) {
+            try {
+              profile = await fetchProfileById(data.user.id);
+              role = profile?.role || (data.user.user_metadata?.role as UserRole) || 'interventionist';
+            } catch (profileError) {
+              console.error('Error fetching profile after login:', profileError);
+              role = (data.user.user_metadata?.role as UserRole) || 'interventionist';
+            }
+          }
 
           set({
             user: data.user,
             session: data.session,
-            userRole: role || 'interventionist',
+            userRole: role,
+            userProfile: profile,
             isLoading: false,
           });
         } catch (error: any) {
@@ -289,6 +337,7 @@ export const useAuthStore = create<AuthState>()(
               user: null,
               session: null,
               userRole: null,
+              userProfile: null,
               currentDemoUser: null,
               isLoading: false,
             });
@@ -303,6 +352,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             session: null,
             userRole: null,
+            userProfile: null,
             currentDemoUser: null,
             isLoading: false,
           });
@@ -410,6 +460,23 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
           throw error;
+        }
+      },
+
+      fetchUserProfile: async () => {
+        const user = get().user;
+        if (!user || isMockMode()) return;
+
+        try {
+          const profile = await fetchProfileById(user.id);
+          if (profile) {
+            set({
+              userProfile: profile,
+              userRole: profile.role,
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
         }
       },
 

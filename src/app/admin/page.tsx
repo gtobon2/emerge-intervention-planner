@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Shield,
   Users,
@@ -16,6 +16,7 @@ import {
   Edit2,
   UserPlus,
   Clock,
+  Loader2,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import {
@@ -35,8 +36,11 @@ import { useGroupsStore } from '@/stores/groups';
 import { useStudentsStore } from '@/stores/students';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettings } from '@/hooks/use-settings';
+import { useAuthStore } from '@/stores/auth';
 import { exportToFile, clearAllData } from '@/lib/local-db/backup';
+import { isMockMode } from '@/lib/supabase/config';
 import type { Group, Student, SessionWithGroup } from '@/lib/supabase/types';
+import type { Profile, UserRole } from '@/lib/supabase/profiles';
 
 // ============================================
 // TYPES
@@ -44,15 +48,14 @@ import type { Group, Student, SessionWithGroup } from '@/lib/supabase/types';
 
 type AdminTab = 'overview' | 'users' | 'students' | 'data' | 'settings';
 
+// User type for display (maps Profile to our UI needs)
 interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'interventionist' | 'teacher';
+  role: UserRole;
   createdAt: string;
-  createdBy?: string;
-  updatedAt?: string;
-  updatedBy?: string;
+  createdBy?: string | null;
 }
 
 // ============================================
@@ -68,17 +71,11 @@ export default function AdminPage() {
   const { allStudents, fetchAllStudents, createStudent, updateStudent, deleteStudent } = useStudentsStore();
   const { allSessions, fetchAllSessions } = useSessionsStore();
   const { sessionDefaults, updateSessionDefaults, saveSettings } = useSettings();
+  const { user: currentUser } = useAuthStore();
 
-  // Local state for users (simulated - would be from Supabase in production)
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      name: 'Admin User',
-      email: 'admin@school.edu',
-      role: 'admin',
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  // Users state - fetched from Supabase
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // UI States
   const [isLoading, setIsLoading] = useState(false);
@@ -114,12 +111,53 @@ export default function AdminPage() {
   // Settings state
   const [localSessionDuration, setLocalSessionDuration] = useState(sessionDefaults.defaultDuration.toString());
 
+  // Fetch users from Supabase API
+  const fetchUsers = useCallback(async () => {
+    if (isMockMode()) {
+      // In mock mode, use demo users
+      setUsers([
+        { id: '1', name: 'Admin User', email: 'admin@school.edu', role: 'admin', createdAt: new Date().toISOString() },
+        { id: '2', name: 'Sarah Martinez', email: 'sarah@emerge.edu', role: 'interventionist', createdAt: new Date().toISOString() },
+        { id: '3', name: 'John Smith', email: 'john@emerge.edu', role: 'teacher', createdAt: new Date().toISOString() },
+      ]);
+      return;
+    }
+
+    setUsersLoading(true);
+    try {
+      const response = await fetch('/api/admin/users');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch users');
+      }
+
+      // Map profiles to User format
+      const mappedUsers: User[] = (data.users || []).map((profile: Profile) => ({
+        id: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        createdAt: profile.created_at,
+        createdBy: profile.created_by,
+      }));
+
+      setUsers(mappedUsers);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to fetch users');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
   // Fetch data on mount
   useEffect(() => {
     fetchGroups();
     fetchAllStudents();
     fetchAllSessions();
-  }, [fetchGroups, fetchAllStudents, fetchAllSessions]);
+    fetchUsers();
+  }, [fetchGroups, fetchAllStudents, fetchAllSessions, fetchUsers]);
 
   // Update local duration when sessionDefaults changes
   useEffect(() => {
@@ -191,33 +229,91 @@ export default function AdminPage() {
     setShowUserModal(true);
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!userForm.name.trim() || !userForm.email.trim()) {
       setErrorMessage('Name and email are required');
       return;
     }
 
-    if (editingUser) {
-      setUsers(prev =>
-        prev.map(u =>
-          u.id === editingUser.id
-            ? { ...u, ...userForm, updatedAt: new Date().toISOString(), updatedBy: 'admin' }
-            : u
-        )
-      );
-      setSuccessMessage('User updated successfully');
-    } else {
-      const newUser: User = {
-        id: Date.now().toString(),
-        ...userForm,
-        createdAt: new Date().toISOString(),
-        createdBy: 'admin',
-      };
-      setUsers(prev => [...prev, newUser]);
-      setSuccessMessage('User added successfully');
+    if (isMockMode()) {
+      // Mock mode: update local state
+      if (editingUser) {
+        setUsers(prev =>
+          prev.map(u =>
+            u.id === editingUser.id
+              ? { ...u, name: userForm.name, email: userForm.email, role: userForm.role }
+              : u
+          )
+        );
+        setSuccessMessage('User updated successfully');
+      } else {
+        const newUser: User = {
+          id: Date.now().toString(),
+          name: userForm.name,
+          email: userForm.email,
+          role: userForm.role,
+          createdAt: new Date().toISOString(),
+          createdBy: 'admin',
+        };
+        setUsers(prev => [...prev, newUser]);
+        setSuccessMessage('User added successfully');
+      }
+      setShowUserModal(false);
+      return;
     }
 
-    setShowUserModal(false);
+    setIsLoading(true);
+    try {
+      if (editingUser) {
+        // Update existing user via PATCH
+        const response = await fetch('/api/admin/users', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: editingUser.id,
+            full_name: userForm.name,
+            role: userForm.role,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to update user');
+        }
+
+        setSuccessMessage('User updated successfully');
+      } else {
+        // Create new user via POST
+        const response = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userForm.email,
+            full_name: userForm.name,
+            role: userForm.role,
+            created_by: currentUser?.id || null,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to create user');
+        }
+
+        setSuccessMessage(data.message || 'User created successfully');
+      }
+
+      setShowUserModal(false);
+      // Refresh the users list
+      await fetchUsers();
+    } catch (err) {
+      console.error('Error saving user:', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to save user');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteUser = (user: User) => {
@@ -225,12 +321,39 @@ export default function AdminPage() {
     setShowDeleteUserModal(true);
   };
 
-  const handleConfirmDeleteUser = () => {
-    if (userToDelete) {
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    if (isMockMode()) {
       setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
       setSuccessMessage('User deleted successfully');
       setShowDeleteUserModal(false);
       setUserToDelete(null);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/admin/users?user_id=${userToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+
+      setSuccessMessage('User deleted successfully');
+      setShowDeleteUserModal(false);
+      setUserToDelete(null);
+      // Refresh the users list
+      await fetchUsers();
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to delete user');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -541,15 +664,25 @@ export default function AdminPage() {
             leftIcon={<Search className="w-4 h-4" />}
           />
         </div>
-        <Button onClick={handleAddUser} className="gap-2">
-          <UserPlus className="w-4 h-4" />
-          Add User
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => fetchUsers()} variant="ghost" size="sm" disabled={usersLoading}>
+            <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button onClick={handleAddUser} className="gap-2">
+            <UserPlus className="w-4 h-4" />
+            Add User
+          </Button>
+        </div>
       </div>
 
       <Card>
         <CardContent className="pt-6">
-          {filteredUsers.length === 0 ? (
+          {usersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-movement" />
+              <span className="ml-2 text-text-muted">Loading users...</span>
+            </div>
+          ) : filteredUsers.length === 0 ? (
             <p className="text-text-muted text-center py-8">No users found</p>
           ) : (
             <div className="overflow-x-auto">
@@ -886,6 +1019,7 @@ export default function AdminPage() {
             value={userForm.name}
             onChange={e => setUserForm({ ...userForm, name: e.target.value })}
             placeholder="Enter user name"
+            disabled={isLoading}
           />
           <Input
             label="Email"
@@ -893,6 +1027,7 @@ export default function AdminPage() {
             value={userForm.email}
             onChange={e => setUserForm({ ...userForm, email: e.target.value })}
             placeholder="Enter email address"
+            disabled={isLoading || !!editingUser} // Can't change email when editing
           />
           <Select
             label="Role"
@@ -903,12 +1038,18 @@ export default function AdminPage() {
               { value: 'interventionist', label: 'Interventionist' },
               { value: 'teacher', label: 'Teacher' },
             ]}
+            disabled={isLoading}
           />
+          {!editingUser && !isMockMode() && (
+            <p className="text-sm text-text-muted">
+              The user will receive an email to set their password.
+            </p>
+          )}
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setShowUserModal(false)}>
+            <Button variant="ghost" onClick={() => setShowUserModal(false)} disabled={isLoading}>
               Cancel
             </Button>
-            <Button onClick={handleSaveUser}>
+            <Button onClick={handleSaveUser} isLoading={isLoading}>
               {editingUser ? 'Update User' : 'Add User'}
             </Button>
           </div>
@@ -959,9 +1100,10 @@ export default function AdminPage() {
         onClose={() => setShowDeleteUserModal(false)}
         onConfirm={handleConfirmDeleteUser}
         title="Delete User?"
-        message={`Are you sure you want to delete "${userToDelete?.name}"? This action cannot be undone.`}
+        message={`Are you sure you want to delete "${userToDelete?.name}"? This will remove them from the system and they will no longer be able to sign in.`}
         confirmText="Delete User"
         variant="danger"
+        isLoading={isLoading}
       />
 
       {/* Delete Student Confirmation */}
