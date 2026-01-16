@@ -45,7 +45,7 @@ function getCurrentWeekDates(): { start: string; end: string } {
 
 export default function DashboardPage() {
   const { groups, fetchGroupsWithVisibility, isLoading: groupsLoading, filter, setFilter } = useGroupsStore();
-  const { fetchTodaySessions, fetchAllSessions, allSessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
+  const { fetchTodaySessionsByRole, fetchSessionsByRole, allSessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
   const { allStudents, fetchAllStudents } = useStudentsStore();
   const { user, userRole, userProfile } = useAuthStore();
   const filteredGroups = useFilteredGroups();
@@ -80,59 +80,49 @@ export default function DashboardPage() {
     }
   }, [fetchGroupsWithVisibility, user, userRole]);
 
-  // Fetch sessions and students
+  // Fetch sessions and students based on user role
   useEffect(() => {
-    fetchTodaySessions();
-    fetchAllSessions();
+    if (user && userRole) {
+      // Fetch sessions filtered by role at the database level
+      const role = userRole as 'admin' | 'interventionist' | 'teacher';
+      fetchSessionsByRole(role, user.id);
+      fetchTodaySessionsByRole(role, user.id);
+    }
+
     fetchAllStudents();
 
     if (userRole === 'interventionist') {
       fetchAssignedStudentsData();
     }
-  }, [fetchTodaySessions, fetchAllSessions, fetchAllStudents, userRole, fetchAssignedStudentsData]);
+  }, [fetchSessionsByRole, fetchTodaySessionsByRole, fetchAllStudents, user, userRole, fetchAssignedStudentsData]);
 
   // Get the set of group IDs the user owns
+  // This is used for IndexedDB filtering and other client-side operations
   const userGroupIds = useMemo(() => {
     return new Set(groups.map(g => g.id));
   }, [groups]);
 
-  // Filter sessions to only include sessions from user's groups
-  // IMPORTANT: Non-admins should ONLY see sessions from groups they own
+  // Sessions are now fetched filtered by role at the database level
+  // These values come directly from the store (already role-filtered)
+  // We just need to handle the case where data hasn't loaded yet
   const filteredAllSessions = useMemo(() => {
     // If no user role yet, don't show any sessions (security default)
     if (!userRole) {
       return [];
     }
-    // Admins see all sessions
-    if (userRole === 'admin') {
-      return allSessions;
-    }
-    // Non-admins: if groups haven't loaded yet, show nothing
-    if (userGroupIds.size === 0) {
-      return [];
-    }
-    // Filter to only sessions from groups this user owns
-    return allSessions.filter(session => userGroupIds.has(session.group_id));
-  }, [allSessions, userGroupIds, userRole]);
+    // Sessions are already filtered by role from fetchSessionsByRole
+    return allSessions;
+  }, [allSessions, userRole]);
 
-  // Filter today's sessions to only include sessions from user's groups
-  // IMPORTANT: Non-admins should ONLY see today's sessions from their groups
+  // Today's sessions are also fetched filtered by role at the database level
   const filteredTodaySessions = useMemo(() => {
     // If no user role yet, don't show any sessions (security default)
     if (!userRole) {
       return [];
     }
-    // Admins see all today's sessions
-    if (userRole === 'admin') {
-      return todaySessions;
-    }
-    // Non-admins: if groups haven't loaded yet, show nothing
-    if (userGroupIds.size === 0) {
-      return [];
-    }
-    // Filter to only sessions from groups this user owns
-    return todaySessions.filter(session => userGroupIds.has(session.groupId));
-  }, [todaySessions, userGroupIds, userRole]);
+    // Sessions are already filtered by role from fetchTodaySessionsByRole
+    return todaySessions;
+  }, [todaySessions, userRole]);
 
   // Calculate the number of students the user has access to
   // IMPORTANT: Non-admins should ONLY see students they have access to
@@ -157,37 +147,24 @@ export default function DashboardPage() {
     return 0;
   }, [userRole, userProfile, allStudents, assignedStudents]);
 
-  // Calculate sessions this week from IndexedDB - filtered by user's groups
+  // Calculate sessions this week from the role-filtered allSessions
+  // allSessions is already filtered by role at the database level
   useEffect(() => {
-    async function calculateWeekStats() {
-      try {
-        const { start, end } = getCurrentWeekDates();
-        let sessions = await db.sessions
-          .where('date')
-          .between(start, end, true, true)
-          .toArray();
+    const { start, end } = getCurrentWeekDates();
 
-        // Filter by user's groups if not admin
-        // Note: IndexedDB uses numeric IDs, Supabase uses string IDs, so we convert
-        if (userRole !== 'admin' && userGroupIds.size > 0) {
-          sessions = sessions.filter(s => userGroupIds.has(String(s.group_id)));
-        } else if (userRole !== 'admin' && userGroupIds.size === 0) {
-          sessions = [];
-        }
+    // Filter to sessions this week (allSessions is already role-filtered)
+    const weekSessionsData = filteredAllSessions.filter(session => {
+      return session.date >= start && session.date <= end;
+    });
 
-        setWeekSessions({
-          total: sessions.length,
-          completed: sessions.filter(s => s.status === 'completed').length,
-        });
-      } catch (error) {
-        console.error('Error calculating week stats:', error);
-      }
-    }
-    calculateWeekStats();
-  }, [allSessions, userRole, userGroupIds]); // Re-calculate when sessions or user groups change
+    setWeekSessions({
+      total: weekSessionsData.length,
+      completed: weekSessionsData.filter(s => s.status === 'completed').length,
+    });
+  }, [filteredAllSessions]); // Re-calculate when role-filtered sessions change
 
   // Calculate PM data points due (Tier 3 students need weekly PM, Tier 2 bi-weekly)
-  // Filtered by user's groups
+  // Uses groups from the store (already role-filtered)
   useEffect(() => {
     async function calculatePMDue() {
       try {
@@ -195,35 +172,32 @@ export default function DashboardPage() {
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        // Get all students with their group info
-        const students = await db.students.toArray();
-        const groupsData = await db.groups.toArray();
+        // Get PM records from IndexedDB
         const pmRecords = await db.progressMonitoring.toArray();
+        // Get students from IndexedDB
+        const allStudentsData = await db.students.toArray();
 
         let dueCount = 0;
 
-        for (const student of students) {
-          const group = groupsData.find(g => g.id === student.group_id);
-          if (!group) continue;
+        // Use the groups from store which are already role-filtered
+        for (const group of groups) {
+          // Find students in this group
+          const groupStudents = allStudentsData.filter(s => String(s.group_id) === group.id);
 
-          // For non-admins, only count students in their groups
-          // Note: IndexedDB uses numeric IDs, Supabase uses string IDs, so we convert
-          if (userRole !== 'admin' && !userGroupIds.has(String(group.id))) {
-            continue;
-          }
+          for (const student of groupStudents) {
+            // Get most recent PM for this student
+            const studentPM = pmRecords
+              .filter(pm => pm.student_id === student.id)
+              .sort((a, b) => b.date.localeCompare(a.date))[0];
 
-          // Get most recent PM for this student
-          const studentPM = pmRecords
-            .filter(pm => pm.student_id === student.id)
-            .sort((a, b) => b.date.localeCompare(a.date))[0];
+            const lastPMDate = studentPM?.date || '1970-01-01';
 
-          const lastPMDate = studentPM?.date || '1970-01-01';
-
-          // Tier 3 needs weekly PM, Tier 2 needs bi-weekly
-          if (group.tier === 3 && lastPMDate < oneWeekAgo) {
-            dueCount++;
-          } else if (group.tier === 2 && lastPMDate < twoWeeksAgo) {
-            dueCount++;
+            // Tier 3 needs weekly PM, Tier 2 needs bi-weekly
+            if (group.tier === 3 && lastPMDate < oneWeekAgo) {
+              dueCount++;
+            } else if (group.tier === 2 && lastPMDate < twoWeeksAgo) {
+              dueCount++;
+            }
           }
         }
 
@@ -233,7 +207,7 @@ export default function DashboardPage() {
       }
     }
     calculatePMDue();
-  }, [allStudents, groups, userRole, userGroupIds]);
+  }, [groups]); // groups is already role-filtered from fetchGroupsWithVisibility
 
   // Calculate groups needing attention (no sessions in past 7 days or mastery = 'no')
   // Filtered by user's groups

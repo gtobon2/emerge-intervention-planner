@@ -572,3 +572,54 @@ export async function fetchGroupWithOwner(groupId: string): Promise<(Group & { o
   }
   return { ...data, owner: data.owner || null };
 }
+
+// ============================================
+// ROLE-BASED SESSION QUERIES
+// ============================================
+
+/**
+ * Fetch sessions for groups owned by a specific user
+ * Used for interventionists and teachers on the dashboard
+ */
+export async function fetchSessionsByGroupOwner(ownerId: string): Promise<Session[]> {
+  // First get the group IDs owned by this user
+  const { data: groups, error: groupsError } = await supabase
+    .from('groups')
+    .select('id')
+    .eq('owner_id', ownerId);
+
+  if (groupsError) throw new Error(groupsError.message);
+
+  if (!groups || groups.length === 0) {
+    return [];
+  }
+
+  const groupIds = groups.map(g => g.id);
+
+  // Then fetch sessions for those groups
+  const { data: sessions, error: sessionsError } = await supabase
+    .from('sessions')
+    .select('*')
+    .in('group_id', groupIds)
+    .order('date', { ascending: false });
+
+  if (sessionsError) throw new Error(sessionsError.message);
+  return (sessions || []) as Session[];
+}
+
+/**
+ * Fetch sessions based on user role
+ * - Admin: All sessions
+ * - Interventionist/Teacher: Sessions from groups they own
+ */
+export async function fetchSessionsByRole(
+  role: 'admin' | 'interventionist' | 'teacher',
+  userId: string
+): Promise<Session[]> {
+  if (role === 'admin') {
+    return fetchAllSessions();
+  }
+
+  // Non-admins only see sessions from their own groups
+  return fetchSessionsByGroupOwner(userId);
+}

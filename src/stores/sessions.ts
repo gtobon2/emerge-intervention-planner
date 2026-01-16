@@ -14,6 +14,8 @@ import type {
   Group,
 } from '@/lib/supabase/types';
 
+type UserRole = 'admin' | 'interventionist' | 'teacher';
+
 interface SessionsState {
   sessions: Session[];
   allSessions: SessionWithGroup[];
@@ -25,7 +27,9 @@ interface SessionsState {
   // Actions
   fetchSessionsForGroup: (groupId: string) => Promise<void>;
   fetchAllSessions: () => Promise<void>;
+  fetchSessionsByRole: (role: UserRole, userId: string) => Promise<void>;
   fetchTodaySessions: () => Promise<void>;
+  fetchTodaySessionsByRole: (role: UserRole, userId: string) => Promise<void>;
   fetchSessionById: (id: string) => Promise<void>;
   createSession: (session: SessionInsert) => Promise<Session | null>;
   updateSession: (id: string, updates: SessionUpdate) => Promise<void>;
@@ -90,6 +94,33 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
   },
 
+  fetchSessionsByRole: async (role: UserRole, userId: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const sessions = await supabaseService.fetchSessionsByRole(role, userId);
+      const groups = await supabaseService.fetchGroupsByRole(role, userId);
+
+      const groupMap = new Map(groups.map(g => [g.id, g]));
+
+      const sessionsWithGroups: SessionWithGroup[] = sessions
+        .map(session => {
+          const group = groupMap.get(session.group_id);
+          if (!group) return null;
+          return { ...session, group };
+        })
+        .filter((s): s is SessionWithGroup => s !== null);
+
+      set({ allSessions: sessionsWithGroups, isLoading: false });
+    } catch (err) {
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        allSessions: []
+      });
+    }
+  },
+
   fetchSessionsForGroup: async (groupId: string) => {
     set({ isLoading: true, error: null });
 
@@ -114,6 +145,51 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const todaySessionsRaw = allSessions.filter(s => s.date === today);
 
       const groups = await supabaseService.fetchAllGroups();
+      const groupMap = new Map(groups.map(g => [g.id, g]));
+
+      const todaySessions: TodaySession[] = todaySessionsRaw
+        .map(session => {
+          const group = groupMap.get(session.group_id);
+          if (!group) return null;
+          return {
+            id: session.id,
+            groupId: session.group_id,
+            groupName: group.name,
+            curriculum: group.curriculum,
+            tier: group.tier,
+            time: session.time || '',
+            status: session.status,
+            position: session.curriculum_position,
+          } as TodaySession;
+        })
+        .filter((s): s is TodaySession => s !== null);
+
+      // Sort by time
+      todaySessions.sort((a, b) => {
+        if (!a.time) return 1;
+        if (!b.time) return -1;
+        return a.time.localeCompare(b.time);
+      });
+
+      set({ todaySessions, isLoading: false });
+    } catch (err) {
+      set({
+        error: (err as Error).message,
+        isLoading: false,
+        todaySessions: []
+      });
+    }
+  },
+
+  fetchTodaySessionsByRole: async (role: UserRole, userId: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const sessions = await supabaseService.fetchSessionsByRole(role, userId);
+      const todaySessionsRaw = sessions.filter(s => s.date === today);
+
+      const groups = await supabaseService.fetchGroupsByRole(role, userId);
       const groupMap = new Map(groups.map(g => [g.id, g]));
 
       const todaySessions: TodaySession[] = todaySessionsRaw
