@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Ban, School, AlertTriangle, Clock } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, Badge } from '@/components/ui';
 import { useAllSessions } from '@/hooks/use-sessions';
-import type { SessionWithGroup } from '@/lib/supabase/types';
+import { useSchoolCalendarStore, isDateInEvents, expandEventDates } from '@/stores/school-calendar';
+import type { SessionWithGroup, SchoolCalendarEvent, NonStudentDayType } from '@/lib/supabase/types';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
 
 // Status color mapping
@@ -22,6 +23,30 @@ const getStatusBadgeColor = (status: string): string => {
   return 'bg-blue-500/20 text-blue-400 border-blue-500/30'; // planned
 };
 
+// Non-student day type styling
+const getNonStudentDayStyle = (type: NonStudentDayType): { bg: string; text: string; icon: typeof Ban } => {
+  switch (type) {
+    case 'holiday':
+      return { bg: 'bg-red-100', text: 'text-red-700', icon: Ban };
+    case 'pd_day':
+      return { bg: 'bg-purple-100', text: 'text-purple-700', icon: School };
+    case 'institute_day':
+      return { bg: 'bg-purple-100', text: 'text-purple-700', icon: School };
+    case 'early_dismissal':
+      return { bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock };
+    case 'late_start':
+      return { bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock };
+    case 'testing_day':
+      return { bg: 'bg-orange-100', text: 'text-orange-700', icon: AlertTriangle };
+    case 'emergency_closure':
+      return { bg: 'bg-red-200', text: 'text-red-800', icon: AlertTriangle };
+    case 'break':
+      return { bg: 'bg-red-100', text: 'text-red-700', icon: Ban };
+    default:
+      return { bg: 'bg-gray-100', text: 'text-gray-700', icon: Ban };
+  }
+};
+
 // Month and day names
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -35,12 +60,25 @@ interface CalendarDay {
   isCurrentMonth: boolean;
   isToday: boolean;
   sessions: SessionWithGroup[];
+  calendarEvents: SchoolCalendarEvent[];
+  isNonStudentDay: boolean;
 }
 
 export default function CalendarPage() {
   const router = useRouter();
   const { sessions, isLoading } = useAllSessions();
+  const { events: calendarEvents, fetchAllEvents } = useSchoolCalendarStore();
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Fetch school calendar events on mount
+  useEffect(() => {
+    fetchAllEvents();
+  }, [fetchAllEvents]);
+
+  // Expand calendar events to individual dates for fast lookup
+  const eventsByDate = useMemo(() => {
+    return expandEventDates(calendarEvents);
+  }, [calendarEvents]);
 
   // Get calendar days for the current month view
   const calendarDays = useMemo(() => {
@@ -65,11 +103,15 @@ export default function CalendarPage() {
     // Add previous month days
     for (let i = startingDayOfWeek - 1; i >= 0; i--) {
       const date = new Date(year, month - 1, prevMonthLastDay - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayEvents = eventsByDate.get(dateStr) || [];
       days.push({
         date,
         isCurrentMonth: false,
         isToday: false,
-        sessions: []
+        sessions: [],
+        calendarEvents: dayEvents,
+        isNonStudentDay: dayEvents.length > 0,
       });
     }
 
@@ -78,12 +120,15 @@ export default function CalendarPage() {
       const date = new Date(year, month, day);
       const dateStr = date.toISOString().split('T')[0];
       const daySessions = sessions.filter(s => s.date === dateStr);
+      const dayEvents = eventsByDate.get(dateStr) || [];
 
       days.push({
         date,
         isCurrentMonth: true,
         isToday: date.getTime() === today.getTime(),
-        sessions: daySessions
+        sessions: daySessions,
+        calendarEvents: dayEvents,
+        isNonStudentDay: dayEvents.length > 0,
       });
     }
 
@@ -91,16 +136,20 @@ export default function CalendarPage() {
     const remainingDays = 42 - days.length; // 6 rows × 7 days
     for (let day = 1; day <= remainingDays; day++) {
       const date = new Date(year, month + 1, day);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayEvents = eventsByDate.get(dateStr) || [];
       days.push({
         date,
         isCurrentMonth: false,
         isToday: false,
-        sessions: []
+        sessions: [],
+        calendarEvents: dayEvents,
+        isNonStudentDay: dayEvents.length > 0,
       });
     }
 
     return days;
-  }, [currentDate, sessions]);
+  }, [currentDate, sessions, eventsByDate]);
 
   const goToPreviousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -225,14 +274,21 @@ export default function CalendarPage() {
 
               {/* Calendar Grid */}
               <div className="grid grid-cols-7 gap-2">
-                {calendarDays.map((day, index) => (
+                {calendarDays.map((day, index) => {
+                  // Get primary event for background styling
+                  const primaryEvent = day.calendarEvents[0];
+                  const eventStyle = primaryEvent ? getNonStudentDayStyle(primaryEvent.type) : null;
+
+                  return (
                   <div
                     key={index}
                     className={`
-                      min-h-[100px] sm:min-h-[120px] p-2 rounded-lg border transition-colors
-                      ${day.isCurrentMonth
-                        ? 'bg-surface/50 border-text-muted/10'
-                        : 'bg-foundation border-text-muted/5'
+                      min-h-[100px] sm:min-h-[120px] p-2 rounded-lg border transition-colors relative
+                      ${day.isNonStudentDay && eventStyle
+                        ? `${eventStyle.bg} border-transparent`
+                        : day.isCurrentMonth
+                          ? 'bg-surface/50 border-text-muted/10'
+                          : 'bg-foundation border-text-muted/5'
                       }
                       ${day.isToday
                         ? 'ring-2 ring-movement'
@@ -245,27 +301,43 @@ export default function CalendarPage() {
                       <span
                         className={`
                           text-sm font-medium
-                          ${day.isCurrentMonth
-                            ? day.isToday
-                              ? 'text-movement font-bold'
-                              : 'text-text-primary'
-                            : 'text-text-muted'
+                          ${day.isNonStudentDay && eventStyle
+                            ? eventStyle.text
+                            : day.isCurrentMonth
+                              ? day.isToday
+                                ? 'text-movement font-bold'
+                                : 'text-text-primary'
+                              : 'text-text-muted'
                           }
                         `}
                       >
                         {day.date.getDate()}
                       </span>
 
-                      {day.sessions.length > 0 && (
-                        <span className="text-xs bg-movement/20 text-movement px-1.5 py-0.5 rounded-full font-medium">
-                          {day.sessions.length}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {day.isNonStudentDay && eventStyle && (
+                          <span className={`text-xs ${eventStyle.text}`}>
+                            <Ban className="w-3 h-3" />
+                          </span>
+                        )}
+                        {day.sessions.length > 0 && (
+                          <span className="text-xs bg-movement/20 text-movement px-1.5 py-0.5 rounded-full font-medium">
+                            {day.sessions.length}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Non-student day label */}
+                    {day.isNonStudentDay && primaryEvent && (
+                      <div className={`text-xs font-medium truncate mb-1 ${eventStyle?.text}`} title={primaryEvent.title}>
+                        {primaryEvent.title}
+                      </div>
+                    )}
 
                     {/* Sessions */}
                     <div className="space-y-1">
-                      {day.sessions.slice(0, 3).map((session) => (
+                      {day.sessions.slice(0, day.isNonStudentDay ? 2 : 3).map((session) => (
                         <button
                           key={session.id}
                           onClick={() => handleSessionClick(session)}
@@ -286,14 +358,15 @@ export default function CalendarPage() {
                         </button>
                       ))}
 
-                      {day.sessions.length > 3 && (
+                      {day.sessions.length > (day.isNonStudentDay ? 2 : 3) && (
                         <div className="text-xs text-center text-text-muted pt-1">
-                          +{day.sessions.length - 3} more
+                          +{day.sessions.length - (day.isNonStudentDay ? 2 : 3)} more
                         </div>
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
@@ -301,23 +374,59 @@ export default function CalendarPage() {
 
         {/* Legend */}
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text-primary mb-3">Session Status</h3>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('planned')}`}></div>
-              <span className="text-text-muted">Planned</span>
+          <h3 className="text-sm font-semibold text-text-primary mb-3">Legend</h3>
+          <div className="space-y-3">
+            {/* Session status legend */}
+            <div>
+              <div className="text-xs text-text-muted mb-2 uppercase tracking-wide">Session Status</div>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('planned')}`}></div>
+                  <span className="text-text-muted">Planned</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('completed')}`}></div>
+                  <span className="text-text-muted">Completed</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('cancelled')}`}></div>
+                  <span className="text-text-muted">Cancelled</span>
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg border-2 border-movement"></div>
+                  <span className="text-text-muted">Today</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('completed')}`}></div>
-              <span className="text-text-muted">Completed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded border ${getStatusBadgeColor('cancelled')}`}></div>
-              <span className="text-text-muted">Cancelled</span>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg border-2 border-movement"></div>
-              <span className="text-text-muted">Today</span>
+            {/* Non-student day legend */}
+            <div>
+              <div className="text-xs text-text-muted mb-2 uppercase tracking-wide">Non-Student Days</div>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-red-100 border border-red-200 flex items-center justify-center">
+                    <Ban className="w-3 h-3 text-red-700" />
+                  </div>
+                  <span className="text-text-muted">Holiday/Break</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-purple-100 border border-purple-200 flex items-center justify-center">
+                    <School className="w-3 h-3 text-purple-700" />
+                  </div>
+                  <span className="text-text-muted">PD/Institute Day</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-amber-100 border border-amber-200 flex items-center justify-center">
+                    <Clock className="w-3 h-3 text-amber-700" />
+                  </div>
+                  <span className="text-text-muted">Early/Late Schedule</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-orange-100 border border-orange-200 flex items-center justify-center">
+                    <AlertTriangle className="w-3 h-3 text-orange-700" />
+                  </div>
+                  <span className="text-text-muted">Testing</span>
+                </div>
+              </div>
             </div>
           </div>
         </Card>
