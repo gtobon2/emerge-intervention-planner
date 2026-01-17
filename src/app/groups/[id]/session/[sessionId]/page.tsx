@@ -49,6 +49,7 @@ import {
   StudentOTRPanel,
   LessonComponentsPanel,
   SessionNotesPanel,
+  AttendancePanel,
   WILSON_LESSON_COMPONENTS,
 } from '@/components/sessions';
 import { WilsonLessonTracker } from '@/components/sessions/tracking/WilsonLessonTracker';
@@ -1051,8 +1052,14 @@ export default function SessionPage({
               />
             </div>
 
-            {/* Side panel - Error tracking */}
+            {/* Side panel - Attendance and Error tracking */}
             <div className="space-y-4">
+              {/* Session Attendance */}
+              <AttendancePanel
+                sessionId={session.id}
+                students={students}
+              />
+
               {/* Anticipated Errors */}
               <Card>
                 <CardHeader>

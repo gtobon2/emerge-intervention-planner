@@ -623,3 +623,431 @@ export async function fetchSessionsByRole(
   // Non-admins only see sessions from their own groups
   return fetchSessionsByGroupOwner(userId);
 }
+
+// ============================================
+// SESSION ATTENDANCE
+// ============================================
+
+import type {
+  SessionAttendance,
+  SessionAttendanceInsert,
+  SessionAttendanceUpdate,
+  SchoolCalendarEvent,
+  SchoolCalendarEventInsert,
+  SchoolCalendarEventUpdate,
+  InterventionCycle,
+  InterventionCycleInsert,
+  InterventionCycleUpdate,
+} from './types';
+
+/**
+ * Fetch attendance records for a session
+ */
+export async function fetchAttendanceBySessionId(sessionId: string): Promise<SessionAttendance[]> {
+  const { data, error } = await supabase
+    .from('session_attendance')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('marked_at', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SessionAttendance[];
+}
+
+/**
+ * Fetch attendance records for a student
+ */
+export async function fetchAttendanceByStudentId(studentId: string): Promise<SessionAttendance[]> {
+  const { data, error } = await supabase
+    .from('session_attendance')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('marked_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SessionAttendance[];
+}
+
+/**
+ * Create or update attendance for a student in a session
+ */
+export async function upsertAttendance(attendance: SessionAttendanceInsert): Promise<SessionAttendance> {
+  const { data, error } = await supabase
+    .from('session_attendance')
+    .upsert(attendance, {
+      onConflict: 'session_id,student_id',
+      ignoreDuplicates: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SessionAttendance;
+}
+
+/**
+ * Bulk create/update attendance for all students in a session
+ */
+export async function bulkUpsertAttendance(attendances: SessionAttendanceInsert[]): Promise<SessionAttendance[]> {
+  const { data, error } = await supabase
+    .from('session_attendance')
+    .upsert(attendances, {
+      onConflict: 'session_id,student_id',
+      ignoreDuplicates: false,
+    })
+    .select();
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SessionAttendance[];
+}
+
+/**
+ * Delete attendance record
+ */
+export async function deleteAttendance(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('session_attendance')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Get attendance statistics for a student
+ */
+export async function getStudentAttendanceStats(studentId: string): Promise<{
+  total: number;
+  present: number;
+  absent: number;
+  tardy: number;
+  excused: number;
+  attendanceRate: number;
+}> {
+  const records = await fetchAttendanceByStudentId(studentId);
+
+  const stats = {
+    total: records.length,
+    present: records.filter(r => r.status === 'present').length,
+    absent: records.filter(r => r.status === 'absent').length,
+    tardy: records.filter(r => r.status === 'tardy').length,
+    excused: records.filter(r => r.status === 'excused').length,
+    attendanceRate: 0,
+  };
+
+  // Calculate attendance rate (present + tardy counts as attended)
+  const attended = stats.present + stats.tardy;
+  stats.attendanceRate = stats.total > 0 ? Math.round((attended / stats.total) * 100) : 0;
+
+  return stats;
+}
+
+// ============================================
+// SCHOOL CALENDAR
+// ============================================
+
+/**
+ * Fetch all school calendar events
+ */
+export async function fetchAllCalendarEvents(): Promise<SchoolCalendarEvent[]> {
+  const { data, error } = await supabase
+    .from('school_calendar')
+    .select('*')
+    .order('date', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SchoolCalendarEvent[];
+}
+
+/**
+ * Fetch calendar events for a date range
+ */
+export async function fetchCalendarEventsInRange(
+  startDate: string,
+  endDate: string
+): Promise<SchoolCalendarEvent[]> {
+  const { data, error } = await supabase
+    .from('school_calendar')
+    .select('*')
+    .or(`date.gte.${startDate},end_date.gte.${startDate}`)
+    .or(`date.lte.${endDate},end_date.lte.${endDate}`)
+    .order('date', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SchoolCalendarEvent[];
+}
+
+/**
+ * Check if a specific date is a non-student day
+ */
+export async function isNonStudentDay(
+  checkDate: string,
+  gradeLevel?: number
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('school_calendar')
+    .select('id')
+    .or(`and(date.eq.${checkDate}),and(date.lte.${checkDate},end_date.gte.${checkDate})`)
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+
+  if (!data || data.length === 0) return false;
+
+  // If grade level is specified, check if it affects that grade
+  if (gradeLevel !== undefined) {
+    const { data: gradeData, error: gradeError } = await supabase
+      .from('school_calendar')
+      .select('affects_grades')
+      .or(`and(date.eq.${checkDate}),and(date.lte.${checkDate},end_date.gte.${checkDate})`)
+      .limit(1)
+      .single();
+
+    if (gradeError) return true; // Assume non-student day if error
+    if (!gradeData?.affects_grades) return true; // null = affects all grades
+    return gradeData.affects_grades.includes(gradeLevel);
+  }
+
+  return true;
+}
+
+/**
+ * Get all non-student days in a date range
+ */
+export async function getNonStudentDaysInRange(
+  startDate: string,
+  endDate: string,
+  gradeLevel?: number
+): Promise<string[]> {
+  const events = await fetchCalendarEventsInRange(startDate, endDate);
+  const nonStudentDays: Set<string> = new Set();
+
+  for (const event of events) {
+    // Check grade level filter
+    if (gradeLevel !== undefined && event.affects_grades) {
+      if (!event.affects_grades.includes(gradeLevel)) continue;
+    }
+
+    // Add all dates in the event range
+    const eventStart = new Date(event.date);
+    const eventEnd = event.end_date ? new Date(event.end_date) : eventStart;
+
+    const current = new Date(eventStart);
+    while (current <= eventEnd) {
+      const dateStr = current.toISOString().split('T')[0];
+      if (dateStr >= startDate && dateStr <= endDate) {
+        nonStudentDays.add(dateStr);
+      }
+      current.setDate(current.getDate() + 1);
+    }
+  }
+
+  return Array.from(nonStudentDays).sort();
+}
+
+/**
+ * Create a school calendar event
+ */
+export async function createCalendarEvent(event: SchoolCalendarEventInsert): Promise<SchoolCalendarEvent> {
+  const { data, error } = await supabase
+    .from('school_calendar')
+    .insert(event)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SchoolCalendarEvent;
+}
+
+/**
+ * Update a school calendar event
+ */
+export async function updateCalendarEvent(
+  id: string,
+  updates: SchoolCalendarEventUpdate
+): Promise<SchoolCalendarEvent> {
+  const { data, error } = await supabase
+    .from('school_calendar')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SchoolCalendarEvent;
+}
+
+/**
+ * Delete a school calendar event
+ */
+export async function deleteCalendarEvent(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('school_calendar')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+// ============================================
+// INTERVENTION CYCLES
+// ============================================
+
+/**
+ * Fetch all intervention cycles
+ */
+export async function fetchAllCycles(): Promise<InterventionCycle[]> {
+  const { data, error } = await supabase
+    .from('intervention_cycles')
+    .select('*')
+    .order('start_date', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as InterventionCycle[];
+}
+
+/**
+ * Fetch active intervention cycles
+ */
+export async function fetchActiveCycles(): Promise<InterventionCycle[]> {
+  const { data, error } = await supabase
+    .from('intervention_cycles')
+    .select('*')
+    .eq('status', 'active')
+    .order('start_date', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as InterventionCycle[];
+}
+
+/**
+ * Fetch cycle by ID
+ */
+export async function fetchCycleById(id: string): Promise<InterventionCycle | null> {
+  const { data, error } = await supabase
+    .from('intervention_cycles')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(error.message);
+  }
+  return data as InterventionCycle;
+}
+
+/**
+ * Get the current active cycle (first active one)
+ */
+export async function getCurrentCycle(): Promise<InterventionCycle | null> {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('intervention_cycles')
+    .select('*')
+    .eq('status', 'active')
+    .lte('start_date', today)
+    .gte('end_date', today)
+    .order('start_date', { ascending: true })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(error.message);
+  }
+  return data as InterventionCycle;
+}
+
+/**
+ * Create an intervention cycle
+ */
+export async function createCycle(cycle: InterventionCycleInsert): Promise<InterventionCycle> {
+  const { data, error } = await supabase
+    .from('intervention_cycles')
+    .insert(cycle)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as InterventionCycle;
+}
+
+/**
+ * Update an intervention cycle
+ */
+export async function updateCycle(
+  id: string,
+  updates: InterventionCycleUpdate
+): Promise<InterventionCycle> {
+  const { data, error } = await supabase
+    .from('intervention_cycles')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as InterventionCycle;
+}
+
+/**
+ * Delete an intervention cycle
+ */
+export async function deleteCycle(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('intervention_cycles')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Generate session dates for a cycle (excluding non-student days)
+ */
+export async function generateCycleSessionDates(
+  cycleId: string,
+  days: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday')[],
+  gradeLevel?: number
+): Promise<{ day: string; date: string }[]> {
+  const cycle = await fetchCycleById(cycleId);
+  if (!cycle) throw new Error('Cycle not found');
+
+  const nonStudentDays = await getNonStudentDaysInRange(
+    cycle.start_date,
+    cycle.end_date,
+    gradeLevel
+  );
+  const nonStudentSet = new Set(nonStudentDays);
+
+  const dayMap: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  const sessionDates: { day: string; date: string }[] = [];
+  const start = new Date(cycle.start_date);
+  const end = new Date(cycle.end_date);
+
+  const current = new Date(start);
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    const dayName = Object.keys(dayMap).find(k => dayMap[k] === dayOfWeek) as string;
+    const dateStr = current.toISOString().split('T')[0];
+
+    if (days.includes(dayName as any) && !nonStudentSet.has(dateStr)) {
+      sessionDates.push({ day: dayName, date: dateStr });
+    }
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return sessionDates;
+}

@@ -9,6 +9,7 @@ export {
   StudentOTRPanel,
   LessonComponentsPanel,
   SessionNotesPanel,
+  AttendancePanel,
   WILSON_LESSON_COMPONENTS,
 } from './tracking';
 export type { LessonComponent } from './tracking';

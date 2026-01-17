@@ -1,18 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import { Lightbulb, ChevronRight, AlertCircle, CheckCircle, Clock, Calendar, Plus } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Lightbulb, ChevronRight, AlertCircle, CheckCircle, Clock, Calendar, Plus, CalendarDays, Ban } from 'lucide-react';
 import { Button, Card, Select, Input, Modal } from '@/components/ui';
 import { useScheduleStore } from '@/stores/schedule';
 import { useSessionsStore } from '@/stores/sessions';
 import { useGroupsStore } from '@/stores/groups';
+import { useCyclesStore } from '@/stores/cycles';
+import { useSchoolCalendarStore } from '@/stores/school-calendar';
 import {
   formatTimeDisplay,
   getDayDisplayName,
   getDayShortName,
   WEEKDAYS,
 } from '@/lib/scheduling/time-utils';
-import type { SuggestedTimeSlot, Group, WeekDay } from '@/lib/supabase/types';
+import {
+  generateCycleSchedule,
+  type CycleScheduleResult,
+  type ScheduledSession,
+} from '@/lib/scheduling/scheduler';
+import type { SuggestedTimeSlot, Group, WeekDay, InterventionCycle } from '@/lib/supabase/types';
 
 interface SuggestionsPanelProps {
   groups: Group[];
@@ -27,12 +34,18 @@ export function SuggestionsPanel({ groups }: SuggestionsPanelProps) {
     clearSuggestions,
   } = useScheduleStore();
 
-  const { createSession } = useSessionsStore();
+  const { createSession, fetchAllSessions } = useSessionsStore();
   const { groups: allGroups } = useGroupsStore();
+  const { cycles, currentCycle, fetchAllCycles, fetchCurrentCycle } = useCyclesStore();
+  const { fetchAllEvents } = useSchoolCalendarStore();
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [sessionsPerWeek, setSessionsPerWeek] = useState('3');
   const [sessionDuration, setSessionDuration] = useState('30');
+  const [schedulingMode, setSchedulingMode] = useState<'weeks' | 'cycle'>('cycle');
+  const [selectedCycleId, setSelectedCycleId] = useState<string>('');
+  const [selectedDays, setSelectedDays] = useState<WeekDay[]>(['monday', 'wednesday', 'friday']);
+  const [preferredTime, setPreferredTime] = useState<string>('09:00');
 
   // Scheduling modal state
   const [isSchedulingModalOpen, setIsSchedulingModalOpen] = useState(false);
@@ -40,18 +53,154 @@ export function SuggestionsPanel({ groups }: SuggestionsPanelProps) {
   const [weeksToSchedule, setWeeksToSchedule] = useState('4');
   const [isCreatingSessions, setIsCreatingSessions] = useState(false);
 
+  // Cycle schedule preview
+  const [cyclePreview, setCyclePreview] = useState<CycleScheduleResult | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  // Fetch cycles on mount
+  useEffect(() => {
+    fetchAllCycles();
+    fetchCurrentCycle();
+    fetchAllEvents();
+  }, [fetchAllCycles, fetchCurrentCycle, fetchAllEvents]);
+
+  // Set default cycle when loaded
+  useEffect(() => {
+    if (currentCycle && !selectedCycleId) {
+      setSelectedCycleId(currentCycle.id);
+    }
+  }, [currentCycle, selectedCycleId]);
+
+  // Cycle options for dropdown
+  const cycleOptions = useMemo(() => [
+    { value: '', label: 'Select a cycle...' },
+    ...cycles
+      .filter(c => c.status !== 'completed')
+      .map(c => ({
+        value: c.id,
+        label: `${c.name} (${new Date(c.start_date).toLocaleDateString()} - ${new Date(c.end_date).toLocaleDateString()})`,
+      })),
+  ], [cycles]);
+
   const groupOptions = [
     { value: '', label: 'Select a group...' },
     ...groups.map(g => ({ value: String(g.id), label: g.name })),
   ];
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     if (!selectedGroupId) return;
 
-    calculateSuggestions(selectedGroupId, {
-      sessionsPerWeek: parseInt(sessionsPerWeek),
-      sessionDuration: parseInt(sessionDuration),
-    });
+    if (schedulingMode === 'weeks') {
+      // Use existing weekly suggestion logic
+      calculateSuggestions(selectedGroupId, {
+        sessionsPerWeek: parseInt(sessionsPerWeek),
+        sessionDuration: parseInt(sessionDuration),
+      });
+    } else {
+      // Use cycle-aware scheduling
+      if (!selectedCycleId) return;
+
+      setIsLoadingPreview(true);
+      setCyclePreview(null);
+
+      try {
+        const group = allGroups.find(g => g.id === selectedGroupId);
+        if (!group) return;
+
+        // Get group from local db (scheduler uses local db IDs)
+        // For now, we'll use a numeric ID approach
+        const numericId = typeof group.id === 'string' ? parseInt(group.id) : group.id;
+
+        const result = await generateCycleSchedule(numericId, {
+          cycleId: selectedCycleId,
+          sessionDuration: parseInt(sessionDuration),
+          preferredDays: selectedDays,
+          preferredTime,
+          startHour: 7,
+          endHour: 17,
+        });
+
+        setCyclePreview(result);
+      } catch (error) {
+        console.error('Failed to generate cycle schedule:', error);
+      } finally {
+        setIsLoadingPreview(false);
+      }
+    }
+  };
+
+  // Handle creating sessions for a full cycle
+  const handleCreateCycleSessions = async () => {
+    if (!cyclePreview || !selectedGroupId) return;
+
+    setIsCreatingSessions(true);
+
+    try {
+      const group = allGroups.find(g => g.id === selectedGroupId);
+      if (!group) throw new Error('Group not found');
+
+      let sessionsCreated = 0;
+
+      // Create sessions for each date in the cycle
+      for (const session of cyclePreview.dates) {
+        // Skip sessions with blocking conflicts
+        const hasBlockingConflict = session.conflicts.some(
+          c => c.type === 'existing_session' || c.type === 'interventionist_unavailable'
+        );
+        if (hasBlockingConflict) continue;
+
+        await createSession({
+          group_id: selectedGroupId,
+          date: session.date,
+          time: session.time,
+          status: 'planned',
+          curriculum_position: group.current_position,
+          advance_after: false,
+          // Required nullable fields
+          notes: null,
+          planned_otr_target: null,
+          planned_response_formats: null,
+          planned_practice_items: null,
+          cumulative_review_items: null,
+          anticipated_errors: null,
+          actual_otr_estimate: null,
+          pacing: null,
+          components_completed: null,
+          exit_ticket_correct: null,
+          exit_ticket_total: null,
+          mastery_demonstrated: null,
+          errors_observed: null,
+          unexpected_errors: null,
+          pm_score: null,
+          pm_trend: null,
+          dbi_adaptation_notes: null,
+          next_session_notes: null,
+          fidelity_checklist: null,
+        });
+
+        sessionsCreated++;
+      }
+
+      // Refresh sessions and close modal
+      await fetchAllSessions();
+      setIsSchedulingModalOpen(false);
+      setCyclePreview(null);
+
+      console.log(`Created ${sessionsCreated} sessions for cycle`);
+    } catch (error) {
+      console.error('Error creating sessions:', error);
+    } finally {
+      setIsCreatingSessions(false);
+    }
+  };
+
+  // Toggle day selection for cycle scheduling
+  const toggleDay = (day: WeekDay) => {
+    setSelectedDays(prev =>
+      prev.includes(day)
+        ? prev.filter(d => d !== day)
+        : [...prev, day].sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b))
+    );
   };
 
   const selectedGroup = groups.find(g => String(g.id) === selectedGroupId);
@@ -186,49 +335,235 @@ export function SuggestionsPanel({ groups }: SuggestionsPanelProps) {
 
           {selectedGroupId && (
             <>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-text-muted block mb-1">Sessions/Week</label>
-                  <Select
-                    options={[
-                      { value: '1', label: '1' },
-                      { value: '2', label: '2' },
-                      { value: '3', label: '3' },
-                      { value: '4', label: '4' },
-                      { value: '5', label: '5' },
-                    ]}
-                    value={sessionsPerWeek}
-                    onChange={e => setSessionsPerWeek(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-text-muted block mb-1">Duration (min)</label>
-                  <Select
-                    options={[
-                      { value: '20', label: '20 min' },
-                      { value: '30', label: '30 min' },
-                      { value: '45', label: '45 min' },
-                      { value: '60', label: '60 min' },
-                    ]}
-                    value={sessionDuration}
-                    onChange={e => setSessionDuration(e.target.value)}
-                  />
-                </div>
+              {/* Scheduling Mode Toggle */}
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => setSchedulingMode('cycle')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    schedulingMode === 'cycle'
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-text-secondary hover:bg-surface-hover'
+                  }`}
+                >
+                  <CalendarDays className="w-3 h-3 inline mr-1" />
+                  By Cycle
+                </button>
+                <button
+                  onClick={() => setSchedulingMode('weeks')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    schedulingMode === 'weeks'
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-text-secondary hover:bg-surface-hover'
+                  }`}
+                >
+                  <Calendar className="w-3 h-3 inline mr-1" />
+                  By Weeks
+                </button>
               </div>
+
+              {schedulingMode === 'cycle' ? (
+                <>
+                  {/* Cycle Selection */}
+                  <div>
+                    <label className="text-xs text-text-muted block mb-1">Intervention Cycle</label>
+                    <Select
+                      options={cycleOptions}
+                      value={selectedCycleId}
+                      onChange={e => {
+                        setSelectedCycleId(e.target.value);
+                        setCyclePreview(null);
+                      }}
+                    />
+                  </div>
+
+                  {/* Day Selection */}
+                  <div>
+                    <label className="text-xs text-text-muted block mb-1">Days</label>
+                    <div className="flex gap-1">
+                      {WEEKDAYS.map(day => (
+                        <button
+                          key={day}
+                          onClick={() => toggleDay(day)}
+                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                            selectedDays.includes(day)
+                              ? 'bg-primary text-white'
+                              : 'bg-surface text-text-secondary hover:bg-surface-hover'
+                          }`}
+                        >
+                          {getDayShortName(day).charAt(0)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Duration and Time */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">Duration</label>
+                      <Select
+                        options={[
+                          { value: '20', label: '20 min' },
+                          { value: '30', label: '30 min' },
+                          { value: '45', label: '45 min' },
+                          { value: '60', label: '60 min' },
+                        ]}
+                        value={sessionDuration}
+                        onChange={e => setSessionDuration(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">Preferred Time</label>
+                      <Input
+                        type="time"
+                        value={preferredTime}
+                        onChange={e => setPreferredTime(e.target.value)}
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Weekly scheduling options */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">Sessions/Week</label>
+                      <Select
+                        options={[
+                          { value: '1', label: '1' },
+                          { value: '2', label: '2' },
+                          { value: '3', label: '3' },
+                          { value: '4', label: '4' },
+                          { value: '5', label: '5' },
+                        ]}
+                        value={sessionsPerWeek}
+                        onChange={e => setSessionsPerWeek(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">Duration (min)</label>
+                      <Select
+                        options={[
+                          { value: '20', label: '20 min' },
+                          { value: '30', label: '30 min' },
+                          { value: '45', label: '45 min' },
+                          { value: '60', label: '60 min' },
+                        ]}
+                        value={sessionDuration}
+                        onChange={e => setSessionDuration(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Button
                 className="w-full"
                 onClick={handleCalculate}
-                disabled={isCalculating}
+                disabled={isCalculating || isLoadingPreview || (schedulingMode === 'cycle' && (!selectedCycleId || selectedDays.length === 0))}
               >
-                {isCalculating ? 'Calculating...' : 'Find Available Slots'}
+                {isCalculating || isLoadingPreview ? 'Calculating...' : schedulingMode === 'cycle' ? 'Preview Cycle Schedule' : 'Find Available Slots'}
               </Button>
             </>
           )}
         </div>
 
-        {/* Suggestions List */}
-        {suggestions.length > 0 && (
+        {/* Cycle Schedule Preview */}
+        {cyclePreview && schedulingMode === 'cycle' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-text-muted">
+                {cyclePreview.totalSessions} sessions for {selectedGroup?.name}
+              </span>
+              <button
+                onClick={() => setCyclePreview(null)}
+                className="text-xs text-text-muted hover:text-text-primary"
+              >
+                Clear
+              </button>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
+                <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                  {cyclePreview.dates.filter(d => d.conflicts.length === 0).length}
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-400">Available</div>
+              </div>
+              <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-center">
+                <div className="text-lg font-bold text-amber-700 dark:text-amber-300">
+                  {cyclePreview.skippedDates.length}
+                </div>
+                <div className="text-xs text-amber-600 dark:text-amber-400">Non-Student Days</div>
+              </div>
+            </div>
+
+            {/* Skipped dates warning */}
+            {cyclePreview.skippedDates.length > 0 && (
+              <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 mb-1">
+                  <Ban className="w-3 h-3" />
+                  <span className="font-medium">Skipped dates (holidays/PD days):</span>
+                </div>
+                <div className="text-xs text-amber-600 dark:text-amber-400">
+                  {cyclePreview.skippedDates.slice(0, 5).map(d => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })).join(', ')}
+                  {cyclePreview.skippedDates.length > 5 && ` +${cyclePreview.skippedDates.length - 5} more`}
+                </div>
+              </div>
+            )}
+
+            {/* Session preview list */}
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {cyclePreview.dates.slice(0, 10).map((session, idx) => (
+                <div
+                  key={`${session.date}-${idx}`}
+                  className={`p-2 rounded text-xs flex items-center justify-between ${
+                    session.conflicts.length === 0
+                      ? 'bg-green-50 dark:bg-green-900/20'
+                      : 'bg-amber-50 dark:bg-amber-900/20'
+                  }`}
+                >
+                  <div>
+                    <span className="font-medium">
+                      {new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                    <span className="text-text-muted ml-2">
+                      {formatTimeDisplay(session.time)}
+                    </span>
+                  </div>
+                  {session.conflicts.length === 0 ? (
+                    <CheckCircle className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <AlertCircle className="w-3 h-3 text-amber-500" />
+                  )}
+                </div>
+              ))}
+              {cyclePreview.dates.length > 10 && (
+                <div className="text-xs text-text-muted text-center py-1">
+                  +{cyclePreview.dates.length - 10} more sessions
+                </div>
+              )}
+            </div>
+
+            {/* Schedule Button */}
+            <Button
+              className="w-full gap-2"
+              onClick={handleCreateCycleSessions}
+              disabled={isCreatingSessions || cyclePreview.dates.filter(d => d.conflicts.length === 0).length === 0}
+            >
+              {isCreatingSessions ? 'Creating...' : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Create {cyclePreview.dates.filter(d => d.conflicts.length === 0).length} Sessions
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Suggestions List (for weekly mode) */}
+        {suggestions.length > 0 && schedulingMode === 'weeks' && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-text-muted">

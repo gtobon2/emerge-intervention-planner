@@ -83,13 +83,13 @@ export function getBlockDuration(block: TimeBlock): number {
  * @param duration Duration in minutes
  * @param startHour Start hour (default 7 = 7:00 AM)
  * @param endHour End hour (default 17 = 5:00 PM)
- * @param interval Slot interval in minutes (default 15)
+ * @param interval Slot interval in minutes (default 5 - changed from 15)
  */
 export function generateTimeSlots(
   duration: number,
   startHour = 7,
   endHour = 17,
-  interval = 15
+  interval = 5
 ): TimeBlock[] {
   const slots: TimeBlock[] = [];
   const startMinutes = startHour * 60;
@@ -191,9 +191,9 @@ export function getWeekDayFromDate(dateStr: string): WeekDay | null {
 }
 
 /**
- * Generate time options for select dropdowns (15-min intervals)
+ * Generate time options for select dropdowns (5-min intervals - changed from 15)
  */
-export function generateTimeOptions(startHour = 7, endHour = 17, interval = 15): string[] {
+export function generateTimeOptions(startHour = 7, endHour = 17, interval = 5): string[] {
   const options: string[] = [];
   const startMinutes = startHour * 60;
   const endMinutes = endHour * 60;

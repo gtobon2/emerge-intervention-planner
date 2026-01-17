@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, Filter, AlertCircle, Users } from 'lucide-react';
+import { Plus, Filter, AlertCircle, Users, CalendarDays, Ban, Calendar } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select, Card, CardContent } from '@/components/ui';
 import { GroupCard, TodaySchedule, QuickStats } from '@/components/dashboard';
@@ -9,6 +9,8 @@ import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useStudentsStore } from '@/stores/students';
 import { useAuthStore } from '@/stores/auth';
+import { useCyclesStore, getWeekOfCycle, getCycleProgress } from '@/stores/cycles';
+import { useSchoolCalendarStore } from '@/stores/school-calendar';
 import { db } from '@/lib/local-db';
 import { fetchAssignedStudentsWithGroupInfo, type StudentWithGroupInfo } from '@/lib/supabase/student-assignments';
 import { isMockMode } from '@/lib/supabase/config';
@@ -48,7 +50,14 @@ export default function DashboardPage() {
   const { fetchTodaySessionsByRole, fetchSessionsByRole, allSessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
   const { allStudents, fetchAllStudents } = useStudentsStore();
   const { user, userRole, userProfile } = useAuthStore();
+  const { currentCycle, fetchCurrentCycle } = useCyclesStore();
+  const { events: calendarEvents, fetchAllEvents, getUpcomingNonStudentDays } = useSchoolCalendarStore();
   const filteredGroups = useFilteredGroups();
+
+  // Upcoming non-student days for display
+  const upcomingNonStudentDays = useMemo(() => {
+    return getUpcomingNonStudentDays(7); // Next 7 days
+  }, [calendarEvents, getUpcomingNonStudentDays]);
 
   // Role-based students data for interventionists
   const [assignedStudents, setAssignedStudents] = useState<StudentWithGroupInfo[]>([]);
@@ -79,6 +88,12 @@ export default function DashboardPage() {
       fetchGroupsWithVisibility(userRole as 'admin' | 'interventionist' | 'teacher', user.id);
     }
   }, [fetchGroupsWithVisibility, user, userRole]);
+
+  // Fetch cycle and calendar data
+  useEffect(() => {
+    fetchCurrentCycle();
+    fetchAllEvents();
+  }, [fetchCurrentCycle, fetchAllEvents]);
 
   // Fetch sessions and students based on user role
   useEffect(() => {
@@ -311,6 +326,60 @@ export default function DashboardPage() {
           </Card>
         ) : (
           <>
+            {/* Cycle & Calendar Info Banner */}
+            {(currentCycle || upcomingNonStudentDays.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Current Cycle Info */}
+                {currentCycle && (
+                  <Card className="p-4 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+                    <div className="flex items-start gap-3">
+                      <CalendarDays className="w-5 h-5 text-primary mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-medium text-text-primary">{currentCycle.name}</div>
+                        <div className="text-sm text-text-muted mt-1">
+                          Week {getWeekOfCycle(currentCycle, new Date())} • {getCycleProgress(currentCycle)}% complete
+                        </div>
+                        <div className="text-xs text-text-muted mt-1">
+                          {new Date(currentCycle.start_date).toLocaleDateString()} - {new Date(currentCycle.end_date).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Upcoming Non-Student Days */}
+                {upcomingNonStudentDays.length > 0 && (
+                  <Card className="p-4 bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-900/30 border-amber-200 dark:border-amber-800">
+                    <div className="flex items-start gap-3">
+                      <Ban className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-medium text-amber-800 dark:text-amber-200">
+                          Upcoming Non-Student Days
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          {upcomingNonStudentDays.slice(0, 3).map((event) => (
+                            <div key={event.id} className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                              <Calendar className="w-3 h-3" />
+                              <span>
+                                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                {' - '}
+                                {event.title}
+                              </span>
+                            </div>
+                          ))}
+                          {upcomingNonStudentDays.length > 3 && (
+                            <div className="text-xs text-amber-600 dark:text-amber-400">
+                              +{upcomingNonStudentDays.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
+
             {/* Quick Stats */}
             <QuickStats stats={stats} isLoading={groupsLoading} isAdmin={isAdmin} />
 

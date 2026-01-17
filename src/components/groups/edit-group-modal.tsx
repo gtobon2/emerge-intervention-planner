@@ -5,6 +5,8 @@ import { Modal } from '@/components/ui/modal';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useCyclesStore, formatCycleDateRange } from '@/stores/cycles';
 import type {
   Group,
   GroupUpdate,
@@ -17,7 +19,12 @@ import type {
   AmiraPosition,
   DespegandoPosition,
   CurriculumPosition,
+  WeekDay,
+  EnhancedGroupSchedule,
+  DayTimeSlot,
+  InterventionCycle,
 } from '@/lib/supabase/types';
+import { isEnhancedSchedule, convertToEnhancedSchedule } from '@/lib/supabase/types';
 
 export interface EditGroupModalProps {
   isOpen: boolean;
@@ -41,12 +48,12 @@ const tierOptions = [
   { value: '3', label: 'Tier 3' },
 ];
 
-const dayOptions = [
-  { value: 'monday', label: 'Monday' },
-  { value: 'tuesday', label: 'Tuesday' },
-  { value: 'wednesday', label: 'Wednesday' },
-  { value: 'thursday', label: 'Thursday' },
-  { value: 'friday', label: 'Friday' },
+const dayOptions: { value: WeekDay; label: string; shortLabel: string }[] = [
+  { value: 'monday', label: 'Monday', shortLabel: 'Mon' },
+  { value: 'tuesday', label: 'Tuesday', shortLabel: 'Tue' },
+  { value: 'wednesday', label: 'Wednesday', shortLabel: 'Wed' },
+  { value: 'thursday', label: 'Thursday', shortLabel: 'Thu' },
+  { value: 'friday', label: 'Friday', shortLabel: 'Fri' },
 ];
 
 export function EditGroupModal({
@@ -56,16 +63,27 @@ export function EditGroupModal({
   group,
   isLoading = false,
 }: EditGroupModalProps) {
+  const { cycles, fetchAllCycles } = useCyclesStore();
+
   const [formData, setFormData] = useState({
     name: '',
     curriculum: 'wilson' as Curriculum,
     tier: 2 as Tier,
     grade: 1,
-    schedule_days: [] as string[],
-    schedule_time: '',
     schedule_duration: 30,
     notes: '',
   });
+
+  // Per-day schedule state
+  const [dayTimeSlots, setDayTimeSlots] = useState<DayTimeSlot[]>(
+    dayOptions.map(d => ({ day: d.value, time: '', enabled: false }))
+  );
+
+  // Cycle selection state
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [useCustomDates, setUseCustomDates] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // Curriculum position fields
   const [wilsonPosition, setWilsonPosition] = useState({ step: 1, substep: '1' });
@@ -77,6 +95,13 @@ export function EditGroupModal({
 
   const [errors, setErrors] = useState<{ [key: string]: string | undefined }>({});
 
+  // Fetch cycles when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchAllCycles();
+    }
+  }, [isOpen, fetchAllCycles]);
+
   // Reset form when modal opens/closes or group changes
   useEffect(() => {
     if (isOpen && group) {
@@ -85,11 +110,27 @@ export function EditGroupModal({
         curriculum: group.curriculum,
         tier: group.tier,
         grade: group.grade,
-        schedule_days: group.schedule?.days || [],
-        schedule_time: group.schedule?.time || '',
         schedule_duration: group.schedule?.duration || 30,
         notes: '',
       });
+
+      // Handle schedule - check if enhanced or legacy format
+      if (group.schedule && isEnhancedSchedule(group.schedule)) {
+        const enhanced = group.schedule as EnhancedGroupSchedule;
+        setDayTimeSlots(enhanced.day_times);
+        setSelectedCycleId(enhanced.cycle_id || null);
+        setUseCustomDates(!!enhanced.custom_start_date);
+        setCustomStartDate(enhanced.custom_start_date || '');
+        setCustomEndDate(enhanced.custom_end_date || '');
+      } else {
+        // Convert legacy format
+        const enhanced = convertToEnhancedSchedule(group.schedule);
+        setDayTimeSlots(enhanced.day_times);
+        setSelectedCycleId(null);
+        setUseCustomDates(false);
+        setCustomStartDate('');
+        setCustomEndDate('');
+      }
 
       // Set curriculum position based on curriculum type
       if (group.curriculum === 'wilson') {
@@ -178,17 +219,22 @@ export function EditGroupModal({
     }
 
     try {
+      // Build enhanced schedule
+      const enhancedSchedule: EnhancedGroupSchedule = {
+        day_times: dayTimeSlots,
+        duration: formData.schedule_duration || 30,
+        cycle_id: selectedCycleId || undefined,
+        custom_start_date: useCustomDates ? customStartDate || undefined : undefined,
+        custom_end_date: useCustomDates ? customEndDate || undefined : undefined,
+      };
+
       const updates: GroupUpdate = {
         name: formData.name.trim(),
         curriculum: formData.curriculum,
         tier: formData.tier,
         grade: formData.grade,
         current_position: getCurrentPosition(),
-        schedule: {
-          days: formData.schedule_days.length > 0 ? formData.schedule_days : undefined,
-          time: formData.schedule_time || undefined,
-          duration: formData.schedule_duration || undefined,
-        },
+        schedule: enhancedSchedule as any, // Cast since GroupSchedule union accepts JSONB
       };
 
       await onSave(group.id, updates);
@@ -205,14 +251,48 @@ export function EditGroupModal({
     }
   };
 
-  const handleDayToggle = (day: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      schedule_days: prev.schedule_days.includes(day)
-        ? prev.schedule_days.filter((d) => d !== day)
-        : [...prev.schedule_days, day],
-    }));
+  const handleDayToggle = (day: WeekDay) => {
+    setDayTimeSlots((prev) =>
+      prev.map((slot) =>
+        slot.day === day
+          ? { ...slot, enabled: !slot.enabled }
+          : slot
+      )
+    );
   };
+
+  const handleDayTimeChange = (day: WeekDay, time: string) => {
+    setDayTimeSlots((prev) =>
+      prev.map((slot) =>
+        slot.day === day
+          ? { ...slot, time, enabled: time ? true : slot.enabled }
+          : slot
+      )
+    );
+  };
+
+  const handleApplySameTime = () => {
+    // Find the first enabled day with a time
+    const firstWithTime = dayTimeSlots.find((s) => s.enabled && s.time);
+    if (firstWithTime) {
+      setDayTimeSlots((prev) =>
+        prev.map((slot) =>
+          slot.enabled ? { ...slot, time: firstWithTime.time } : slot
+        )
+      );
+    }
+  };
+
+  // Get cycle options for dropdown
+  const cycleOptions = [
+    { value: '', label: 'No cycle selected' },
+    ...cycles
+      .filter((c) => c.status === 'active' || c.status === 'planning')
+      .map((c) => ({
+        value: c.id,
+        label: `${c.name} (${formatCycleDateRange(c)})`,
+      })),
+  ];
 
   if (!group) return null;
 
@@ -398,52 +478,126 @@ export function EditGroupModal({
             Schedule (Optional)
           </h3>
 
+          {/* Cycle Selection */}
+          <div className="space-y-3">
+            <Select
+              label="Intervention Cycle"
+              options={cycleOptions}
+              value={selectedCycleId || ''}
+              onChange={(e) => setSelectedCycleId(e.target.value || null)}
+              disabled={isLoading}
+            />
+
+            {selectedCycleId && (
+              <div className="ml-4 space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={useCustomDates}
+                    onChange={(e) => setUseCustomDates(e.target.checked)}
+                    disabled={isLoading}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-text-muted">Custom dates (for mid-cycle starts)</span>
+                </label>
+                {useCustomDates && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Start Date"
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      disabled={isLoading}
+                    />
+                    <Input
+                      label="End Date"
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Per-Day Schedule */}
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">
-              Meeting Days
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {dayOptions.map((day) => (
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-text-primary">
+                Meeting Days & Times
+              </label>
+              {dayTimeSlots.some((s) => s.enabled && s.time) && (
                 <button
-                  key={day.value}
                   type="button"
-                  onClick={() => handleDayToggle(day.value)}
+                  onClick={handleApplySameTime}
+                  className="text-xs text-movement hover:text-movement/80 underline"
                   disabled={isLoading}
-                  className={`
-                    px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    ${
-                      formData.schedule_days.includes(day.value)
-                        ? 'bg-movement text-white'
-                        : 'bg-foundation border border-text-muted/20 text-text-muted hover:bg-surface'
-                    }
-                  `}
                 >
-                  {day.label}
+                  Apply same time to all
                 </button>
-              ))}
+              )}
+            </div>
+            <div className="space-y-2">
+              {dayOptions.map((day) => {
+                const slot = dayTimeSlots.find((s) => s.day === day.value);
+                const isEnabled = slot?.enabled || false;
+                return (
+                  <div
+                    key={day.value}
+                    className={`
+                      flex items-center gap-3 p-2 rounded-lg border transition-colors
+                      ${isEnabled ? 'border-movement/30 bg-movement/5' : 'border-gray-200 bg-gray-50'}
+                    `}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleDayToggle(day.value)}
+                      disabled={isLoading}
+                      className={`
+                        w-20 px-2 py-1.5 rounded text-sm font-medium transition-colors
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                        ${isEnabled
+                          ? 'bg-movement text-white'
+                          : 'bg-white border border-gray-200 text-text-muted hover:bg-gray-100'
+                        }
+                      `}
+                    >
+                      {day.shortLabel}
+                    </button>
+                    <input
+                      type="time"
+                      value={slot?.time || ''}
+                      onChange={(e) => handleDayTimeChange(day.value, e.target.value)}
+                      disabled={isLoading || !isEnabled}
+                      className={`
+                        flex-1 px-3 py-1.5 rounded border text-sm
+                        ${isEnabled
+                          ? 'border-movement/30 focus:ring-movement focus:border-movement'
+                          : 'border-gray-200 bg-gray-100 text-gray-400'
+                        }
+                        disabled:cursor-not-allowed
+                      `}
+                      placeholder={isEnabled ? 'Select time' : '--:--'}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Time"
-              type="time"
-              value={formData.schedule_time}
-              onChange={(e) => handleChange('schedule_time', e.target.value)}
-              disabled={isLoading}
-            />
-            <Input
-              label="Duration (minutes)"
-              type="number"
-              min="10"
-              max="120"
-              placeholder="e.g., 40"
-              value={formData.schedule_duration || ''}
-              onChange={(e) => handleChange('schedule_duration', parseInt(e.target.value) || 30)}
-              disabled={isLoading}
-            />
-          </div>
+          {/* Duration */}
+          <Input
+            label="Session Duration (minutes)"
+            type="number"
+            min="10"
+            max="120"
+            placeholder="e.g., 30"
+            value={formData.schedule_duration || ''}
+            onChange={(e) => handleChange('schedule_duration', parseInt(e.target.value) || 30)}
+            disabled={isLoading}
+          />
         </div>
 
         {/* Actions */}

@@ -547,7 +547,7 @@ export interface SuggestedTimeSlot {
 
 // Schedule conflict details
 export interface ScheduleConflict {
-  type: 'student_unavailable' | 'interventionist_unavailable' | 'existing_session';
+  type: 'student_unavailable' | 'interventionist_unavailable' | 'existing_session' | 'group_not_found' | 'no_cycle';
   description: string;
   studentId?: string;
   studentName?: string;
@@ -596,3 +596,244 @@ export const INTERVENTIONIST_COLORS = [
   '#f43f5e', // Rose
   '#0ea5e9', // Sky
 ];
+
+// ===========================================
+// SESSION ATTENDANCE TYPES
+// ===========================================
+
+export type AttendanceStatus = 'present' | 'absent' | 'tardy' | 'excused';
+
+export interface SessionAttendance {
+  id: string;
+  session_id: string;
+  student_id: string;
+  status: AttendanceStatus;
+  notes: string | null;
+  marked_at: string;
+  marked_by: string | null;
+}
+
+export type SessionAttendanceInsert = Omit<SessionAttendance, 'id' | 'marked_at'>;
+export type SessionAttendanceUpdate = Partial<SessionAttendanceInsert>;
+
+// Attendance with student info for display
+export interface AttendanceWithStudent extends SessionAttendance {
+  student: Student;
+}
+
+// ===========================================
+// SCHOOL CALENDAR / NON-STUDENT DAYS
+// ===========================================
+
+export type NonStudentDayType =
+  | 'holiday'
+  | 'pd_day'
+  | 'institute_day'
+  | 'early_dismissal'
+  | 'late_start'
+  | 'testing_day'
+  | 'emergency_closure'
+  | 'break';
+
+export interface SchoolCalendarEvent {
+  id: string;
+  date: string;          // YYYY-MM-DD
+  end_date: string | null; // For date ranges (e.g., winter break)
+  type: NonStudentDayType;
+  title: string;
+  affects_grades: number[] | null; // null = all grades affected
+  modified_start_time: string | null; // For late starts
+  modified_end_time: string | null;   // For early dismissals
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type SchoolCalendarEventInsert = Omit<SchoolCalendarEvent, 'id' | 'created_at'>;
+export type SchoolCalendarEventUpdate = Partial<SchoolCalendarEventInsert>;
+
+// ===========================================
+// INTERVENTION CYCLES
+// ===========================================
+
+export type CycleStatus = 'planning' | 'active' | 'completed';
+
+export interface InterventionCycle {
+  id: string;
+  name: string;           // "Cycle 3"
+  start_date: string;     // YYYY-MM-DD
+  end_date: string;       // YYYY-MM-DD
+  grade_band: string | null; // "K-2", "3-5", "6-8" or null for all
+  weeks_count: number;    // Typically 6-8
+  status: CycleStatus;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InterventionCycleInsert = Omit<InterventionCycle, 'id' | 'created_at' | 'updated_at'>;
+export type InterventionCycleUpdate = Partial<InterventionCycleInsert>;
+
+// ===========================================
+// ENHANCED GROUP SCHEDULE (per-day times)
+// ===========================================
+
+// Time slot for a specific day
+export interface DayTimeSlot {
+  day: WeekDay;
+  time: string;        // "09:00" 24-hour format
+  enabled: boolean;
+}
+
+// Enhanced schedule with per-day times and cycle reference
+export interface EnhancedGroupSchedule {
+  cycle_id?: string | null;       // Reference to intervention cycle
+  custom_start_date?: string | null;  // Override cycle start (for mid-cycle starts)
+  custom_end_date?: string | null;    // Override cycle end
+  day_times: DayTimeSlot[];       // Per-day time configuration
+  duration: number;               // Session duration in minutes
+}
+
+// Helper to check if schedule uses enhanced format
+export function isEnhancedSchedule(schedule: GroupSchedule | EnhancedGroupSchedule | null): schedule is EnhancedGroupSchedule {
+  return schedule !== null && 'day_times' in schedule;
+}
+
+// Helper to convert old format to new format
+export function convertToEnhancedSchedule(oldSchedule: GroupSchedule | null): EnhancedGroupSchedule {
+  if (!oldSchedule) {
+    return {
+      day_times: [
+        { day: 'monday', time: '', enabled: false },
+        { day: 'tuesday', time: '', enabled: false },
+        { day: 'wednesday', time: '', enabled: false },
+        { day: 'thursday', time: '', enabled: false },
+        { day: 'friday', time: '', enabled: false },
+      ],
+      duration: 30,
+    };
+  }
+
+  const defaultTime = oldSchedule.time || '09:00';
+  const days = oldSchedule.days || [];
+  const allDays: WeekDay[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+  return {
+    day_times: allDays.map(day => ({
+      day,
+      time: days.includes(day) ? defaultTime : '',
+      enabled: days.includes(day),
+    })),
+    duration: oldSchedule.duration || 30,
+  };
+}
+
+// Helper to get enabled days from enhanced schedule
+export function getEnabledDays(schedule: EnhancedGroupSchedule): WeekDay[] {
+  return schedule.day_times.filter(dt => dt.enabled).map(dt => dt.day);
+}
+
+// Helper to get time for a specific day
+export function getTimeForDay(schedule: EnhancedGroupSchedule, day: WeekDay): string | null {
+  const slot = schedule.day_times.find(dt => dt.day === day);
+  return slot?.enabled ? slot.time : null;
+}
+
+// ===========================================
+// ATTENDANCE HELPERS
+// ===========================================
+
+export function getAttendanceStatusLabel(status: AttendanceStatus): string {
+  const labels: Record<AttendanceStatus, string> = {
+    present: 'Present',
+    absent: 'Absent',
+    tardy: 'Tardy',
+    excused: 'Excused',
+  };
+  return labels[status];
+}
+
+export function getAttendanceStatusIcon(status: AttendanceStatus): string {
+  const icons: Record<AttendanceStatus, string> = {
+    present: '✓',
+    absent: '✗',
+    tardy: '⏰',
+    excused: 'E',
+  };
+  return icons[status];
+}
+
+export function getAttendanceStatusColor(status: AttendanceStatus): string {
+  const colors: Record<AttendanceStatus, string> = {
+    present: 'text-green-500',
+    absent: 'text-red-500',
+    tardy: 'text-yellow-500',
+    excused: 'text-blue-500',
+  };
+  return colors[status];
+}
+
+// ===========================================
+// NON-STUDENT DAY HELPERS
+// ===========================================
+
+export function getNonStudentDayTypeLabel(type: NonStudentDayType): string {
+  const labels: Record<NonStudentDayType, string> = {
+    holiday: 'Holiday',
+    pd_day: 'PD Day',
+    institute_day: 'Institute Day',
+    early_dismissal: 'Early Dismissal',
+    late_start: 'Late Start',
+    testing_day: 'Testing Day',
+    emergency_closure: 'Emergency Closure',
+    break: 'Break',
+  };
+  return labels[type];
+}
+
+export function getNonStudentDayTypeColor(type: NonStudentDayType): string {
+  const colors: Record<NonStudentDayType, string> = {
+    holiday: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    pd_day: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    institute_day: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    early_dismissal: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+    late_start: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+    testing_day: 'bg-gray-100 text-gray-800 dark:bg-gray-700/30 dark:text-gray-300',
+    emergency_closure: 'bg-red-200 text-red-900 dark:bg-red-800/30 dark:text-red-200',
+    break: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  };
+  return colors[type];
+}
+
+// ===========================================
+// CYCLE HELPERS
+// ===========================================
+
+export function getCycleStatusColor(status: CycleStatus): string {
+  const colors: Record<CycleStatus, string> = {
+    planning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+    active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    completed: 'bg-gray-100 text-gray-800 dark:bg-gray-700/30 dark:text-gray-300',
+  };
+  return colors[status];
+}
+
+export function getCycleStatusLabel(status: CycleStatus): string {
+  const labels: Record<CycleStatus, string> = {
+    planning: 'Planning',
+    active: 'Active',
+    completed: 'Completed',
+  };
+  return labels[status];
+}
+
+// Calculate which week of the cycle we're in
+export function getCurrentCycleWeek(cycle: InterventionCycle): number {
+  const now = new Date();
+  const start = new Date(cycle.start_date);
+  const diffTime = now.getTime() - start.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const weekNumber = Math.floor(diffDays / 7) + 1;
+  return Math.min(Math.max(1, weekNumber), cycle.weeks_count);
+}

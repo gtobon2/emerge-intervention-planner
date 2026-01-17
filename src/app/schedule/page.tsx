@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Modal, Input, Select, Card } from '@/components/ui';
 import { useScheduleStore } from '@/stores/schedule';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
+import { useCyclesStore } from '@/stores/cycles';
+import { useSchoolCalendarStore } from '@/stores/school-calendar';
 import { ScheduleGrid } from '@/components/schedule/ScheduleGrid';
 import { InterventionistModal } from '@/components/schedule/InterventionistModal';
 import { ConstraintsModal } from '@/components/schedule/ConstraintsModal';
 import { SuggestionsPanel } from '@/components/schedule/SuggestionsPanel';
 import { formatTimeDisplay, WEEKDAYS, getDayDisplayName } from '@/lib/scheduling/time-utils';
-import type { WeekDay } from '@/lib/supabase/types';
+import type { WeekDay, Group } from '@/lib/supabase/types';
 
 export default function SchedulePage() {
   const {
@@ -26,17 +28,25 @@ export default function SchedulePage() {
   } = useScheduleStore();
 
   const { groups, fetchGroups } = useGroupsStore();
-  const { allSessions, fetchAllSessions } = useSessionsStore();
+  const { allSessions, fetchAllSessions, createSession } = useSessionsStore();
+  const { currentCycle, fetchCurrentCycle } = useCyclesStore();
+  const { events: calendarEvents, fetchAllEvents } = useSchoolCalendarStore();
 
   const [isInterventionistModalOpen, setIsInterventionistModalOpen] = useState(false);
   const [isConstraintsModalOpen, setIsConstraintsModalOpen] = useState(false);
   const [editingInterventionist, setEditingInterventionist] = useState<string | null>(null);
 
+  // Drag and drop state
+  const [draggingGroup, setDraggingGroup] = useState<Group | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<{ day: WeekDay; hour: number } | null>(null);
+
   useEffect(() => {
     fetchAll();
     fetchGroups();
     fetchAllSessions();
-  }, [fetchAll, fetchGroups, fetchAllSessions]);
+    fetchCurrentCycle();
+    fetchAllEvents();
+  }, [fetchAll, fetchGroups, fetchAllSessions, fetchCurrentCycle, fetchAllEvents]);
 
   // Get groups that have no upcoming sessions (planned status)
   const unscheduledGroups = useMemo(() => {
@@ -67,6 +77,63 @@ export default function SchedulePage() {
     { value: 'all', label: 'All Interventionists' },
     ...interventionists.map(i => ({ value: String(i.id), label: i.name }))
   ], [interventionists]);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, group: Group) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({ groupId: group.id }));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggingGroup(group);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingGroup(null);
+    setDragOverSlot(null);
+  }, []);
+
+  const handleDrop = useCallback(async (day: WeekDay, hour: number, dateStr: string) => {
+    if (!draggingGroup) return;
+
+    // Create a session for this group at the dropped time
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+
+    try {
+      await createSession({
+        group_id: draggingGroup.id,
+        date: dateStr,
+        time: timeStr,
+        status: 'planned',
+        curriculum_position: draggingGroup.current_position,
+        advance_after: false,
+        // Required nullable fields
+        notes: null,
+        planned_otr_target: null,
+        planned_response_formats: null,
+        planned_practice_items: null,
+        cumulative_review_items: null,
+        anticipated_errors: null,
+        actual_otr_estimate: null,
+        pacing: null,
+        components_completed: null,
+        exit_ticket_correct: null,
+        exit_ticket_total: null,
+        mastery_demonstrated: null,
+        errors_observed: null,
+        unexpected_errors: null,
+        pm_score: null,
+        pm_trend: null,
+        dbi_adaptation_notes: null,
+        next_session_notes: null,
+        fidelity_checklist: null,
+      });
+      // Refresh sessions
+      fetchAllSessions();
+    } catch (error) {
+      console.error('Failed to create session:', error);
+    }
+
+    setDraggingGroup(null);
+    setDragOverSlot(null);
+  }, [draggingGroup, createSession, fetchAllSessions]);
 
   return (
     <AppLayout>
@@ -124,17 +191,26 @@ export default function SchedulePage() {
                 interventionist={selectedInterventionist}
                 groups={groups}
                 constraints={gradeLevelConstraints}
+                onDrop={handleDrop}
+                isDragging={!!draggingGroup}
+                dragOverSlot={dragOverSlot}
+                onDragOver={setDragOverSlot}
               />
             </Card>
           </div>
 
           {/* Sidebar - Groups & Suggestions */}
           <div className="space-y-4">
-            {/* Unscheduled Groups */}
+            {/* Unscheduled Groups - Draggable */}
             <Card className="p-4">
               <h3 className="font-semibold text-text-primary mb-3 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Unscheduled Groups
+                {draggingGroup && (
+                  <span className="text-xs bg-movement/20 text-movement px-2 py-0.5 rounded">
+                    Drop on calendar
+                  </span>
+                )}
               </h3>
               {groups.length === 0 ? (
                 <p className="text-sm text-text-muted">No groups created yet</p>
@@ -142,20 +218,34 @@ export default function SchedulePage() {
                 <p className="text-sm text-green-600">All groups are scheduled!</p>
               ) : (
                 <div className="space-y-2">
-                  {unscheduledGroups.slice(0, 5).map(group => (
+                  <p className="text-xs text-text-muted mb-2">
+                    Drag a group to the calendar to schedule
+                  </p>
+                  {unscheduledGroups.slice(0, 10).map(group => (
                     <div
                       key={group.id}
-                      className="p-2 bg-background rounded-lg text-sm"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, group)}
+                      onDragEnd={handleDragEnd}
+                      className={`
+                        p-2 bg-background rounded-lg text-sm cursor-grab
+                        hover:bg-surface-hover transition-colors
+                        flex items-center gap-2
+                        ${draggingGroup?.id === group.id ? 'opacity-50 ring-2 ring-movement' : ''}
+                      `}
                     >
-                      <div className="font-medium">{group.name}</div>
-                      <div className="text-text-muted text-xs">
-                        Grade {group.grade} | {group.curriculum}
+                      <GripVertical className="w-4 h-4 text-text-muted flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{group.name}</div>
+                        <div className="text-text-muted text-xs">
+                          Grade {group.grade} | {group.curriculum}
+                        </div>
                       </div>
                     </div>
                   ))}
-                  {unscheduledGroups.length > 5 && (
+                  {unscheduledGroups.length > 10 && (
                     <p className="text-xs text-text-muted text-center">
-                      +{unscheduledGroups.length - 5} more groups
+                      +{unscheduledGroups.length - 10} more groups
                     </p>
                   )}
                 </div>

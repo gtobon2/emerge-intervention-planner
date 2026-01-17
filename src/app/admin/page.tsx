@@ -19,7 +19,10 @@ import {
   Loader2,
   Link2,
   Layers,
+  Calendar,
+  RotateCcw,
 } from 'lucide-react';
+import Link from 'next/link';
 import { AppLayout } from '@/components/layout';
 import {
   Card,
@@ -627,6 +630,53 @@ export default function AdminPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* School Management Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="py-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="w-5 h-5 text-movement" />
+                  <h3 className="font-semibold text-text-primary">School Calendar</h3>
+                </div>
+                <p className="text-sm text-text-muted mb-4">
+                  Manage non-student days, holidays, PD days, and schedule modifications.
+                </p>
+                <Link href="/admin/school-calendar">
+                  <Button variant="primary" size="sm" className="gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Manage Calendar
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="py-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <RotateCcw className="w-5 h-5 text-movement" />
+                  <h3 className="font-semibold text-text-primary">Intervention Cycles</h3>
+                </div>
+                <p className="text-sm text-text-muted mb-4">
+                  Create and manage intervention cycle periods for scheduling.
+                </p>
+                <Link href="/admin/cycles">
+                  <Button variant="primary" size="sm" className="gap-2">
+                    <RotateCcw className="w-4 h-4" />
+                    Manage Cycles
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Recent Activity */}
       <Card>

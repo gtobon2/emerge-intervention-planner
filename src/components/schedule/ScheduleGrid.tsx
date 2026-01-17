@@ -20,6 +20,11 @@ interface ScheduleGridProps {
   interventionist: LocalInterventionist | null;
   groups: Group[];
   constraints: LocalGradeLevelConstraint[];
+  // Drag and drop props
+  onDrop?: (day: WeekDay, hour: number, dateStr: string) => void;
+  isDragging?: boolean;
+  dragOverSlot?: { day: WeekDay; hour: number } | null;
+  onDragOver?: (slot: { day: WeekDay; hour: number } | null) => void;
 }
 
 const HOURS = Array.from({ length: 11 }, (_, i) => i + 7); // 7 AM to 5 PM
@@ -55,7 +60,15 @@ function formatDateShort(dateStr: string): string {
   return `${month}/${day}`;
 }
 
-export function ScheduleGrid({ interventionist, groups, constraints }: ScheduleGridProps) {
+export function ScheduleGrid({
+  interventionist,
+  groups,
+  constraints,
+  onDrop,
+  isDragging = false,
+  dragOverSlot,
+  onDragOver,
+}: ScheduleGridProps) {
   const { allSessions, fetchAllSessions } = useSessionsStore();
 
   // Fetch sessions on mount
@@ -229,22 +242,57 @@ export function ScheduleGrid({ interventionist, groups, constraints }: ScheduleG
                 const available = isAvailable(day, timeStr);
                 const label = getConstraintLabel(day, timeStr);
                 const sessions = getSessionsForSlot(day, hour);
+                const dateStr = weekDates.get(day)!;
+                const isDragOver = dragOverSlot?.day === day && dragOverSlot?.hour === hour;
+                const canDrop = isDragging && !blocked && sessions.length === 0 && (available || !interventionist);
 
                 return (
                   <div
                     key={`${day}-${hour}`}
+                    onDragOver={(e) => {
+                      if (canDrop) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        onDragOver?.({ day, hour });
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (isDragOver) {
+                        onDragOver?.(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (canDrop && onDrop) {
+                        onDrop(day, hour, dateStr);
+                      }
+                    }}
                     className={`
                       min-h-[60px] rounded-lg border transition-colors relative
-                      ${sessions.length > 0
-                        ? 'bg-white border-gray-300 dark:bg-gray-900 dark:border-gray-600'
-                        : blocked
-                          ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
-                          : available
-                            ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30 cursor-pointer'
-                            : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
+                      ${isDragOver && canDrop
+                        ? 'bg-movement/20 border-movement border-2 scale-[1.02]'
+                        : sessions.length > 0
+                          ? 'bg-white border-gray-300 dark:bg-gray-900 dark:border-gray-600'
+                          : blocked
+                            ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                            : available
+                              ? `bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800
+                                 ${isDragging ? 'hover:bg-green-100 hover:border-green-300' : 'hover:bg-green-100'}
+                                 dark:hover:bg-green-900/30 cursor-pointer`
+                              : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
                       }
+                      ${isDragging && canDrop ? 'ring-1 ring-movement/30' : ''}
                     `}
                   >
+                    {/* Drop indicator */}
+                    {isDragOver && canDrop && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                        <span className="text-xs font-medium text-movement bg-white/90 px-2 py-1 rounded shadow-sm">
+                          Drop here
+                        </span>
+                      </div>
+                    )}
+
                     {/* Show scheduled sessions */}
                     {sessions.length > 0 && (
                       <div className="absolute inset-1 flex flex-col gap-1">
@@ -267,7 +315,7 @@ export function ScheduleGrid({ interventionist, groups, constraints }: ScheduleG
                     )}
 
                     {/* Show constraint label */}
-                    {sessions.length === 0 && blocked && label && (
+                    {sessions.length === 0 && blocked && label && !isDragOver && (
                       <div className="absolute inset-0 flex items-center justify-center p-1">
                         <span className="text-xs text-red-600 dark:text-red-400 font-medium text-center">
                           {label}
@@ -276,7 +324,7 @@ export function ScheduleGrid({ interventionist, groups, constraints }: ScheduleG
                     )}
 
                     {/* Show unavailable for interventionist */}
-                    {sessions.length === 0 && !blocked && !available && interventionist && (
+                    {sessions.length === 0 && !blocked && !available && interventionist && !isDragOver && (
                       <div className="absolute inset-0 flex items-center justify-center p-1">
                         <span className="text-xs text-gray-400 text-center">
                           Unavailable

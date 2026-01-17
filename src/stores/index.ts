@@ -10,6 +10,24 @@ export { useSettingsStore, getReminderTimingLabel, getThemeLabel } from './setti
 export { useAIContextStore } from './ai-context';
 export type { StudentContext, GroupContext, SessionContext } from './ai-context';
 
+// New stores for attendance, calendar, and cycles
+export { useAttendanceStore, getStudentAttendanceStatus, isAttendanceComplete } from './attendance';
+export {
+  useSchoolCalendarStore,
+  isDateInEvents,
+  getDatesBetween,
+  expandEventDates,
+  NON_STUDENT_DAY_TEMPLATES,
+} from './school-calendar';
+export {
+  useCyclesStore,
+  getWeekOfCycle,
+  getCycleProgress,
+  isCycleActive,
+  formatCycleDateRange,
+  getCycleStatusColorClass,
+} from './cycles';
+
 // Generic store factory for creating new entity stores
 export { createEntityStore } from './factory';
 export type {
