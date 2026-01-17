@@ -16,6 +16,7 @@ import {
   type WilsonStory,
   type WilsonWordElement,
 } from './wilson-lesson-elements';
+import { getWilsonSubstep } from './wilson';
 
 // Import the JSON data
 import wilsonData from './wilson-data.json';
@@ -32,39 +33,11 @@ interface RawWilsonData {
   stories: { title: string; text: string; level?: string | null; source?: string | null; purpose?: string | null }[];
 }
 
-// Substep name mapping
-const SUBSTEP_NAMES: Record<string, string> = {
-  '1.1': 'Short Vowels a, i',
-  '1.2': 'Short Vowels o, u, e',
-  '1.3': 'Digraphs sh, th, wh, ch, ck',
-  '1.4': 'Blends',
-  '1.5': 'Three-Sound Review',
-  '1.55': 'Three-Sound Review Extended',
-  '1.6': 'Glued Sounds ang, ing, ong, ung, ank, ink, onk, unk',
-  '1.68': 'Glued Sounds Extended',
-  '2.1': 'Closed Syllable Exceptions',
-  '2.2': 'Suffix -s, Plurals',
-  '2.3': 'Suffix -es',
-  '2.4': 'Suffix -ed',
-  '2.5': 'Suffix -ing',
-  '2.6': 'Suffix Review',
-  '3.1': 'Closed Syllable Division',
-  '3.2': 'Vowel-Consonant-e Syllable',
-  '3.3': 'Open Syllable',
-  '3.4': 'Syllable Division Review',
-  '3.5': 'Suffixes -ed, -ing with VCe',
-  '4.1': 'Vowel-Consonant-e',
-  '4.2': 'VCe Syllable in Multisyllable Words',
-  '4.3': 'VCe Exception Words',
-  '4.4': '-ive, -ive Suffix',
-  '5.1': 'Open Syllables y, i',
-  '5.2': 'Open Syllable with Prefixes',
-  '5.3': 'Open Syllable y as Suffix',
-  '5.4': 'Open Syllable in Multisyllable Words',
-  '5.5': 'Schwa Sound',
-  '6.1': 'Suffixes',
-  '6.2': 'Suffix -ed Variations',
-};
+// Get substep name from the official Wilson scope & sequence
+function getSubstepName(substep: string): string {
+  const substepData = getWilsonSubstep(substep);
+  return substepData?.name || `Substep ${substep}`;
+}
 
 function getStepNumber(substep: string): number {
   const match = substep.match(/^(\d+)\./);
@@ -89,7 +62,7 @@ export async function loadWilsonData(): Promise<{ success: boolean; message: str
       if (!item.substep || item.substep.includes('48')) continue;
 
       const stepNumber = getStepNumber(item.substep);
-      const substepName = SUBSTEP_NAMES[item.substep] || `Substep ${item.substep}`;
+      const substepName = getSubstepName(item.substep);
       const syllableType = getSyllableType(item.substep);
 
       // Check if this substep already exists
