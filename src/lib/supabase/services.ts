@@ -1051,3 +1051,185 @@ export async function generateCycleSessionDates(
 
   return sessionDates;
 }
+
+/**
+ * Generate planned sessions for a group based on its schedule
+ *
+ * This function creates planned sessions for the entire cycle (or custom date range)
+ * based on the group's per-day schedule. It respects non-student days and
+ * doesn't create duplicate sessions.
+ *
+ * @param groupId - The group ID to generate sessions for
+ * @param schedule - The enhanced group schedule with cycle and day times
+ * @param group - The group data for curriculum position
+ * @returns Array of created sessions
+ */
+export async function generateSessionsFromSchedule(
+  groupId: string,
+  schedule: {
+    cycle_id?: string | null;
+    custom_start_date?: string | null;
+    custom_end_date?: string | null;
+    day_times: { day: string; time: string; enabled: boolean }[];
+    duration: number;
+  },
+  group: { current_position: any; grade: number }
+): Promise<Session[]> {
+  // Get enabled days
+  const enabledDays = schedule.day_times
+    .filter(dt => dt.enabled && dt.time)
+    .map(dt => ({ day: dt.day, time: dt.time }));
+
+  if (enabledDays.length === 0) {
+    return [];
+  }
+
+  // Determine date range
+  let startDate: string;
+  let endDate: string;
+
+  if (schedule.custom_start_date && schedule.custom_end_date) {
+    startDate = schedule.custom_start_date;
+    endDate = schedule.custom_end_date;
+  } else if (schedule.cycle_id) {
+    const cycle = await fetchCycleById(schedule.cycle_id);
+    if (!cycle) {
+      throw new Error('Cycle not found');
+    }
+    startDate = schedule.custom_start_date || cycle.start_date;
+    endDate = schedule.custom_end_date || cycle.end_date;
+  } else {
+    // No cycle selected, don't generate sessions
+    return [];
+  }
+
+  // Get non-student days
+  const nonStudentDays = await getNonStudentDaysInRange(startDate, endDate, group.grade);
+  const nonStudentSet = new Set(nonStudentDays);
+
+  // Get existing sessions for this group to avoid duplicates
+  const existingSessions = await fetchSessionsByGroupId(groupId);
+  const existingDates = new Set(existingSessions.filter(s => s.status === 'planned').map(s => s.date));
+
+  // Generate session dates
+  const dayMap: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  const sessionsToCreate: SessionInsert[] = [];
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const current = new Date(start);
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    const dayName = Object.keys(dayMap).find(k => dayMap[k] === dayOfWeek);
+    const dateStr = current.toISOString().split('T')[0];
+
+    // Only create future sessions
+    if (current >= today) {
+      // Find if this day is enabled
+      const dayConfig = enabledDays.find(d => d.day === dayName);
+
+      if (dayConfig && !nonStudentSet.has(dateStr) && !existingDates.has(dateStr)) {
+        sessionsToCreate.push({
+          group_id: groupId,
+          date: dateStr,
+          time: dayConfig.time,
+          status: 'planned',
+          curriculum_position: group.current_position,
+          advance_after: false,
+          notes: null,
+          planned_otr_target: null,
+          planned_response_formats: null,
+          planned_practice_items: null,
+          cumulative_review_items: null,
+          anticipated_errors: null,
+          actual_otr_estimate: null,
+          pacing: null,
+          components_completed: null,
+          exit_ticket_correct: null,
+          exit_ticket_total: null,
+          mastery_demonstrated: null,
+          errors_observed: null,
+          unexpected_errors: null,
+          pm_score: null,
+          pm_trend: null,
+          dbi_adaptation_notes: null,
+          next_session_notes: null,
+          fidelity_checklist: null,
+        });
+      }
+    }
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Batch insert sessions
+  if (sessionsToCreate.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .insert(sessionsToCreate)
+    .select();
+
+  if (error) throw new Error(error.message);
+  return (data || []) as Session[];
+}
+
+/**
+ * Remove future planned sessions for a group
+ *
+ * Used when regenerating sessions after schedule change.
+ * Only removes sessions with status 'planned' that are in the future.
+ */
+export async function removeFuturePlannedSessions(groupId: string): Promise<number> {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('status', 'planned')
+    .gte('date', today)
+    .select('id');
+
+  if (error) throw new Error(error.message);
+  return data?.length || 0;
+}
+
+/**
+ * Regenerate sessions for a group based on its schedule
+ *
+ * This removes existing future planned sessions and creates new ones
+ * based on the updated schedule.
+ */
+export async function regenerateGroupSessions(
+  groupId: string,
+  schedule: {
+    cycle_id?: string | null;
+    custom_start_date?: string | null;
+    custom_end_date?: string | null;
+    day_times: { day: string; time: string; enabled: boolean }[];
+    duration: number;
+  },
+  group: { current_position: any; grade: number }
+): Promise<{ removed: number; created: Session[] }> {
+  // Remove future planned sessions
+  const removed = await removeFuturePlannedSessions(groupId);
+
+  // Generate new sessions
+  const created = await generateSessionsFromSchedule(groupId, schedule, group);
+
+  return { removed, created };
+}

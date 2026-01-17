@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Calendar, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCyclesStore, formatCycleDateRange } from '@/stores/cycles';
+import { regenerateGroupSessions } from '@/lib/supabase/services';
 import type {
   Group,
   GroupUpdate,
@@ -85,6 +87,10 @@ export function EditGroupModal({
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
+  // Session generation state
+  const [regenerateSessions, setRegenerateSessions] = useState(false);
+  const [sessionGenResult, setSessionGenResult] = useState<{ removed: number; created: number } | null>(null);
+
   // Curriculum position fields
   const [wilsonPosition, setWilsonPosition] = useState({ step: 1, substep: '1' });
   const [deltaMathPosition, setDeltaMathPosition] = useState({ standard: '' });
@@ -151,6 +157,8 @@ export function EditGroupModal({
       }
 
       setErrors({});
+      setRegenerateSessions(false);
+      setSessionGenResult(null);
     }
   }, [isOpen, group]);
 
@@ -238,7 +246,27 @@ export function EditGroupModal({
       };
 
       await onSave(group.id, updates);
-      onClose();
+
+      // Regenerate sessions if requested
+      if (regenerateSessions && selectedCycleId) {
+        try {
+          const result = await regenerateGroupSessions(
+            group.id,
+            enhancedSchedule,
+            { current_position: getCurrentPosition(), grade: formData.grade }
+          );
+          setSessionGenResult({ removed: result.removed, created: result.created.length });
+          // Wait a moment to show the result before closing
+          setTimeout(() => {
+            onClose();
+          }, 1500);
+        } catch (err) {
+          console.error('Failed to regenerate sessions:', err);
+          onClose();
+        }
+      } else {
+        onClose();
+      }
     } catch (err) {
       console.error('Failed to update group:', err);
     }
@@ -598,6 +626,38 @@ export function EditGroupModal({
             onChange={(e) => handleChange('schedule_duration', parseInt(e.target.value) || 30)}
             disabled={isLoading}
           />
+
+          {/* Generate Sessions Option */}
+          {selectedCycleId && dayTimeSlots.some((d) => d.enabled && d.time) && (
+            <div className="mt-4 p-3 bg-movement/5 border border-movement/20 rounded-lg">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={regenerateSessions}
+                  onChange={(e) => setRegenerateSessions(e.target.checked)}
+                  disabled={isLoading}
+                  className="mt-0.5 rounded border-movement text-movement focus:ring-movement"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                    <RefreshCw className="w-4 h-4 text-movement" />
+                    Generate planned sessions
+                  </div>
+                  <p className="text-xs text-text-muted mt-1">
+                    Automatically create planned sessions for the selected cycle based on this schedule.
+                    Existing future planned sessions will be replaced.
+                  </p>
+                </div>
+              </label>
+              {sessionGenResult && (
+                <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-700">
+                  <Calendar className="w-4 h-4 inline-block mr-1" />
+                  Created {sessionGenResult.created} sessions
+                  {sessionGenResult.removed > 0 && ` (${sessionGenResult.removed} replaced)`}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

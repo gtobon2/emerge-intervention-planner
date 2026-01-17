@@ -27,11 +27,22 @@ import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useAIContextStore } from '@/stores/ai-context';
 import { useAuthStore } from '@/stores/auth';
-import { formatCurriculumPosition } from '@/lib/supabase/types';
+import { formatCurriculumPosition, isEnhancedSchedule, getEnabledDays, getTimeForDay } from '@/lib/supabase/types';
+import type { EnhancedGroupSchedule, WeekDay } from '@/lib/supabase/types';
 import { canUserAccessGroup } from '@/lib/supabase/services';
+import { useCyclesStore } from '@/stores/cycles';
 import { db } from '@/lib/local-db';
 import { toNumericId } from '@/lib/utils/id';
 import type { Session, PMTrend } from '@/lib/supabase/types';
+
+// Day label helper
+const DAY_LABELS: Record<WeekDay, string> = {
+  monday: 'Mon',
+  tuesday: 'Tue',
+  wednesday: 'Wed',
+  thursday: 'Thu',
+  friday: 'Fri',
+};
 
 export default function GroupDetailPage() {
   const params = useParams();
@@ -42,6 +53,7 @@ export default function GroupDetailPage() {
   const { sessions, fetchSessionsForGroup, createSession, updateSession, cancelSession, isLoading: sessionsLoading } = useSessionsStore();
   const { setContext, clearContext } = useAIContextStore();
   const { user, userRole } = useAuthStore();
+  const { cycles, fetchAllCycles } = useCyclesStore();
 
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -83,8 +95,9 @@ export default function GroupDetailPage() {
     if (groupId && hasAccess) {
       fetchGroupById(groupId);
       fetchSessionsForGroup(groupId);
+      fetchAllCycles();
     }
-  }, [groupId, hasAccess, fetchGroupById, fetchSessionsForGroup]);
+  }, [groupId, hasAccess, fetchGroupById, fetchSessionsForGroup, fetchAllCycles]);
 
   // Set AI context when group and sessions load
   useEffect(() => {
@@ -568,7 +581,7 @@ export default function GroupDetailPage() {
           </div>
 
           {/* Students */}
-          <div>
+          <div className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between text-base md:text-lg">
@@ -626,6 +639,140 @@ export default function GroupDetailPage() {
                     </Link>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Schedule Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between text-base md:text-lg">
+                  <span>Schedule</span>
+                  {canEdit && (
+                    <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]" onClick={() => setShowEditGroupModal(true)}>
+                      <Edit className="w-4 h-4" />
+                      <span className="hidden sm:inline">Edit</span>
+                    </Button>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const schedule = selectedGroup.schedule;
+                  if (!schedule || !isEnhancedSchedule(schedule)) {
+                    return (
+                      <div className="text-center py-6 text-text-muted">
+                        <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No schedule set</p>
+                        {canEdit && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="mt-3 gap-1"
+                            onClick={() => setShowEditGroupModal(true)}
+                          >
+                            <Plus className="w-4 h-4" />
+                            Set Schedule
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const enhancedSchedule = schedule as EnhancedGroupSchedule;
+                  const enabledDays = getEnabledDays(enhancedSchedule);
+                  const cycle = enhancedSchedule.cycle_id
+                    ? cycles.find((c) => c.id === enhancedSchedule.cycle_id)
+                    : null;
+
+                  if (enabledDays.length === 0) {
+                    return (
+                      <div className="text-center py-6 text-text-muted">
+                        <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No days selected</p>
+                        {canEdit && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="mt-3 gap-1"
+                            onClick={() => setShowEditGroupModal(true)}
+                          >
+                            <Settings className="w-4 h-4" />
+                            Configure
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {/* Cycle Info */}
+                      {cycle && (
+                        <div className="p-2 bg-movement/10 rounded-lg">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Calendar className="w-4 h-4 text-movement" />
+                            <span className="font-medium text-movement">{cycle.name}</span>
+                          </div>
+                          <p className="text-xs text-text-muted mt-1">
+                            {new Date(cycle.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {' - '}
+                            {new Date(cycle.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Days and Times */}
+                      <div className="space-y-2">
+                        {enabledDays.map((day) => {
+                          const time = getTimeForDay(enhancedSchedule, day);
+                          const timeFormatted = time
+                            ? new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true,
+                              })
+                            : '--:--';
+
+                          return (
+                            <div
+                              key={day}
+                              className="flex items-center justify-between p-2 bg-foundation rounded-lg"
+                            >
+                              <span className="text-sm font-medium text-text-primary">
+                                {DAY_LABELS[day]}
+                              </span>
+                              <span className="text-sm text-text-muted flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {timeFormatted}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Duration */}
+                      <div className="text-xs text-text-muted pt-2 border-t border-text-muted/10">
+                        Session duration: {enhancedSchedule.duration} minutes
+                      </div>
+
+                      {/* Upcoming Count */}
+                      {(() => {
+                        const upcomingSessions = sessions.filter(
+                          (s) => s.status === 'planned' && new Date(s.date) >= new Date()
+                        ).length;
+                        if (upcomingSessions > 0) {
+                          return (
+                            <div className="text-sm text-emerald-600 flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              {upcomingSessions} upcoming session{upcomingSessions !== 1 ? 's' : ''}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>

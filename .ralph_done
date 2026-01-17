@@ -1,0 +1,25 @@
+Task completed: Add session attendance, school calendar, cycles, and improve schedule builder
+
+Completed features:
+1. Session Attendance Tracking - AttendancePanel with Present/Absent/Tardy/Excused status
+2. Group Scheduling Improvements - Per-day time selection and cycle integration
+3. School Calendar / Non-Student Days - Admin page to manage holidays, PD days, etc.
+4. Intervention Cycles - Planning/active/completed cycle management
+5. Schedule Builder Improvements - Drag & drop, cycle-aware auto-scheduling
+6. Data Connections - Dashboard shows current cycle and upcoming non-student days
+
+New files:
+- src/stores/attendance.ts
+- src/stores/cycles.ts
+- src/stores/school-calendar.ts
+- src/components/sessions/tracking/AttendancePanel.tsx
+- src/app/admin/cycles/page.tsx
+- src/app/admin/school-calendar/page.tsx
+- supabase/migrations/002_attendance_calendar_cycles.sql
+
+Build: Passed
+Deployed to NAS: Yes
+Branch: claude/setup-project-structure-017VtwLJnseT2Xgo5iFGcjgB
+Commit: 68d6c62
+
+Completed at: 2026-01-17
