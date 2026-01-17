@@ -1,8 +1,12 @@
 // EMERGE Intervention Planner - Scope & Sequence Data
 // Complete curriculum progression data for Wilson, Delta Math, Camino, WordGen, Amira
+//
+// NOTE: For Wilson, the source of truth is src/lib/curriculum/wilson.ts
+// This file mirrors that data for documentation purposes
 
 // ============================================
 // WILSON READING SYSTEM - STEPS 1-6
+// Official Wilson Language Training Scope & Sequence
 // ============================================
 
 export const WILSON_SEQUENCE = {
@@ -10,252 +14,279 @@ export const WILSON_SEQUENCE = {
   name: 'Wilson Reading System',
   total_steps: 6,
   description: 'Structured literacy program for students with word-level reading difficulties',
-  
+
   steps: [
     {
       step: 1,
-      name: 'Closed Syllables & Foundational Skills',
+      name: 'Closed Syllables (3 Sounds)',
       substeps: [
         {
           substep: '1.1',
-          name: 'Short Vowels in Closed Syllables (CVC)',
-          skills: ['Short vowel sounds (a, e, i, o, u)', 'Consonant sounds', 'Basic closed syllable structure', 'Sound tapping'],
-          sample_words: ['sat', 'pet', 'hit', 'lot', 'cup', 'jam', 'hem', 'dim', 'mop', 'bus'],
-          nonsense_words: ['vap', 'kem', 'zit', 'wod', 'jup'],
-          concepts: ['Closed syllable: ends in consonant, vowel is short', 'Every syllable has one vowel sound'],
-          lesson_focus: 'Sound-symbol correspondence, blending CVC words'
+          name: 'Basic Consonants & Short Vowels a, i, o',
+          skills: ['Consonants: f, l, m, n, r, s (initial); d, g, p, t (final)', 'Short vowels: a, i, o', 'Sound tapping', 'Blending CVC words'],
+          sample_words: ['sat', 'sit', 'lot', 'fan', 'rim', 'top', 'fin', 'dog', 'map', 'rag'],
+          nonsense_words: ['dit', 'fom', 'nas', 'lig', 'mot'],
+          concepts: ['Closed syllable: vowel is "closed in" by consonant, making it short', 'Every syllable has one vowel sound', 'Tap each sound, then blend'],
+          lesson_focus: 'Sound-symbol correspondence for basic consonants and short a, i, o'
         },
         {
           substep: '1.2',
-          name: 'Consonant Blends',
-          skills: ['Initial blends (bl, cl, fl, gl, pl, sl, br, cr, dr, fr, gr, pr, tr, sc, sk, sm, sn, sp, st, sw)', 'Final blends (ft, lt, mp, nd, nt, pt, sk, sp, st)'],
-          sample_words: ['plant', 'blend', 'crisp', 'stomp', 'drift', 'frost', 'sprint', 'strand'],
-          nonsense_words: ['blom', 'crift', 'stund', 'pland'],
-          concepts: ['Blends: two or three consonants where each sound is heard', 'Sound-by-sound blending with blends'],
-          lesson_focus: 'Blending words with initial and final consonant blends'
+          name: 'Additional Consonants, Digraphs & Short Vowels u, e',
+          skills: ['Consonants: b, h, j, c, k, ck, v, w, x, y, z', 'Digraphs: sh, ch, th, wh, qu', 'Short vowels: u, e', 'Digraphs as single sound units'],
+          sample_words: ['bed', 'cup', 'ship', 'chop', 'thin', 'when', 'quit', 'back', 'yes', 'box'],
+          nonsense_words: ['sheb', 'thup', 'chod', 'whem', 'quiv'],
+          concepts: ['Digraph: two letters that make ONE sound', 'Tap once for digraphs', 'ck used after short vowel at end of one-syllable word'],
+          lesson_focus: 'Introducing digraphs and completing short vowel sounds'
         },
         {
           substep: '1.3',
-          name: 'Digraphs',
-          skills: ['Consonant digraphs: ch, sh, th, wh, ck', 'Digraphs as single sound units'],
-          sample_words: ['chip', 'shop', 'thin', 'whip', 'thick', 'check', 'shack', 'when', 'chop', 'this'],
-          nonsense_words: ['chib', 'shum', 'thock', 'whep'],
-          concepts: ['Digraph: two letters that make ONE sound', 'Tap once for digraphs'],
-          lesson_focus: 'Recognizing digraphs as single phoneme units'
+          name: 'Three-Sound Words with Digraphs',
+          skills: ['Reading and spelling CVC words with digraphs', 'All five short vowels', 'Initial and final digraph positions'],
+          sample_words: ['wish', 'chop', 'wet', 'them', 'such', 'with', 'shed', 'chest', 'whip', 'shut'],
+          nonsense_words: ['chib', 'shum', 'thock', 'whep', 'chud'],
+          concepts: ['Apply digraph knowledge in full word reading', 'Digraphs can appear at beginning or end of words', 'Continue tapping with digraphs as single units'],
+          lesson_focus: 'Fluent reading and spelling of three-sound words including digraphs'
         },
         {
           substep: '1.4',
-          name: 'Bonus Letters (ff, ll, ss, zz)',
-          skills: ['FLOSS rule: double f, l, s, z after short vowel in one-syllable word', 'Reading and spelling bonus letter patterns'],
-          sample_words: ['stuff', 'bell', 'miss', 'jazz', 'cliff', 'smell', 'dress', 'fuzz', 'still', 'buff'],
-          nonsense_words: ['beff', 'woss', 'glill', 'tuzz'],
-          concepts: ['FLOSS rule application', 'Bonus letters make one sound, tap once'],
-          lesson_focus: 'Applying FLOSS rule in reading and spelling'
+          name: 'Bonus Letters (FLOSS Rule) & Welded Sound /all/',
+          skills: ['FLOSS rule: double f, l, s, z after short vowel', 'Bonus letters in one-syllable words', 'Welded sound /all/'],
+          sample_words: ['off', 'bill', 'miss', 'buzz', 'call', 'cliff', 'smell', 'dress', 'fuzz', 'stall'],
+          nonsense_words: ['beff', 'woss', 'glill', 'tuzz', 'chall'],
+          concepts: ['FLOSS rule: f, l, s, z double after short vowel in one-syllable word', 'Bonus letters make one sound, tap once', 'Welded /all/ - tap with fingers together'],
+          lesson_focus: 'Applying FLOSS rule and introducing first welded sound'
         },
         {
           substep: '1.5',
-          name: 'Glued Sounds (Welded Sounds)',
-          skills: ['all, am, an glued sounds', 'ang, ing, ong, ung glued sounds', 'ank, ink, onk, unk glued sounds'],
-          sample_words: ['ball', 'ham', 'man', 'bang', 'ring', 'song', 'bunk', 'bank', 'pink', 'honk'],
-          nonsense_words: ['clang', 'prink', 'blunk'],
-          concepts: ['Glued sounds stay together as a unit', 'Tap with two/three fingers stuck together', 'Vowel sound changes in glued sounds'],
-          lesson_focus: 'Reading and spelling glued sound patterns'
+          name: 'Welded Sounds /am/ and /an/',
+          skills: ['Welded sound /am/', 'Welded sound /an/', 'Nasalized vowel sounds'],
+          sample_words: ['ham', 'fan', 'jam', 'man', 'clam', 'plan', 'slam', 'than', 'swam', 'scan'],
+          nonsense_words: ['blam', 'stran', 'glam', 'thran'],
+          concepts: ['Welded sounds stay together as a unit', 'Tap with two fingers stuck together for welded sounds', 'Vowel sound changes slightly before m and n'],
+          lesson_focus: 'Reading and spelling welded /am/ and /an/ patterns'
         },
         {
           substep: '1.6',
-          name: 'Suffixes (-s, -es, -ed, -ing)',
-          skills: ['Suffix -s and -es', 'Three sounds of -ed: /ĭd/, /d/, /t/', 'Suffix -ing', 'Identifying base words'],
-          sample_words: ['cats', 'dishes', 'jumped', 'played', 'wanted', 'running', 'sitting', 'helps', 'foxes'],
-          concepts: ['Suffix: word part added to end of base word', 'Base word + suffix', '-ed says /ĭd/ after t/d, /d/ after voiced, /t/ after unvoiced'],
-          lesson_focus: 'Reading and spelling words with suffixes'
+          name: 'Suffixes -s and -es',
+          skills: ['Suffix -s with unchanging base words', 'Suffix -es after s, x, z, ch, sh', 'Identifying base word + suffix'],
+          sample_words: ['cats', 'dogs', 'bugs', 'dishes', 'foxes', 'wishes', 'boxes', 'chills', 'quizzes', 'brushes'],
+          concepts: ['Suffix: word part added to end of base word', 'Base word + suffix = new word', 'Add -es when word ends in s, x, z, ch, sh'],
+          lesson_focus: 'Reading and spelling words with -s and -es suffixes'
         }
       ]
     },
     {
       step: 2,
-      name: 'Vowel-Consonant-e (VCe) Syllables',
+      name: 'Closed Syllables (4-6 Sounds with Blends)',
       substeps: [
         {
           substep: '2.1',
-          name: 'VCe with Long Vowels',
-          skills: ['VCe syllable pattern', 'Silent e makes vowel "say its name"', 'Long a, i, o, u, e in VCe words'],
-          sample_words: ['make', 'time', 'hope', 'cube', 'eve', 'plate', 'smile', 'stone', 'huge', 'these'],
-          nonsense_words: ['bape', 'kibe', 'trome', 'flune'],
-          concepts: ['VCe: vowel-consonant-silent e', 'Silent e jumps over one consonant to make vowel long', 'Contrast with closed syllables: hop vs hope'],
-          lesson_focus: 'Distinguishing closed vs VCe syllables'
+          name: 'Welded Sounds with -ng and -nk',
+          skills: ['Welded sounds: ang, ing, ong, ung', 'Welded sounds: ank, ink, onk, unk', 'Nasalized vowel + velar sounds'],
+          sample_words: ['bang', 'ring', 'song', 'hung', 'bank', 'pink', 'honk', 'bunk', 'clang', 'drink'],
+          nonsense_words: ['glang', 'prink', 'blonk', 'stunk', 'thring'],
+          concepts: ['ng and nk are welded to the vowel before them', 'Tap these as welded units (2-3 fingers together)', 'The vowel sound changes before ng and nk'],
+          lesson_focus: 'Mastering all welded sound patterns'
         },
         {
           substep: '2.2',
-          name: 'VCe with Digraphs and Blends',
-          skills: ['VCe words with initial/final blends', 'VCe words with digraphs'],
-          sample_words: ['shake', 'stripe', 'throne', 'whale', 'smoke', 'spine', 'chrome', 'phase'],
-          concepts: ['Applying VCe pattern to more complex words'],
-          lesson_focus: 'Multisyllabic decoding with VCe'
+          name: 'Closed Syllables with 4 Sounds (Initial Blends)',
+          skills: ['Initial blends: bl, cl, fl, gl, pl, sl', 'Initial blends: br, cr, dr, fr, gr, pr, tr', 'Initial blends: sc, sk, sm, sn, sp, st, sw'],
+          sample_words: ['stop', 'clap', 'blast', 'from', 'step', 'grab', 'swim', 'plan', 'trip', 'sled'],
+          nonsense_words: ['blom', 'stup', 'frap', 'glin', 'swem'],
+          concepts: ['Blend: each consonant sound is heard', 'Tap each sound in a blend separately', 'Keep blends together when dividing syllables'],
+          lesson_focus: 'Reading and spelling CCVC words with initial blends'
         },
         {
           substep: '2.3',
-          name: 'VCe Exceptions and Review',
-          skills: ['VCe exceptions: have, give, love, etc.', 'Suffixes with VCe base words'],
-          sample_words: ['have', 'give', 'live', 'love', 'come', 'some', 'making', 'hoped', 'shaking'],
-          concepts: ['Some VCe words have short vowels (exceptions)', 'Drop e before adding vowel suffix'],
-          lesson_focus: 'VCe exceptions and suffix spelling rules'
+          name: 'Closed Syllable Exceptions',
+          skills: ['Exception patterns: -ild, -ind (long i)', 'Exception patterns: -old, -olt, -ost (long o)', 'Recognizing when vowel is long in closed syllable'],
+          sample_words: ['wild', 'child', 'mind', 'find', 'kind', 'cold', 'gold', 'bolt', 'most', 'host'],
+          concepts: ['Some closed syllables have long vowels (exceptions)', 'Common exception patterns to memorize', 'i before ld/nd often says long i; o before ld/lt/st often says long o'],
+          lesson_focus: 'Recognizing closed syllable exceptions with long vowels'
+        },
+        {
+          substep: '2.4',
+          name: 'Closed Syllables with 5 Sounds (Final Blends)',
+          skills: ['Final blends: ft, lt, mp, nd, nt, pt', 'Final blends: sk, sp, st', 'Words with both initial and final blends'],
+          sample_words: ['clamp', 'blend', 'trunk', 'crisp', 'stamp', 'split', 'drift', 'frost', 'stunt', 'clasp'],
+          nonsense_words: ['blund', 'strift', 'glimp', 'crast', 'flond'],
+          concepts: ['Final blends follow the vowel', 'Each sound in a blend is tapped', 'CCVCC pattern words'],
+          lesson_focus: 'Reading and spelling words with initial and final blends'
+        },
+        {
+          substep: '2.5',
+          name: 'Three-Letter Blends (Up to 6 Sounds)',
+          skills: ['Three-letter blends: scr, spl, spr, str, thr', 'CCCVCC pattern words', 'Complex consonant clusters'],
+          sample_words: ['strand', 'string', 'scrimp', 'splash', 'sprint', 'strong', 'script', 'shrimp', 'throb', 'strap'],
+          nonsense_words: ['strig', 'splund', 'scramp', 'thrist', 'spronk'],
+          concepts: ['Three-letter blends: each sound still heard', 'Complex words require careful tapping', 'Maximum 6 sounds in one-syllable closed words'],
+          lesson_focus: 'Mastery of complex closed syllable words'
         }
       ]
     },
     {
       step: 3,
-      name: 'Open Syllables & Multisyllabic Words',
+      name: 'Two-Syllable Closed Words',
       substeps: [
         {
           substep: '3.1',
-          name: 'Open Syllables',
-          skills: ['Open syllable: ends in vowel, vowel is long', 'Common open syllables: be, he, me, she, we, no, so, go, hi, by, my, fly'],
-          sample_words: ['be', 'he', 'she', 'we', 'no', 'so', 'go', 'hi', 'my', 'fly', 'why', 'try'],
-          concepts: ['Open syllable: nothing closes in the vowel, so it says its name', 'Open vs closed syllable contrast'],
-          lesson_focus: 'Recognizing open syllables'
+          name: 'VCCV Syllable Division',
+          skills: ['Spotting and dotting vowels', 'VCCV pattern: divide between consonants', 'Applying closed syllable rules to each part'],
+          sample_words: ['napkin', 'rabbit', 'sudden', 'puppet', 'picnic', 'helmet', 'contest', 'subject', 'mascot', 'husband'],
+          concepts: ['Spot and dot vowels first', 'VCCV: divide between the two consonants', 'Each syllable has one vowel sound', 'Apply closed syllable rule to each syllable'],
+          lesson_focus: 'Dividing and decoding VCCV pattern words'
         },
         {
           substep: '3.2',
-          name: 'Two-Syllable Words (VC/CV Division)',
-          skills: ['VCCV syllable division', 'Divide between two consonants', 'Syllable types in multisyllabic words'],
-          sample_words: ['napkin', 'rabbit', 'sudden', 'puppet', 'picnic', 'helmet', 'contest', 'subject'],
-          concepts: ['Spot and dot vowels first', 'VCCV: divide between consonants', 'Each syllable has one vowel sound'],
-          lesson_focus: 'Dividing and decoding VCCV words'
+          name: 'Words with -ct Blend',
+          skills: ['Final -ct blend in multisyllabic words', 'Keeping -ct together in division', 'Common -ct words'],
+          sample_words: ['exact', 'contact', 'insect', 'compact', 'instinct', 'distinct', 'abstract', 'subtract', 'conduct', 'conflict'],
+          concepts: ['ct blend stays together', 'Divide before the ct blend', 'Common pattern in two-syllable words'],
+          lesson_focus: 'Reading and spelling words with -ct blend'
         },
         {
           substep: '3.3',
-          name: 'Two-Syllable Words (V/CV and VC/V Division)',
-          skills: ['VCV syllable division', 'Try open first, flex to closed if not a word'],
-          sample_words: ['robot', 'silent', 'baby', 'student', 'cabin', 'lemon', 'comet', 'visit'],
-          concepts: ['VCV: try V/CV (open) first', 'Flex strategy: if open doesn\'t make a word, try closed'],
-          lesson_focus: 'Flexible syllable division'
+          name: 'Compound Closed Syllable Words',
+          skills: ['Compound words with closed syllables', 'Recognizing two base words', 'Division at compound boundary'],
+          sample_words: ['sunlit', 'bathtub', 'catnap', 'sunset', 'hatbox', 'hotdog', 'inkblot', 'zigzag', 'lipstick', 'eggnog'],
+          concepts: ['Compound word = two words joined together', 'Divide at the compound boundary', 'Apply syllable rules to each part'],
+          lesson_focus: 'Recognizing and decoding compound words'
         },
         {
           substep: '3.4',
-          name: 'Syllable Division with Blends and Digraphs',
-          skills: ['Keep blends and digraphs together in division', 'Three-syllable words'],
-          sample_words: ['children', 'kitchen', 'hundred', 'pumpkin', 'establish', 'fantastic'],
-          concepts: ['Never split a digraph or blend', 'Apply division rules to longer words'],
-          lesson_focus: 'Complex multisyllabic decoding'
+          name: 'Three-Syllable Closed Words',
+          skills: ['Three-syllable division', 'Multiple division points', 'Blends and digraphs in longer words'],
+          sample_words: ['fantastic', 'establish', 'Wisconsin', 'Atlantic', 'September', 'instruction', 'subtraction', 'subscription', 'transcription', 'manuscript'],
+          concepts: ['Apply division rules at each VCCV pattern', 'Keep digraphs and blends together', 'Decode one syllable at a time'],
+          lesson_focus: 'Multisyllabic closed syllable word decoding'
         }
       ]
     },
     {
       step: 4,
-      name: 'R-Controlled Vowels',
+      name: 'Vowel-Consonant-e (VCe) Syllables',
       substeps: [
         {
           substep: '4.1',
-          name: 'Ar and Or',
-          skills: ['ar says /är/ as in car', 'or says /ôr/ as in for'],
-          sample_words: ['car', 'star', 'farm', 'hard', 'for', 'storm', 'horn', 'short', 'chart', 'porch'],
-          nonsense_words: ['flar', 'blor', 'starp', 'clorn'],
-          concepts: ['R-controlled: r changes the vowel sound', 'ar and or are distinct sounds'],
-          lesson_focus: 'Reading and spelling ar and or words'
+          name: 'One-Syllable VCe Words',
+          skills: ['VCe syllable pattern recognition', 'Silent e makes vowel long', 'Long a, i, o, u, e in VCe words'],
+          sample_words: ['make', 'time', 'hope', 'cube', 'Pete', 'plate', 'smile', 'stone', 'flute', 'theme'],
+          nonsense_words: ['bape', 'kibe', 'trome', 'flune', 'zede'],
+          concepts: ['VCe: vowel-consonant-silent e pattern', 'Silent e jumps over one consonant to make vowel say its name', 'Contrast with closed syllables: hop vs hope, tap vs tape'],
+          lesson_focus: 'Distinguishing closed vs VCe syllables'
         },
         {
           substep: '4.2',
-          name: 'Er, Ir, Ur',
-          skills: ['er, ir, ur all say /ėr/', 'Spelling choices for /ėr/ sound'],
-          sample_words: ['her', 'fern', 'bird', 'first', 'burn', 'hurt', 'perch', 'shirt', 'church'],
-          concepts: ['er, ir, ur are spelling cousins - same sound', 'Must memorize which spelling for each word'],
-          lesson_focus: 'Reading r-controlled vowels, spelling with correct choice'
+          name: 'Two-Syllable Words with VCe',
+          skills: ['VCe in multisyllabic words', 'Syllable division with VCe pattern', 'Combining closed and VCe syllables'],
+          sample_words: ['compete', 'explode', 'reptile', 'stampede', 'costume', 'confuse', 'complete', 'athlete', 'concrete', 'subscribe'],
+          concepts: ['VCe syllable can combine with closed syllables', 'Divide before or after the consonant preceding VCe', 'Silent e rule applies within syllable'],
+          lesson_focus: 'Multisyllabic decoding with VCe syllables'
         },
         {
           substep: '4.3',
-          name: 'R-Controlled in Multisyllabic Words',
-          skills: ['R-controlled syllable type', 'R-controlled in longer words'],
-          sample_words: ['market', 'corner', 'perfect', 'surprise', 'cartoon', 'garden'],
-          concepts: ['R-controlled syllable type: vowel + r'],
-          lesson_focus: 'Syllable division with r-controlled syllables'
+          name: 'VCe Exceptions',
+          skills: ['VCe words with short vowels', 'Common exception words', 'Recognizing when to flex pronunciation'],
+          sample_words: ['have', 'give', 'live', 'love', 'come', 'some', 'done', 'gone', 'none', 'glove'],
+          concepts: ['Some VCe words have short vowels (exceptions)', 'These are high-frequency words to memorize', 'Flex strategy: try long, if not a word try short'],
+          lesson_focus: 'Recognizing and reading VCe exception words'
+        },
+        {
+          substep: '4.4',
+          name: 'Suffix Rules with VCe Base Words',
+          skills: ['Drop e before vowel suffix (-ing, -ed, -er, -est)', 'Keep e before consonant suffix (-ment, -ful, -less)', 'Spelling patterns with VCe base words'],
+          sample_words: ['making', 'hoped', 'shaking', 'rider', 'latest', 'movement', 'hopeful', 'homeless', 'excitement', 'usefulness'],
+          concepts: ['Drop e rule: remove e before adding suffix starting with vowel', 'Keep e before consonant suffixes', 'Base word meaning stays the same'],
+          lesson_focus: 'Spelling rules for adding suffixes to VCe words'
         }
       ]
     },
     {
       step: 5,
-      name: 'Vowel Teams',
+      name: 'Open Syllables',
       substeps: [
         {
           substep: '5.1',
-          name: 'AI/AY and OA/OW/OE',
-          skills: ['ai (middle) and ay (end) say long a', 'oa, ow, oe say long o'],
-          sample_words: ['rain', 'day', 'boat', 'snow', 'toe', 'train', 'play', 'float', 'show', 'hoe'],
-          concepts: ['Position-based spelling: ai middle, ay end', 'When two vowels go walking, first does talking (sometimes)'],
-          lesson_focus: 'Long a and long o vowel teams'
+          name: 'One-Syllable Open Words',
+          skills: ['Open syllable: ends in vowel, vowel is long', 'Common one-syllable open words', 'Contrast with closed syllables'],
+          sample_words: ['be', 'he', 'me', 'she', 'we', 'no', 'so', 'go', 'hi', 'I'],
+          concepts: ['Open syllable: nothing closes in the vowel', 'Vowel at end of syllable says its name (long)', 'These are often high-frequency words'],
+          lesson_focus: 'Recognizing open syllables'
         },
         {
           substep: '5.2',
-          name: 'EE/EA and IE/IGH',
-          skills: ['ee and ea say long e', 'ie and igh say long i'],
-          sample_words: ['feet', 'meat', 'tie', 'high', 'sleep', 'read', 'pie', 'night', 'green', 'light'],
-          concepts: ['ea can also say short e (bread, head)', 'igh: three letters, one sound'],
-          lesson_focus: 'Long e and long i vowel teams'
+          name: 'Y as a Vowel',
+          skills: ['Y says long i at end of one-syllable word', 'Y says long e at end of multisyllabic word', 'Y in open syllable position'],
+          sample_words: ['my', 'fly', 'sky', 'try', 'why', 'baby', 'happy', 'candy', 'silly', 'plenty'],
+          concepts: ['Y is a vowel when it makes a vowel sound', 'End of one-syllable word: y says long i (my, fly)', 'End of multisyllabic word: y says long e (baby, happy)'],
+          lesson_focus: 'Reading y as a vowel in different positions'
         },
         {
           substep: '5.3',
-          name: 'Other Vowel Teams (OO, OU, EW, AU, AW)',
-          skills: ['oo says /oo/ (moon) or /ŏŏ/ (book)', 'ou/ow say /ou/ as in out', 'ew/ue say /oo/', 'au/aw say /ô/'],
-          sample_words: ['moon', 'book', 'out', 'cow', 'new', 'blue', 'auto', 'saw'],
-          concepts: ['Some vowel teams have multiple sounds', 'Learn common patterns'],
-          lesson_focus: 'Additional vowel team patterns'
+          name: 'Open Syllable Prefixes',
+          skills: ['Common open syllable prefixes: re-, pre-, de-, be-', 'Prefix meaning and usage', 'Dividing after open syllable prefix'],
+          sample_words: ['redo', 'prefix', 'decode', 'begin', 'refuse', 'pretend', 'defend', 'belong', 'return', 'demand'],
+          concepts: ['Prefixes are word parts added to beginning', 'Open syllable prefixes end in long vowel', 'Divide after the prefix'],
+          lesson_focus: 'Recognizing and reading open syllable prefixes'
         },
         {
           substep: '5.4',
-          name: 'Vowel Teams in Multisyllabic Words',
-          skills: ['Vowel team syllable type', 'Vowel teams in longer words'],
-          sample_words: ['rainbow', 'toaster', 'fifteen', 'explain', 'mushroom', 'birthday'],
-          concepts: ['Vowel team syllable type'],
-          lesson_focus: 'Syllable division with vowel teams'
+          name: 'Open Syllable Division & Schwa',
+          skills: ['VCV division: try open first (V/CV)', 'Flex to closed if open does not make a word (VC/V)', 'Schwa sound in unstressed syllables'],
+          sample_words: ['robot', 'hotel', 'student', 'cabin', 'lemon', 'camel', 'wagon', 'seven', 'planet', 'melon'],
+          concepts: ['VCV pattern: try open syllable first (V/CV)', 'Flex strategy: if open does not make a word, try closed (VC/V)', 'Schwa: unstressed vowel often says /uh/'],
+          lesson_focus: 'Flexible syllable division with VCV pattern'
         }
       ]
     },
     {
       step: 6,
-      name: 'Diphthongs & Advanced Patterns',
+      name: 'Suffixes & Consonant-le Syllables',
       substeps: [
         {
           substep: '6.1',
-          name: 'Diphthongs (OI/OY, OU/OW)',
-          skills: ['oi (middle) and oy (end) diphthong', 'ou and ow as diphthong /ou/'],
-          sample_words: ['oil', 'boy', 'out', 'cow', 'coin', 'toy', 'loud', 'now', 'point', 'enjoy'],
-          concepts: ['Diphthong: vowel sound that glides', 'Mouth position changes during sound'],
-          lesson_focus: 'Diphthong reading and spelling'
+          name: 'Common Suffixes (Set 1)',
+          skills: ['Suffixes: -er, -est, -en, -ish', 'Suffixes: -or, -y, -ly', 'Adding suffixes to unchanging base words'],
+          sample_words: ['faster', 'softest', 'golden', 'selfish', 'actor', 'rocky', 'sadly', 'flatten', 'freshen', 'rusted'],
+          concepts: ['Suffix changes word meaning or part of speech', 'Identify base word + suffix', 'Unchanging base: no spelling changes when adding suffix'],
+          lesson_focus: 'Reading and spelling words with common suffixes'
         },
         {
           substep: '6.2',
-          name: 'Advanced Suffixes',
-          skills: ['-tion, -sion saying /shun/', '-ture saying /chur/', '-ous, -ious, -eous'],
-          sample_words: ['nation', 'vision', 'nature', 'famous', 'curious', 'gorgeous'],
-          concepts: ['Latin suffixes', 'Suffix pronunciation patterns'],
-          lesson_focus: 'Advanced suffix patterns'
+          name: 'Additional Suffixes (Set 2)',
+          skills: ['Suffixes: -ful, -less, -ness, -ment', 'Suffixes: -able, -ty', 'Abstract noun and adjective suffixes'],
+          sample_words: ['thankful', 'helpless', 'sadness', 'shipment', 'fixable', 'plenty', 'careful', 'homeless', 'softness', 'payment'],
+          concepts: ['-ful means full of; -less means without', '-ness and -ment create nouns', '-able means able to be'],
+          lesson_focus: 'Suffix meanings and spelling patterns'
         },
         {
           substep: '6.3',
           name: 'Consonant-le Syllables',
-          skills: ['Final -le syllable', '-ble, -cle, -dle, -fle, -gle, -kle, -ple, -tle, -zle'],
-          sample_words: ['table', 'uncle', 'middle', 'raffle', 'eagle', 'ankle', 'simple', 'little', 'puzzle'],
-          concepts: ['Consonant-le syllable: consonant + le', 'Divide before the consonant-le'],
+          skills: ['Consonant-le pattern: consonant + le', 'Common endings: -ble, -cle, -dle, -fle, -gle, -kle, -ple, -tle, -zle', 'Division before consonant-le'],
+          sample_words: ['table', 'uncle', 'middle', 'raffle', 'eagle', 'ankle', 'simple', 'little', 'puzzle', 'bottle'],
+          concepts: ['Consonant-le: the consonant + le form a syllable', 'Divide BEFORE the consonant-le', 'The le syllable is never stressed'],
           lesson_focus: 'Reading and dividing consonant-le words'
         },
         {
           substep: '6.4',
-          name: 'Review and Complex Words',
-          skills: ['All syllable types', 'Complex multisyllabic words', 'Morpheme awareness'],
-          sample_words: ['uncomfortable', 'independent', 'transportation', 'automatically'],
-          concepts: ['All six syllable types', 'Syllable division rules', 'Prefix, base, suffix identification'],
-          lesson_focus: 'Comprehensive review and application'
+          name: 'Two-Syllable Consonant-le Words',
+          skills: ['First syllable type + consonant-le', 'Closed + consonant-le (bubble, jungle)', 'VCe + consonant-le (maple, noble)', 'Open + consonant-le (cable, bugle)'],
+          sample_words: ['bubble', 'jungle', 'maple', 'noble', 'cable', 'bugle', 'tremble', 'crumble', 'scramble', 'staple'],
+          concepts: ['Identify first syllable type to determine vowel sound', 'Closed first syllable = short vowel (bubble)', 'Open or VCe first syllable = long vowel (maple, cable)'],
+          lesson_focus: 'Combining syllable types with consonant-le'
         }
       ]
     }
   ],
-  
+
   syllable_types: [
-    { type: 'closed', description: 'Ends in consonant, vowel is short', example: 'cat', marker: 'breve over vowel' },
-    { type: 'vce', description: 'Vowel-consonant-silent e, vowel is long', example: 'make', marker: 'macron over vowel, cross out e' },
-    { type: 'open', description: 'Ends in vowel, vowel is long', example: 'go', marker: 'macron over vowel' },
-    { type: 'r-controlled', description: 'Vowel followed by r', example: 'car', marker: 'circle vowel-r' },
-    { type: 'vowel_team', description: 'Two vowels together', example: 'rain', marker: 'box vowel team' },
-    { type: 'consonant_le', description: 'Consonant + le at end', example: 'table', marker: 'box -le' }
+    { type: 'closed', description: 'Ends in consonant, vowel is short', example: 'cat, splash', marker: 'breve (˘) over vowel' },
+    { type: 'vce', description: 'Vowel-consonant-silent e, vowel is long', example: 'make, compete', marker: 'macron (¯) over vowel, slash through e' },
+    { type: 'open', description: 'Ends in vowel, vowel is long', example: 'go, robot', marker: 'macron (¯) over vowel' },
+    { type: 'consonant_le', description: 'Consonant + le at end, forms final syllable', example: 'table, puzzle', marker: 'box around -le' },
+    { type: 'r_controlled', description: 'Vowel followed by r, vowel sound is changed', example: 'car, bird', marker: 'circle around vowel-r' },
+    { type: 'vowel_team', description: 'Two vowels together make one sound (D syllable)', example: 'rain, boat', marker: 'box around vowel team' }
   ]
 };
 
