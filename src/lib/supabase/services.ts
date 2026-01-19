@@ -20,6 +20,16 @@ import type {
   ErrorBankEntry,
   ErrorBankInsert,
   ErrorBankUpdate,
+  MaterialCatalog,
+  GroupMaterial,
+  GroupMaterialInsert,
+  GroupMaterialUpdate,
+  SessionMaterialChecklist,
+  SessionMaterialChecklistInsert,
+  SessionMaterialChecklistUpdate,
+  GroupMaterialWithCatalog,
+  SessionMaterialWithCatalog,
+  Curriculum,
 } from './types';
 
 // ============================================
@@ -1232,4 +1242,412 @@ export async function regenerateGroupSessions(
   const created = await generateSessionsFromSchedule(groupId, schedule, group);
 
   return { removed, created };
+}
+
+// ============================================
+// MATERIAL CATALOG
+// ============================================
+
+export async function fetchMaterialCatalog(): Promise<MaterialCatalog[]> {
+  const { data, error } = await supabase
+    .from('material_catalog')
+    .select('*')
+    .order('curriculum')
+    .order('category')
+    .order('sort_order');
+
+  if (error) throw new Error(error.message);
+  return (data || []) as MaterialCatalog[];
+}
+
+export async function fetchMaterialCatalogByCurriculum(curriculum: string): Promise<MaterialCatalog[]> {
+  const { data, error } = await supabase
+    .from('material_catalog')
+    .select('*')
+    .eq('curriculum', curriculum)
+    .order('category')
+    .order('sort_order');
+
+  if (error) throw new Error(error.message);
+  return (data || []) as MaterialCatalog[];
+}
+
+export async function fetchMaterialById(id: string): Promise<MaterialCatalog | null> {
+  const { data, error } = await supabase
+    .from('material_catalog')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(error.message);
+  }
+  return data as MaterialCatalog;
+}
+
+// ============================================
+// GROUP MATERIALS
+// ============================================
+
+export async function fetchGroupMaterials(groupId: string): Promise<GroupMaterialWithCatalog[]> {
+  const { data, error } = await supabase
+    .from('group_materials')
+    .select(`
+      *,
+      material:material_catalog(*)
+    `)
+    .eq('group_id', groupId)
+    .order('created_at');
+
+  if (error) throw new Error(error.message);
+  return (data || []) as GroupMaterialWithCatalog[];
+}
+
+export async function fetchGroupMaterialsSummary(groupId: string): Promise<{
+  total: number;
+  collected: number;
+  percent: number;
+}> {
+  const materials = await fetchGroupMaterials(groupId);
+  const total = materials.length;
+  const collected = materials.filter(m => m.is_collected).length;
+  const percent = total > 0 ? Math.round((collected / total) * 100) : 0;
+  return { total, collected, percent };
+}
+
+export async function createGroupMaterial(material: GroupMaterialInsert): Promise<GroupMaterial> {
+  const { data, error } = await supabase
+    .from('group_materials')
+    .insert(material)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as GroupMaterial;
+}
+
+export async function updateGroupMaterial(
+  id: string,
+  updates: GroupMaterialUpdate
+): Promise<GroupMaterial> {
+  const updateData: any = { ...updates, updated_at: new Date().toISOString() };
+
+  // If marking as collected, set collected_at
+  if (updates.is_collected === true && !updates.collected_at) {
+    updateData.collected_at = new Date().toISOString();
+  } else if (updates.is_collected === false) {
+    updateData.collected_at = null;
+  }
+
+  const { data, error } = await supabase
+    .from('group_materials')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as GroupMaterial;
+}
+
+export async function toggleGroupMaterialCollected(
+  id: string,
+  isCollected: boolean,
+  userId?: string
+): Promise<GroupMaterial> {
+  const updateData: any = {
+    is_collected: isCollected,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (isCollected) {
+    updateData.collected_at = new Date().toISOString();
+    if (userId) updateData.collected_by = userId;
+  } else {
+    updateData.collected_at = null;
+    updateData.collected_by = null;
+  }
+
+  const { data, error } = await supabase
+    .from('group_materials')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as GroupMaterial;
+}
+
+export async function deleteGroupMaterial(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('group_materials')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Initialize materials for a group based on its curriculum
+ * Adds all base materials (no position-specific ones) from the catalog
+ */
+export async function initializeGroupMaterials(
+  groupId: string,
+  curriculum: Curriculum
+): Promise<GroupMaterial[]> {
+  // Get all materials for this curriculum that apply to all positions
+  const { data: catalogMaterials, error: catalogError } = await supabase
+    .from('material_catalog')
+    .select('id')
+    .eq('curriculum', curriculum)
+    .is('applicable_positions', null)
+    .eq('is_essential', true);
+
+  if (catalogError) throw new Error(catalogError.message);
+  if (!catalogMaterials || catalogMaterials.length === 0) return [];
+
+  // Check which materials already exist for this group
+  const { data: existingMaterials, error: existingError } = await supabase
+    .from('group_materials')
+    .select('material_id')
+    .eq('group_id', groupId);
+
+  if (existingError) throw new Error(existingError.message);
+
+  const existingMaterialIds = new Set(existingMaterials?.map(m => m.material_id) || []);
+
+  // Create materials that don't already exist
+  const newMaterials = catalogMaterials
+    .filter(m => !existingMaterialIds.has(m.id))
+    .map(m => ({
+      group_id: groupId,
+      material_id: m.id,
+      is_collected: false,
+      is_custom: false,
+    }));
+
+  if (newMaterials.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('group_materials')
+    .insert(newMaterials)
+    .select();
+
+  if (error) throw new Error(error.message);
+  return (data || []) as GroupMaterial[];
+}
+
+/**
+ * Add a custom material to a group (not from catalog)
+ */
+export async function addCustomGroupMaterial(
+  groupId: string,
+  customMaterial: {
+    name: string;
+    description?: string;
+    category: string;
+  }
+): Promise<GroupMaterial> {
+  const { data, error } = await supabase
+    .from('group_materials')
+    .insert({
+      group_id: groupId,
+      material_id: null,
+      is_collected: false,
+      is_custom: true,
+      custom_name: customMaterial.name,
+      custom_description: customMaterial.description || null,
+      custom_category: customMaterial.category,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as GroupMaterial;
+}
+
+// ============================================
+// SESSION MATERIAL CHECKLISTS
+// ============================================
+
+export async function fetchSessionMaterials(sessionId: string): Promise<SessionMaterialWithCatalog[]> {
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .select(`
+      *,
+      material:material_catalog(*)
+    `)
+    .eq('session_id', sessionId)
+    .order('created_at');
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SessionMaterialWithCatalog[];
+}
+
+export async function fetchWeeklySessionMaterials(): Promise<SessionMaterialWithCatalog[]> {
+  const today = new Date().toISOString().split('T')[0];
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .select(`
+      *,
+      material:material_catalog(*),
+      session:sessions!inner(id, date, time, status, group:groups!inner(id, name, curriculum))
+    `)
+    .gte('session.date', today)
+    .lt('session.date', nextWeek)
+    .eq('session.status', 'planned')
+    .order('session(date)')
+    .order('session(time)');
+
+  if (error) throw new Error(error.message);
+  return (data || []) as any[];
+}
+
+export async function createSessionMaterial(
+  material: SessionMaterialChecklistInsert
+): Promise<SessionMaterialChecklist> {
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .insert(material)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SessionMaterialChecklist;
+}
+
+export async function updateSessionMaterial(
+  id: string,
+  updates: SessionMaterialChecklistUpdate
+): Promise<SessionMaterialChecklist> {
+  const updateData: any = { ...updates };
+
+  // If marking as prepared, set prepared_at
+  if (updates.is_prepared === true && !updates.prepared_at) {
+    updateData.prepared_at = new Date().toISOString();
+  } else if (updates.is_prepared === false) {
+    updateData.prepared_at = null;
+  }
+
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SessionMaterialChecklist;
+}
+
+export async function toggleSessionMaterialPrepared(
+  id: string,
+  isPrepared: boolean,
+  userId?: string
+): Promise<SessionMaterialChecklist> {
+  const updateData: any = { is_prepared: isPrepared };
+
+  if (isPrepared) {
+    updateData.prepared_at = new Date().toISOString();
+    if (userId) updateData.prepared_by = userId;
+  } else {
+    updateData.prepared_at = null;
+    updateData.prepared_by = null;
+  }
+
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SessionMaterialChecklist;
+}
+
+export async function deleteSessionMaterial(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('session_material_checklists')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Generate session materials based on curriculum position
+ * Uses the database function get_materials_for_position
+ */
+export async function generateSessionMaterials(
+  sessionId: string,
+  curriculum: string,
+  position: any
+): Promise<SessionMaterialChecklist[]> {
+  // First, delete existing auto-generated materials
+  await supabase
+    .from('session_material_checklists')
+    .delete()
+    .eq('session_id', sessionId)
+    .eq('is_auto_generated', true);
+
+  // Call the database function to get materials for this position
+  const { data: materials, error: fnError } = await supabase
+    .rpc('get_materials_for_position', {
+      p_curriculum: curriculum,
+      p_position: position,
+    });
+
+  if (fnError) throw new Error(fnError.message);
+  if (!materials || materials.length === 0) return [];
+
+  // Insert the materials
+  const checklistItems = materials.map((m: any) => ({
+    session_id: sessionId,
+    material_id: m.material_id,
+    specific_item: m.specific_item,
+    quantity_needed: m.quantity_hint,
+    is_prepared: false,
+    is_auto_generated: true,
+  }));
+
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .insert(checklistItems)
+    .select();
+
+  if (error) throw new Error(error.message);
+  return (data || []) as SessionMaterialChecklist[];
+}
+
+/**
+ * Bulk toggle prepared status for session materials
+ */
+export async function bulkToggleSessionMaterialsPrepared(
+  sessionId: string,
+  isPrepared: boolean,
+  userId?: string
+): Promise<number> {
+  const updateData: any = { is_prepared: isPrepared };
+
+  if (isPrepared) {
+    updateData.prepared_at = new Date().toISOString();
+    if (userId) updateData.prepared_by = userId;
+  } else {
+    updateData.prepared_at = null;
+    updateData.prepared_by = null;
+  }
+
+  const { data, error } = await supabase
+    .from('session_material_checklists')
+    .update(updateData)
+    .eq('session_id', sessionId)
+    .select('id');
+
+  if (error) throw new Error(error.message);
+  return data?.length || 0;
 }

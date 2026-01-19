@@ -23,6 +23,7 @@ import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
 import { PlanSessionModal, EditSessionModal, CancelSessionModal, SessionPlanData } from '@/components/sessions';
 import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
+import { GroupMaterialsSection } from '@/components/materials';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useAIContextStore } from '@/stores/ai-context';
@@ -775,6 +776,13 @@ export default function GroupDetailPage() {
                 })()}
               </CardContent>
             </Card>
+
+            {/* Materials Section */}
+            <GroupMaterialsSection
+              groupId={groupId}
+              curriculum={selectedGroup.curriculum}
+              canEdit={canEdit}
+            />
           </div>
         </div>
       </div>

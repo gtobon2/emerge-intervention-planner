@@ -28,6 +28,15 @@ export {
   getCycleStatusColorClass,
 } from './cycles';
 
+// Materials store for group and session materials management
+export {
+  useGroupMaterialsStore,
+  useGroupMaterialsForGroup,
+  useGroupMaterialsSummary,
+  useSessionMaterialsForSession,
+  useMaterialCatalogByCurriculum,
+} from './group-materials';
+
 // Generic store factory for creating new entity stores
 export { createEntityStore } from './factory';
 export type {

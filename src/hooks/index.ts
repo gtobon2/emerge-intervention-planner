@@ -19,3 +19,9 @@ export { useSpeechRecognition } from './use-speech-recognition';
 export { useSettings } from './use-settings';
 export { useSearch } from './use-search';
 export { useNotifications, useNotificationGenerator, useFilteredNotifications } from './use-notifications';
+export {
+  useGroupMaterials,
+  useSessionMaterials,
+  useWeeklyMaterials,
+  useMaterialCatalog,
+} from './use-group-materials';

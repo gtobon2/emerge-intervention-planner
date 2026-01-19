@@ -837,3 +837,176 @@ export function getCurrentCycleWeek(cycle: InterventionCycle): number {
   const weekNumber = Math.floor(diffDays / 7) + 1;
   return Math.min(Math.max(1, weekNumber), cycle.weeks_count);
 }
+
+// ===========================================
+// MATERIALS SYSTEM TYPES
+// ===========================================
+
+export type MaterialCategory =
+  | 'cards'
+  | 'manipulatives'
+  | 'texts'
+  | 'workbooks'
+  | 'teacher'
+  | 'visuals'
+  | 'technology'
+  | 'assessment'
+  | 'other';
+
+export type MaterialCurriculum = Curriculum | 'fundations';
+
+// Material catalog - master list of materials
+export interface MaterialCatalog {
+  id: string;
+  curriculum: MaterialCurriculum;
+  category: MaterialCategory;
+  name: string;
+  description: string | null;
+  quantity_hint: string | null;
+  is_consumable: boolean;
+  applicable_positions: string[] | null; // Position keys where this material applies
+  sort_order: number;
+  is_essential: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Group materials - links groups to their collected materials
+export interface GroupMaterial {
+  id: string;
+  group_id: string;
+  material_id: string;
+  is_collected: boolean;
+  collected_at: string | null;
+  collected_by: string | null;
+  notes: string | null;
+  location: string | null;
+  is_custom: boolean;
+  custom_name: string | null;
+  custom_description: string | null;
+  custom_category: MaterialCategory | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Session material checklist - session-specific materials
+export interface SessionMaterialChecklist {
+  id: string;
+  session_id: string;
+  material_id: string | null;
+  custom_material_name: string | null;
+  custom_material_description: string | null;
+  is_prepared: boolean;
+  prepared_at: string | null;
+  prepared_by: string | null;
+  specific_item: string | null;
+  quantity_needed: string | null;
+  notes: string | null;
+  is_auto_generated: boolean;
+  created_at: string;
+}
+
+// ===========================================
+// MATERIALS INSERT/UPDATE TYPES
+// ===========================================
+
+export type MaterialCatalogInsert = Omit<MaterialCatalog, 'id' | 'created_at' | 'updated_at'>;
+export type MaterialCatalogUpdate = Partial<MaterialCatalogInsert>;
+
+export type GroupMaterialInsert = Omit<GroupMaterial, 'id' | 'created_at' | 'updated_at' | 'collected_at' | 'collected_by'>;
+export type GroupMaterialUpdate = Partial<GroupMaterialInsert> & {
+  is_collected?: boolean;
+  collected_at?: string | null;
+  collected_by?: string | null;
+};
+
+export type SessionMaterialChecklistInsert = Omit<SessionMaterialChecklist, 'id' | 'created_at' | 'prepared_at' | 'prepared_by'>;
+export type SessionMaterialChecklistUpdate = Partial<SessionMaterialChecklistInsert> & {
+  is_prepared?: boolean;
+  prepared_at?: string | null;
+  prepared_by?: string | null;
+};
+
+// ===========================================
+// MATERIALS JOINED TYPES
+// ===========================================
+
+export interface GroupMaterialWithCatalog extends GroupMaterial {
+  material: MaterialCatalog | null;
+}
+
+export interface SessionMaterialWithCatalog extends SessionMaterialChecklist {
+  material: MaterialCatalog | null;
+}
+
+// ===========================================
+// MATERIALS SUMMARY TYPES
+// ===========================================
+
+export interface GroupMaterialsSummary {
+  group_id: string;
+  group_name: string;
+  curriculum: Curriculum;
+  total_materials: number;
+  collected_count: number;
+  collection_percent: number;
+}
+
+export interface WeeklySessionMaterial {
+  session_id: string;
+  session_date: string;
+  session_time: string | null;
+  group_id: string;
+  group_name: string;
+  curriculum: Curriculum;
+  checklist_id: string;
+  material_name: string;
+  category: MaterialCategory;
+  specific_item: string | null;
+  quantity_needed: string | null;
+  is_prepared: boolean;
+  notes: string | null;
+}
+
+// ===========================================
+// MATERIALS HELPERS
+// ===========================================
+
+export const MATERIAL_CATEGORY_LABELS: Record<MaterialCategory, string> = {
+  cards: 'Cards & Flashcards',
+  manipulatives: 'Manipulatives',
+  texts: 'Decodable Texts',
+  workbooks: 'Workbooks & Worksheets',
+  teacher: 'Teacher Materials',
+  visuals: 'Visual Aids',
+  technology: 'Technology',
+  assessment: 'Assessment Tools',
+  other: 'Other',
+};
+
+export const MATERIAL_CATEGORY_ICONS: Record<MaterialCategory, string> = {
+  cards: 'layers',
+  manipulatives: 'puzzle',
+  texts: 'book-open',
+  workbooks: 'file-text',
+  teacher: 'pen-tool',
+  visuals: 'image',
+  technology: 'monitor',
+  assessment: 'clipboard-check',
+  other: 'package',
+};
+
+export function getMaterialCategoryColor(category: MaterialCategory): string {
+  const colors: Record<MaterialCategory, string> = {
+    cards: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    manipulatives: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    texts: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    workbooks: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+    teacher: 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
+    visuals: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+    technology: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+    assessment: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    other: 'bg-gray-100 text-gray-800 dark:bg-gray-700/30 dark:text-gray-300',
+  };
+  return colors[category];
+}

@@ -54,6 +54,7 @@ import {
 } from '@/components/sessions';
 import { WilsonLessonTracker } from '@/components/sessions/tracking/WilsonLessonTracker';
 import { CaminoLessonTracker } from '@/components/sessions/tracking/CaminoLessonTracker';
+import { SessionMaterialsChecklist } from '@/components/materials';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, useAIContextStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
@@ -868,6 +869,13 @@ export default function SessionPage({
                 </CardContent>
               </Card>
             )}
+
+            {/* Session Materials Checklist */}
+            <SessionMaterialsChecklist
+              sessionId={session.id}
+              curriculum={group.curriculum}
+              curriculumPosition={session.curriculum_position}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Session Plan Details */}
