@@ -492,7 +492,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'emerge-auth-store',
       partialize: (state) => ({
         // Persist initialization status and demo user for session restoration
-        isInitialized: state.isInitialized,
+        // isInitialized removed - must re-fetch session on each page load
         currentDemoUser: state.currentDemoUser,
         userRole: state.userRole,
       }),
