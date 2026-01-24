@@ -6,3 +6,4 @@
 
 export * from './time-utils';
 export * from './scheduler';
+export * from './day-slots';
