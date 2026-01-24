@@ -575,6 +575,43 @@ export interface ScheduleSlot {
   constraint?: GradeLevelConstraint | StudentConstraint;
 }
 
+// ===========================================
+// SCHEDULE CONSTRAINTS (Supabase-backed)
+// ===========================================
+
+export type ConstraintScope = 'schoolwide' | 'personal';
+
+/**
+ * Schedule constraint stored in Supabase
+ * Supports multi-grade and role-based visibility
+ */
+export interface ScheduleConstraint {
+  id: string;
+  created_by: string;
+  scope: ConstraintScope;
+  applicable_grades: number[];
+  label: string;
+  type: ConstraintType;
+  days: WeekDay[];
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ScheduleConstraintInsert = Omit<ScheduleConstraint, 'id' | 'created_at' | 'updated_at'>;
+export type ScheduleConstraintUpdate = Partial<Omit<ScheduleConstraintInsert, 'created_by'>>;
+
+/**
+ * Extended type with creator profile info (for display)
+ */
+export interface ScheduleConstraintWithCreator extends ScheduleConstraint {
+  creator?: {
+    full_name: string;
+    role: string;
+  };
+}
+
 // Preset constraint templates
 export const CONSTRAINT_PRESETS: Record<string, { label: string; type: ConstraintType; defaultTime: TimeBlock }> = {
   lunch_early: { label: 'Lunch (Early)', type: 'lunch', defaultTime: { startTime: '11:00', endTime: '11:30' } },

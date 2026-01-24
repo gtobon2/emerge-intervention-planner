@@ -2,9 +2,9 @@
  * Schedule Store
  *
  * Manages state for the Schedule Builder feature:
- * - Interventionists
- * - Grade-level constraints
- * - Student constraints
+ * - Interventionists (local IndexedDB)
+ * - Schedule constraints (Supabase - multi-grade, role-based)
+ * - Student constraints (local IndexedDB)
  * - Schedule suggestions
  */
 
@@ -12,36 +12,58 @@ import { create } from 'zustand';
 import { db } from '@/lib/local-db';
 import type {
   LocalInterventionist,
-  LocalGradeLevelConstraint,
   LocalStudentConstraint,
   LocalInterventionistInsert,
   LocalInterventionistUpdate,
-  LocalGradeLevelConstraintInsert,
   LocalStudentConstraintInsert,
 } from '@/lib/local-db';
-import type { SuggestedTimeSlot, WeekDay } from '@/lib/supabase/types';
+import type {
+  SuggestedTimeSlot,
+  ScheduleConstraint,
+  ScheduleConstraintInsert,
+  ScheduleConstraintUpdate,
+  ScheduleConstraintWithCreator,
+  ConstraintScope,
+} from '@/lib/supabase/types';
 import {
   createInterventionist as createInterventionistDB,
   updateInterventionist as updateInterventionistDB,
   deleteInterventionist as deleteInterventionistDB,
-  createGradeLevelConstraint as createGradeLevelConstraintDB,
-  updateGradeLevelConstraint as updateGradeLevelConstraintDB,
-  deleteGradeLevelConstraint as deleteGradeLevelConstraintDB,
   createStudentConstraint as createStudentConstraintDB,
   updateStudentConstraint as updateStudentConstraintDB,
   deleteStudentConstraint as deleteStudentConstraintDB,
 } from '@/lib/local-db/hooks';
-import { findAvailableSlots, suggestSchedule, SchedulingOptions } from '@/lib/scheduling';
-import { toNumericId, toNumericIdOrThrow, toStringId } from '@/lib/utils/id';
+import {
+  fetchConstraints as fetchConstraintsDB,
+  createConstraint as createConstraintDB,
+  updateConstraint as updateConstraintDB,
+  deleteConstraint as deleteConstraintDB,
+  canCreateSchoolwide,
+  getDefaultScope,
+} from '@/lib/supabase/constraints';
+import { suggestSchedule, SchedulingOptions } from '@/lib/scheduling';
+import { toNumericIdOrThrow } from '@/lib/utils/id';
+import type { UserRole } from '@/lib/supabase/profiles';
 
 // ============================================
 // TYPES
 // ============================================
 
+// Input type for creating constraints (without created_by, which is set automatically)
+export interface CreateConstraintInput {
+  scope: ConstraintScope;
+  applicable_grades: number[];
+  label: string;
+  type: 'lunch' | 'core_instruction' | 'specials' | 'therapy' | 'other';
+  days: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday')[];
+  start_time: string;
+  end_time: string;
+}
+
 interface ScheduleState {
   // Data
   interventionists: LocalInterventionist[];
-  gradeLevelConstraints: LocalGradeLevelConstraint[];
+  constraints: ScheduleConstraintWithCreator[];  // Supabase-backed
   studentConstraints: LocalStudentConstraint[];
 
   // Current suggestions
@@ -54,20 +76,20 @@ interface ScheduleState {
   isCalculating: boolean;
   error: string | null;
 
-  // Actions - Interventionists
+  // Actions - Interventionists (local DB)
   fetchInterventionists: () => Promise<void>;
   createInterventionist: (data: LocalInterventionistInsert) => Promise<LocalInterventionist | null>;
   updateInterventionist: (id: string, updates: LocalInterventionistUpdate) => Promise<void>;
   deleteInterventionist: (id: string) => Promise<void>;
   setSelectedInterventionist: (id: string | null) => void;
 
-  // Actions - Grade-level constraints
-  fetchGradeLevelConstraints: () => Promise<void>;
-  createGradeLevelConstraint: (data: LocalGradeLevelConstraintInsert) => Promise<LocalGradeLevelConstraint | null>;
-  updateGradeLevelConstraint: (id: string, updates: Partial<LocalGradeLevelConstraintInsert>) => Promise<void>;
-  deleteGradeLevelConstraint: (id: string) => Promise<void>;
+  // Actions - Schedule constraints (Supabase)
+  fetchConstraints: () => Promise<void>;
+  createConstraint: (data: CreateConstraintInput, userId: string) => Promise<ScheduleConstraint | null>;
+  updateConstraint: (id: string, updates: ScheduleConstraintUpdate) => Promise<void>;
+  deleteConstraint: (id: string) => Promise<void>;
 
-  // Actions - Student constraints
+  // Actions - Student constraints (local DB)
   fetchStudentConstraints: () => Promise<void>;
   fetchStudentConstraintsForStudent: (studentId: string) => Promise<LocalStudentConstraint[]>;
   createStudentConstraint: (data: LocalStudentConstraintInsert) => Promise<LocalStudentConstraint | null>;
@@ -90,7 +112,7 @@ interface ScheduleState {
 export const useScheduleStore = create<ScheduleState>((set, get) => ({
   // Initial state
   interventionists: [],
-  gradeLevelConstraints: [],
+  constraints: [],
   studentConstraints: [],
   suggestions: [],
   suggestionsGroupId: null,
@@ -100,7 +122,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   error: null,
 
   // ==========================================
-  // INTERVENTIONISTS
+  // INTERVENTIONISTS (Local IndexedDB)
   // ==========================================
 
   fetchInterventionists: async () => {
@@ -172,73 +194,64 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   },
 
   // ==========================================
-  // GRADE-LEVEL CONSTRAINTS
+  // SCHEDULE CONSTRAINTS (Supabase)
   // ==========================================
 
-  fetchGradeLevelConstraints: async () => {
+  fetchConstraints: async () => {
     set({ isLoading: true, error: null });
     try {
-      const constraints = await db.gradeLevelConstraints.orderBy('grade').toArray();
-      set({ gradeLevelConstraints: constraints, isLoading: false });
+      const constraints = await fetchConstraintsDB();
+      set({ constraints, isLoading: false });
     } catch (error) {
-      console.error('Error fetching grade-level constraints:', error);
+      console.error('Error fetching constraints:', error);
       set({ error: 'Failed to load constraints', isLoading: false });
     }
   },
 
-  createGradeLevelConstraint: async (data) => {
+  createConstraint: async (data, userId) => {
     try {
-      const id = await createGradeLevelConstraintDB(data);
-      const newConstraint = await db.gradeLevelConstraints.get(id);
-      if (newConstraint) {
-        set((state) => ({
-          gradeLevelConstraints: [...state.gradeLevelConstraints, newConstraint].sort(
-            (a, b) => a.grade - b.grade
-          ),
-        }));
-        return newConstraint;
-      }
-      return null;
+      const insertData: ScheduleConstraintInsert = {
+        ...data,
+        created_by: userId,
+      };
+      const newConstraint = await createConstraintDB(insertData);
+      // Refetch to get the creator info
+      const constraints = await fetchConstraintsDB();
+      set({ constraints });
+      return newConstraint;
     } catch (error) {
-      console.error('Error creating grade-level constraint:', error);
+      console.error('Error creating constraint:', error);
       set({ error: 'Failed to create constraint' });
       return null;
     }
   },
 
-  updateGradeLevelConstraint: async (id, updates) => {
+  updateConstraint: async (id, updates) => {
     try {
-      const numericId = toNumericIdOrThrow(id, 'grade_level_constraint_id');
-      await updateGradeLevelConstraintDB(numericId, updates);
-      const updated = await db.gradeLevelConstraints.get(numericId);
-      if (updated) {
-        set((state) => ({
-          gradeLevelConstraints: state.gradeLevelConstraints
-            .map((c) => (c.id === numericId ? updated : c))
-            .sort((a, b) => a.grade - b.grade),
-        }));
-      }
+      await updateConstraintDB(id, updates);
+      // Refetch to get updated data with creator info
+      const constraints = await fetchConstraintsDB();
+      set({ constraints });
     } catch (error) {
-      console.error('Error updating grade-level constraint:', error);
+      console.error('Error updating constraint:', error);
       set({ error: 'Failed to update constraint' });
     }
   },
 
-  deleteGradeLevelConstraint: async (id) => {
+  deleteConstraint: async (id) => {
     try {
-      const numericId = toNumericIdOrThrow(id, 'grade_level_constraint_id');
-      await deleteGradeLevelConstraintDB(numericId);
+      await deleteConstraintDB(id);
       set((state) => ({
-        gradeLevelConstraints: state.gradeLevelConstraints.filter((c) => c.id !== numericId),
+        constraints: state.constraints.filter((c) => c.id !== id),
       }));
     } catch (error) {
-      console.error('Error deleting grade-level constraint:', error);
+      console.error('Error deleting constraint:', error);
       set({ error: 'Failed to delete constraint' });
     }
   },
 
   // ==========================================
-  // STUDENT CONSTRAINTS
+  // STUDENT CONSTRAINTS (Local IndexedDB)
   // ==========================================
 
   fetchStudentConstraints: async () => {
@@ -345,14 +358,14 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   fetchAll: async () => {
     set({ isLoading: true, error: null });
     try {
-      const [interventionists, gradeLevelConstraints, studentConstraints] = await Promise.all([
+      const [interventionists, constraints, studentConstraints] = await Promise.all([
         db.interventionists.orderBy('name').toArray(),
-        db.gradeLevelConstraints.orderBy('grade').toArray(),
+        fetchConstraintsDB(),
         db.studentConstraints.toArray(),
       ]);
       set({
         interventionists,
-        gradeLevelConstraints,
+        constraints,
         studentConstraints,
         isLoading: false,
       });
@@ -365,7 +378,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   reset: () => {
     set({
       interventionists: [],
-      gradeLevelConstraints: [],
+      constraints: [],
       studentConstraints: [],
       suggestions: [],
       suggestionsGroupId: null,
@@ -376,3 +389,6 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     });
   },
 }));
+
+// Re-export permission helpers for use in components
+export { canCreateSchoolwide, getDefaultScope, canModifyConstraint } from '@/lib/supabase/constraints';
