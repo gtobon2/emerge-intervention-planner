@@ -6,28 +6,34 @@ import Link from 'next/link';
 import {
   WEEKDAYS,
   getDayShortName,
-  getDayDisplayName,
   formatTimeDisplay,
-  generateTimeSlots,
   timeToMinutes,
   getWeekDayFromDate,
 } from '@/lib/scheduling/time-utils';
 import { useSessionsStore } from '@/stores/sessions';
-import type { LocalInterventionist, LocalGradeLevelConstraint } from '@/lib/local-db';
-import type { WeekDay, TimeBlock, Group, SessionWithGroup } from '@/lib/supabase/types';
+import type { LocalInterventionist } from '@/lib/local-db';
+import type { WeekDay, TimeBlock, Group, SessionWithGroup, ScheduleConstraint } from '@/lib/supabase/types';
 
 interface ScheduleGridProps {
   interventionist: LocalInterventionist | null;
   groups: Group[];
-  constraints: LocalGradeLevelConstraint[];
-  // Drag and drop props
-  onDrop?: (day: WeekDay, hour: number, dateStr: string) => void;
+  constraints: ScheduleConstraint[];
+  // Drag and drop props - now uses timeStr instead of hour
+  onDrop?: (day: WeekDay, timeStr: string, dateStr: string) => void;
   isDragging?: boolean;
-  dragOverSlot?: { day: WeekDay; hour: number } | null;
-  onDragOver?: (slot: { day: WeekDay; hour: number } | null) => void;
+  dragOverSlot?: { day: WeekDay; timeStr: string } | null;
+  onDragOver?: (slot: { day: WeekDay; timeStr: string } | null) => void;
+  draggingDay?: WeekDay | null; // The specific day being dragged
 }
 
-const HOURS = Array.from({ length: 11 }, (_, i) => i + 7); // 7 AM to 5 PM
+// Generate 30-minute time slots from 7:00 AM to 5:00 PM
+const TIME_SLOTS: string[] = [];
+for (let hour = 7; hour <= 17; hour++) {
+  TIME_SLOTS.push(`${hour.toString().padStart(2, '0')}:00`);
+  if (hour < 17) {
+    TIME_SLOTS.push(`${hour.toString().padStart(2, '0')}:30`);
+  }
+}
 
 // Get dates for current week (Monday-Friday)
 function getCurrentWeekDates(): Map<WeekDay, string> {
@@ -60,6 +66,13 @@ function formatDateShort(dateStr: string): string {
   return `${month}/${day}`;
 }
 
+// Format grades for display
+function formatGrades(grades: number[]): string {
+  if (grades.length === 0) return '';
+  if (grades.length === 9) return 'All grades';
+  return `Gr ${grades.map(g => g === 0 ? 'K' : g).join(', ')}`;
+}
+
 export function ScheduleGrid({
   interventionist,
   groups,
@@ -68,6 +81,7 @@ export function ScheduleGrid({
   isDragging = false,
   dragOverSlot,
   onDragOver,
+  draggingDay = null,
 }: ScheduleGridProps) {
   const { allSessions, fetchAllSessions } = useSessionsStore();
 
@@ -79,19 +93,37 @@ export function ScheduleGrid({
   // Get current week dates
   const weekDates = useMemo(() => getCurrentWeekDates(), []);
 
+  // Get unique grades from visible groups
+  const visibleGrades = useMemo(() => {
+    return [...new Set(groups.map(g => g.grade))];
+  }, [groups]);
+
+  // Filter constraints to only those relevant to visible groups
+  // Schoolwide constraints always show (they affect everyone)
+  // Personal constraints only show when their grades match visible groups
+  const relevantConstraints = useMemo(() => {
+    return constraints.filter(c => {
+      // Schoolwide constraints always visible
+      if (c.scope === 'schoolwide') return true;
+      // Personal constraints: show if no groups visible OR grades overlap
+      if (visibleGrades.length === 0) return true;
+      return c.applicable_grades.some(grade => visibleGrades.includes(grade));
+    });
+  }, [constraints, visibleGrades]);
+
   // Group constraints by day
   const constraintsByDay = useMemo(() => {
-    const byDay = new Map<WeekDay, LocalGradeLevelConstraint[]>();
+    const byDay = new Map<WeekDay, ScheduleConstraint[]>();
     WEEKDAYS.forEach(day => byDay.set(day, []));
 
-    constraints.forEach(constraint => {
-      constraint.schedule.days.forEach(day => {
-        byDay.get(day)?.push(constraint);
+    relevantConstraints.forEach(constraint => {
+      constraint.days.forEach(day => {
+        byDay.get(day as WeekDay)?.push(constraint);
       });
     });
 
     return byDay;
-  }, [constraints]);
+  }, [relevantConstraints]);
 
   // Get interventionist availability by day
   const availabilityByDay = useMemo(() => {
@@ -112,8 +144,8 @@ export function ScheduleGrid({
     return byDay;
   }, [interventionist]);
 
-  // Group sessions by day and hour for current week
-  const sessionsByDayAndHour = useMemo(() => {
+  // Group sessions by day and time slot for current week
+  const sessionsBySlot = useMemo(() => {
     const map = new Map<string, SessionWithGroup[]>();
 
     allSessions.forEach(session => {
@@ -127,11 +159,13 @@ export function ScheduleGrid({
       const expectedDate = weekDates.get(weekDay);
       if (sessionDate !== expectedDate) return;
 
-      // Get the hour from session time
+      // Get the time slot - round to nearest 30 min
       if (!session.time) return;
-      const hour = parseInt(session.time.split(':')[0]);
+      const [hours, mins] = session.time.split(':').map(Number);
+      const roundedMins = mins < 30 ? '00' : '30';
+      const timeSlot = `${hours.toString().padStart(2, '0')}:${roundedMins}`;
 
-      const key = `${weekDay}-${hour}`;
+      const key = `${weekDay}-${timeSlot}`;
       if (!map.has(key)) {
         map.set(key, []);
       }
@@ -142,15 +176,24 @@ export function ScheduleGrid({
   }, [allSessions, weekDates]);
 
   // Check if a time slot is blocked by constraints
+  // Duration is 30 minutes to match the grid rows
+  // Schoolwide constraints always block; personal constraints only block if grades match
   const isTimeBlocked = (day: WeekDay, time: string, duration: number = 30): boolean => {
     const dayConstraints = constraintsByDay.get(day) || [];
     const slotStart = timeToMinutes(time);
     const slotEnd = slotStart + duration;
 
     return dayConstraints.some(constraint => {
-      const constraintStart = timeToMinutes(constraint.schedule.startTime);
-      const constraintEnd = timeToMinutes(constraint.schedule.endTime);
-      return slotStart < constraintEnd && slotEnd > constraintStart;
+      const constraintStart = timeToMinutes(constraint.start_time);
+      const constraintEnd = timeToMinutes(constraint.end_time);
+      const timesOverlap = slotStart < constraintEnd && slotEnd > constraintStart;
+      if (!timesOverlap) return false;
+
+      // Schoolwide constraints always block
+      if (constraint.scope === 'schoolwide') return true;
+      // Personal constraints only block if grades overlap with visible groups
+      if (visibleGrades.length === 0) return true;
+      return constraint.applicable_grades.some(g => visibleGrades.includes(g));
     });
   };
 
@@ -172,23 +215,38 @@ export function ScheduleGrid({
     });
   };
 
-  // Get constraint label for a time slot
-  const getConstraintLabel = (day: WeekDay, time: string): string | null => {
+  // Get constraint info for a time slot (for tooltip/display)
+  // Uses same overlap logic as isTimeBlocked for consistency
+  // Schoolwide constraints always show; personal constraints only show if grades match
+  const getConstraintInfo = (day: WeekDay, time: string): { label: string; grades: string } | null => {
     const dayConstraints = constraintsByDay.get(day) || [];
     const slotStart = timeToMinutes(time);
+    const slotEnd = slotStart + 30; // Match the 30-minute grid
 
     const constraint = dayConstraints.find(c => {
-      const constraintStart = timeToMinutes(c.schedule.startTime);
-      const constraintEnd = timeToMinutes(c.schedule.endTime);
-      return slotStart >= constraintStart && slotStart < constraintEnd;
+      const constraintStart = timeToMinutes(c.start_time);
+      const constraintEnd = timeToMinutes(c.end_time);
+      const timesOverlap = slotStart < constraintEnd && slotEnd > constraintStart;
+      if (!timesOverlap) return false;
+
+      // Schoolwide constraints always show
+      if (c.scope === 'schoolwide') return true;
+      // Personal constraints only show if grades overlap
+      if (visibleGrades.length === 0) return true;
+      return c.applicable_grades.some(g => visibleGrades.includes(g));
     });
 
-    return constraint?.label || null;
+    if (!constraint) return null;
+
+    return {
+      label: constraint.label,
+      grades: formatGrades(constraint.applicable_grades),
+    };
   };
 
-  // Get sessions for a specific day and hour
-  const getSessionsForSlot = (day: WeekDay, hour: number): SessionWithGroup[] => {
-    return sessionsByDayAndHour.get(`${day}-${hour}`) || [];
+  // Get sessions for a specific day and time slot
+  const getSessionsForSlot = (day: WeekDay, timeStr: string): SessionWithGroup[] => {
+    return sessionsBySlot.get(`${day}-${timeStr}`) || [];
   };
 
   // Get color for a group (based on curriculum)
@@ -203,20 +261,30 @@ export function ScheduleGrid({
     return colors[session.group.curriculum] || 'bg-gray-500';
   };
 
+  // Check if this is the start of an hour (for visual grouping)
+  const isHourStart = (timeStr: string): boolean => {
+    return timeStr.endsWith(':00');
+  };
+
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[600px]">
         {/* Header row with days */}
-        <div className="grid grid-cols-[80px_repeat(5,1fr)] gap-1 mb-1">
+        <div className="grid grid-cols-[60px_repeat(5,1fr)] gap-1 mb-1">
           <div className="flex items-center justify-center p-2 text-sm font-medium text-text-muted">
             <Clock className="w-4 h-4" />
           </div>
           {WEEKDAYS.map(day => (
             <div
               key={day}
-              className="text-center p-2 bg-surface rounded-lg"
+              className={`
+                text-center p-2 rounded-lg transition-colors
+                ${isDragging && draggingDay === day
+                  ? 'bg-movement/20 ring-2 ring-movement'
+                  : 'bg-surface'}
+              `}
             >
-              <div className="font-semibold text-sm text-text-primary">
+              <div className={`font-semibold text-sm ${isDragging && draggingDay === day ? 'text-movement' : 'text-text-primary'}`}>
                 {getDayShortName(day)}
               </div>
               <div className="text-xs text-text-muted">
@@ -228,32 +296,36 @@ export function ScheduleGrid({
 
         {/* Time grid */}
         <div className="relative">
-          {HOURS.map(hour => (
-            <div key={hour} className="grid grid-cols-[80px_repeat(5,1fr)] gap-1 mb-1">
-              {/* Time label */}
-              <div className="flex items-start justify-end pr-2 text-xs text-text-muted pt-1">
-                {formatTimeDisplay(`${hour.toString().padStart(2, '0')}:00`)}
+          {TIME_SLOTS.map(timeStr => (
+            <div
+              key={timeStr}
+              className={`grid grid-cols-[60px_repeat(5,1fr)] gap-1 ${isHourStart(timeStr) ? 'mt-1' : ''}`}
+            >
+              {/* Time label - only show on hour marks */}
+              <div className="flex items-start justify-end pr-2 text-xs text-text-muted pt-0.5">
+                {isHourStart(timeStr) ? formatTimeDisplay(timeStr) : ''}
               </div>
 
               {/* Day columns */}
               {WEEKDAYS.map(day => {
-                const timeStr = `${hour.toString().padStart(2, '0')}:00`;
                 const blocked = isTimeBlocked(day, timeStr);
                 const available = isAvailable(day, timeStr);
-                const label = getConstraintLabel(day, timeStr);
-                const sessions = getSessionsForSlot(day, hour);
+                const constraintInfo = getConstraintInfo(day, timeStr);
+                const sessions = getSessionsForSlot(day, timeStr);
                 const dateStr = weekDates.get(day)!;
-                const isDragOver = dragOverSlot?.day === day && dragOverSlot?.hour === hour;
-                const canDrop = isDragging && !blocked && sessions.length === 0 && (available || !interventionist);
+                const isDragOver = dragOverSlot?.day === day && dragOverSlot?.timeStr === timeStr;
+                // Only allow drop if day matches the dragging day
+                const dayMatches = !draggingDay || draggingDay === day;
+                const canDrop = isDragging && dayMatches && !blocked && sessions.length === 0 && (available || !interventionist);
 
                 return (
                   <div
-                    key={`${day}-${hour}`}
+                    key={`${day}-${timeStr}`}
                     onDragOver={(e) => {
                       if (canDrop) {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
-                        onDragOver?.({ day, hour });
+                        onDragOver?.({ day, timeStr });
                       }
                     }}
                     onDragLeave={() => {
@@ -264,45 +336,50 @@ export function ScheduleGrid({
                     onDrop={(e) => {
                       e.preventDefault();
                       if (canDrop && onDrop) {
-                        onDrop(day, hour, dateStr);
+                        onDrop(day, timeStr, dateStr);
                       }
                     }}
                     className={`
-                      min-h-[60px] rounded-lg border transition-colors relative
+                      min-h-[32px] rounded border transition-colors relative
+                      ${isHourStart(timeStr) ? 'rounded-t-lg' : 'rounded-t-none border-t-0'}
+                      ${timeStr.endsWith(':30') ? 'rounded-b-lg' : 'rounded-b-none'}
                       ${isDragOver && canDrop
                         ? 'bg-movement/20 border-movement border-2 scale-[1.02]'
                         : sessions.length > 0
                           ? 'bg-white border-gray-300 dark:bg-gray-900 dark:border-gray-600'
                           : blocked
                             ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
-                            : available
-                              ? `bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800
-                                 ${isDragging ? 'hover:bg-green-100 hover:border-green-300' : 'hover:bg-green-100'}
-                                 dark:hover:bg-green-900/30 cursor-pointer`
-                              : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
+                            : isDragging && draggingDay && draggingDay !== day
+                              ? 'bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600 opacity-40'
+                              : available
+                                ? `bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800
+                                   ${isDragging && canDrop ? 'hover:bg-green-100 hover:border-green-300' : 'hover:bg-green-100'}
+                                   dark:hover:bg-green-900/30 cursor-pointer`
+                                : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
                       }
                       ${isDragging && canDrop ? 'ring-1 ring-movement/30' : ''}
                     `}
+                    title={constraintInfo ? `${constraintInfo.label} (${constraintInfo.grades})` : formatTimeDisplay(timeStr)}
                   >
                     {/* Drop indicator */}
                     {isDragOver && canDrop && (
                       <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                        <span className="text-xs font-medium text-movement bg-white/90 px-2 py-1 rounded shadow-sm">
-                          Drop here
+                        <span className="text-[10px] font-medium text-movement bg-white/90 px-1 py-0.5 rounded shadow-sm">
+                          {formatTimeDisplay(timeStr)}
                         </span>
                       </div>
                     )}
 
                     {/* Show scheduled sessions */}
                     {sessions.length > 0 && (
-                      <div className="absolute inset-1 flex flex-col gap-1">
+                      <div className="absolute inset-0.5 flex flex-col gap-0.5">
                         {sessions.map(session => (
                           <Link
                             key={session.id}
                             href={`/groups/${session.group_id}`}
                             className={`
                               ${getGroupColor(session)} text-white
-                              rounded px-2 py-1 text-xs font-medium
+                              rounded px-1.5 py-0.5 text-[10px] font-medium
                               hover:opacity-90 transition-opacity
                               truncate
                             `}
@@ -314,20 +391,29 @@ export function ScheduleGrid({
                       </div>
                     )}
 
-                    {/* Show constraint label */}
-                    {sessions.length === 0 && blocked && label && !isDragOver && (
-                      <div className="absolute inset-0 flex items-center justify-center p-1">
-                        <span className="text-xs text-red-600 dark:text-red-400 font-medium text-center">
-                          {label}
+                    {/* Show constraint label with grades - only on hour marks to avoid repetition */}
+                    {sessions.length === 0 && blocked && constraintInfo && isHourStart(timeStr) && !isDragOver && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-0.5">
+                        <span className="text-[10px] text-red-600 dark:text-red-400 font-medium text-center leading-tight">
+                          {constraintInfo.label}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Show constraint continuation indicator on :30 slots */}
+                    {sessions.length === 0 && blocked && constraintInfo && !isHourStart(timeStr) && !isDragOver && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[8px] text-red-400">
+                          {constraintInfo.grades}
                         </span>
                       </div>
                     )}
 
                     {/* Show unavailable for interventionist */}
-                    {sessions.length === 0 && !blocked && !available && interventionist && !isDragOver && (
-                      <div className="absolute inset-0 flex items-center justify-center p-1">
-                        <span className="text-xs text-gray-400 text-center">
-                          Unavailable
+                    {sessions.length === 0 && !blocked && !available && interventionist && !isDragOver && isHourStart(timeStr) && (
+                      <div className="absolute inset-0 flex items-center justify-center p-0.5">
+                        <span className="text-[10px] text-gray-400 text-center">
+                          N/A
                         </span>
                       </div>
                     )}
