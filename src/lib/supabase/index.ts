@@ -1,5 +1,6 @@
 // Supabase exports
-export { supabase, createServerClient } from './client';
+export { supabase, createClient } from './client';
+export { createServerClient, createServiceClient } from './server';
 export * from './types';
 export * from './config';
 export * from './queries';
