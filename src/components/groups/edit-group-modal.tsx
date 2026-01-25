@@ -23,10 +23,17 @@ import type {
   CurriculumPosition,
   WeekDay,
   EnhancedGroupSchedule,
+  FlexibleGroupSchedule,
   DayTimeSlot,
   InterventionCycle,
 } from '@/lib/supabase/types';
-import { isEnhancedSchedule, convertToEnhancedSchedule } from '@/lib/supabase/types';
+import { 
+  isEnhancedSchedule, 
+  isFlexibleSchedule,
+  convertToEnhancedSchedule,
+  flexibleToEnhancedSchedule,
+  getSessionsPerWeek,
+} from '@/lib/supabase/types';
 
 export interface EditGroupModalProps {
   isOpen: boolean;
@@ -76,7 +83,10 @@ export function EditGroupModal({
     notes: '',
   });
 
-  // Per-day schedule state
+  // Flexible schedule state (sessions per week instead of manual day selection)
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(3);
+  const [preferredTime, setPreferredTime] = useState('');
+  const [useManualDays, setUseManualDays] = useState(false);
   const [dayTimeSlots, setDayTimeSlots] = useState<DayTimeSlot[]>(
     dayOptions.map(d => ({ day: d.value, time: '', enabled: false }))
   );
@@ -120,22 +130,45 @@ export function EditGroupModal({
         notes: '',
       });
 
-      // Handle schedule - check if enhanced or legacy format
-      if (group.schedule && isEnhancedSchedule(group.schedule)) {
+      // Handle schedule - check format (flexible, enhanced, or legacy)
+      if (group.schedule && isFlexibleSchedule(group.schedule)) {
+        // New flexible format
+        const flex = group.schedule as FlexibleGroupSchedule;
+        setSessionsPerWeek(flex.sessions_per_week);
+        setPreferredTime(flex.preferred_time || '');
+        setSelectedCycleId(flex.cycle_id || null);
+        setUseCustomDates(!!flex.custom_start_date);
+        setCustomStartDate(flex.custom_start_date || '');
+        setCustomEndDate(flex.custom_end_date || '');
+        setUseManualDays(false);
+        // Load computed days if available (for manual override)
+        if (flex.computed_days) {
+          setDayTimeSlots(flex.computed_days);
+        }
+      } else if (group.schedule && isEnhancedSchedule(group.schedule)) {
+        // Legacy enhanced format - convert to sessions per week
         const enhanced = group.schedule as EnhancedGroupSchedule;
+        const enabledDays = enhanced.day_times.filter(dt => dt.enabled);
+        setSessionsPerWeek(enabledDays.length || 3);
+        setPreferredTime(enabledDays.find(dt => dt.time)?.time || '');
         setDayTimeSlots(enhanced.day_times);
         setSelectedCycleId(enhanced.cycle_id || null);
         setUseCustomDates(!!enhanced.custom_start_date);
         setCustomStartDate(enhanced.custom_start_date || '');
         setCustomEndDate(enhanced.custom_end_date || '');
+        setUseManualDays(enabledDays.length > 0); // Show manual if they had specific days
       } else {
         // Convert legacy format
         const enhanced = convertToEnhancedSchedule(group.schedule);
+        const enabledDays = enhanced.day_times.filter(dt => dt.enabled);
+        setSessionsPerWeek(enabledDays.length || 3);
+        setPreferredTime(enabledDays.find(dt => dt.time)?.time || '');
         setDayTimeSlots(enhanced.day_times);
         setSelectedCycleId(null);
         setUseCustomDates(false);
         setCustomStartDate('');
         setCustomEndDate('');
+        setUseManualDays(false);
       }
 
       // Set curriculum position based on curriculum type
@@ -227,14 +260,20 @@ export function EditGroupModal({
     }
 
     try {
-      // Build enhanced schedule
-      const enhancedSchedule: EnhancedGroupSchedule = {
-        day_times: dayTimeSlots,
+      // Build flexible schedule (new format)
+      const flexibleSchedule: FlexibleGroupSchedule = {
+        sessions_per_week: sessionsPerWeek,
+        preferred_time: preferredTime || undefined,
         duration: formData.schedule_duration || 30,
         cycle_id: selectedCycleId || undefined,
         custom_start_date: useCustomDates ? customStartDate || undefined : undefined,
         custom_end_date: useCustomDates ? customEndDate || undefined : undefined,
+        // Include manual days if user overrode
+        computed_days: useManualDays ? dayTimeSlots : undefined,
       };
+
+      // Convert to enhanced format for backward compatibility with session generation
+      const enhancedSchedule = flexibleToEnhancedSchedule(flexibleSchedule);
 
       const updates: GroupUpdate = {
         name: formData.name.trim(),
@@ -242,7 +281,7 @@ export function EditGroupModal({
         tier: formData.tier,
         grade: formData.grade,
         current_position: getCurrentPosition(),
-        schedule: enhancedSchedule as any, // Cast since GroupSchedule union accepts JSONB
+        schedule: flexibleSchedule as any, // Store flexible format
       };
 
       await onSave(group.id, updates);
@@ -252,7 +291,7 @@ export function EditGroupModal({
         try {
           const result = await regenerateGroupSessions(
             group.id,
-            enhancedSchedule,
+            enhancedSchedule, // Use enhanced format for session generation
             { current_position: getCurrentPosition(), grade: formData.grade }
           );
           setSessionGenResult({ removed: result.removed, created: result.created.length });
@@ -550,69 +589,127 @@ export function EditGroupModal({
             )}
           </div>
 
-          {/* Per-Day Schedule */}
+          {/* Sessions Per Week Selector (New Flexible Schedule) */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-text-primary">
-                Meeting Days & Times
-              </label>
-              {dayTimeSlots.some((s) => s.enabled && s.time) && (
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Sessions Per Week
+            </label>
+            <p className="text-xs text-text-muted mb-3">
+              The scheduler will pick the best days based on availability.
+            </p>
+            <div className="flex gap-2">
+              {[2, 3, 4, 5].map((num) => (
                 <button
+                  key={num}
                   type="button"
-                  onClick={handleApplySameTime}
-                  className="text-xs text-movement hover:text-movement/80 underline"
+                  onClick={() => setSessionsPerWeek(num)}
                   disabled={isLoading}
+                  className={`
+                    flex-1 py-3 px-4 rounded-lg font-medium transition-colors
+                    ${sessionsPerWeek === num
+                      ? 'bg-movement text-white'
+                      : 'bg-white border border-gray-200 text-text-muted hover:bg-gray-50'
+                    }
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  `}
                 >
-                  Apply same time to all
+                  {num}x
                 </button>
-              )}
+              ))}
             </div>
-            <div className="space-y-2">
-              {dayOptions.map((day) => {
-                const slot = dayTimeSlots.find((s) => s.day === day.value);
-                const isEnabled = slot?.enabled || false;
-                return (
-                  <div
-                    key={day.value}
-                    className={`
-                      flex items-center gap-3 p-2 rounded-lg border transition-colors
-                      ${isEnabled ? 'border-movement/30 bg-movement/5' : 'border-gray-200 bg-gray-50'}
-                    `}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleDayToggle(day.value)}
-                      disabled={isLoading}
+            
+            {/* Preview suggested days */}
+            <div className="mt-3 p-2 bg-foundation rounded-lg">
+              <p className="text-xs text-text-muted">
+                Suggested: {' '}
+                <span className="font-medium text-text-primary">
+                  {sessionsPerWeek === 2 && 'Tue, Thu'}
+                  {sessionsPerWeek === 3 && 'Mon, Wed, Fri'}
+                  {sessionsPerWeek === 4 && 'Mon, Tue, Thu, Fri'}
+                  {sessionsPerWeek === 5 && 'Mon–Fri'}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Preferred Time */}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Preferred Time
+              <span className="text-text-muted font-normal ml-1">(optional)</span>
+            </label>
+            <input
+              type="time"
+              value={preferredTime}
+              onChange={(e) => setPreferredTime(e.target.value)}
+              disabled={isLoading}
+              className="w-full px-3 py-2 rounded border border-gray-200 text-sm
+                         focus:ring-movement focus:border-movement"
+              placeholder="--:--"
+            />
+          </div>
+
+          {/* Manual Override Option */}
+          <div className="pt-2">
+            <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useManualDays}
+                onChange={(e) => setUseManualDays(e.target.checked)}
+                disabled={isLoading}
+                className="rounded border-gray-300"
+              />
+              Override: manually select specific days
+            </label>
+            
+            {useManualDays && (
+              <div className="mt-3 space-y-2">
+                {dayOptions.map((day) => {
+                  const slot = dayTimeSlots.find((s) => s.day === day.value);
+                  const isEnabled = slot?.enabled || false;
+                  return (
+                    <div
+                      key={day.value}
                       className={`
-                        w-20 px-2 py-1.5 rounded text-sm font-medium transition-colors
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                        ${isEnabled
-                          ? 'bg-movement text-white'
-                          : 'bg-white border border-gray-200 text-text-muted hover:bg-gray-100'
-                        }
+                        flex items-center gap-3 p-2 rounded-lg border transition-colors
+                        ${isEnabled ? 'border-movement/30 bg-movement/5' : 'border-gray-200 bg-gray-50'}
                       `}
                     >
-                      {day.shortLabel}
-                    </button>
-                    <input
-                      type="time"
-                      value={slot?.time || ''}
-                      onChange={(e) => handleDayTimeChange(day.value, e.target.value)}
-                      disabled={isLoading || !isEnabled}
-                      className={`
-                        flex-1 px-3 py-1.5 rounded border text-sm
-                        ${isEnabled
-                          ? 'border-movement/30 focus:ring-movement focus:border-movement'
-                          : 'border-gray-200 bg-gray-100 text-gray-400'
-                        }
-                        disabled:cursor-not-allowed
-                      `}
-                      placeholder={isEnabled ? 'Select time' : '--:--'}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDayToggle(day.value)}
+                        disabled={isLoading}
+                        className={`
+                          w-20 px-2 py-1.5 rounded text-sm font-medium transition-colors
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          ${isEnabled
+                            ? 'bg-movement text-white'
+                            : 'bg-white border border-gray-200 text-text-muted hover:bg-gray-100'
+                          }
+                        `}
+                      >
+                        {day.shortLabel}
+                      </button>
+                      <input
+                        type="time"
+                        value={slot?.time || ''}
+                        onChange={(e) => handleDayTimeChange(day.value, e.target.value)}
+                        disabled={isLoading || !isEnabled}
+                        className={`
+                          flex-1 px-3 py-1.5 rounded border text-sm
+                          ${isEnabled
+                            ? 'border-movement/30 focus:ring-movement focus:border-movement'
+                            : 'border-gray-200 bg-gray-100 text-gray-400'
+                          }
+                          disabled:cursor-not-allowed
+                        `}
+                        placeholder={isEnabled ? 'Select time' : '--:--'}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Duration */}

@@ -778,6 +778,142 @@ export function getTimeForDay(schedule: EnhancedGroupSchedule, day: WeekDay): st
 }
 
 // ===========================================
+// FLEXIBLE GROUP SCHEDULE (sessions per week)
+// ===========================================
+
+/**
+ * Flexible schedule with sessions-per-week (scheduler auto-picks days)
+ * This is the new preferred format - simpler UX, smarter scheduling
+ */
+export interface FlexibleGroupSchedule {
+  /** Reference to intervention cycle for date range */
+  cycle_id?: string | null;
+  
+  /** Override cycle start (for mid-cycle starts) */
+  custom_start_date?: string | null;
+  
+  /** Override cycle end */
+  custom_end_date?: string | null;
+  
+  /** Number of sessions per week (2-5) */
+  sessions_per_week: number;
+  
+  /** Preferred time for all sessions (can be null to let scheduler pick) */
+  preferred_time?: string | null;
+  
+  /** Session duration in minutes */
+  duration: number;
+  
+  /** 
+   * Computed/cached day assignments (filled by scheduler)
+   * If present, used directly. If absent, scheduler computes optimal days.
+   */
+  computed_days?: DayTimeSlot[];
+}
+
+/**
+ * Type guard for flexible schedule format
+ */
+export function isFlexibleSchedule(
+  schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null
+): schedule is FlexibleGroupSchedule {
+  return schedule !== null && 'sessions_per_week' in schedule;
+}
+
+/**
+ * Convert enhanced schedule to flexible format
+ */
+export function convertToFlexibleSchedule(
+  schedule: EnhancedGroupSchedule | null
+): FlexibleGroupSchedule {
+  if (!schedule) {
+    return {
+      sessions_per_week: 3,
+      duration: 30,
+    };
+  }
+  
+  // Count enabled days
+  const enabledDays = schedule.day_times.filter(dt => dt.enabled);
+  const sessionsPerWeek = enabledDays.length || 3;
+  
+  // Get first time as preferred
+  const firstTime = enabledDays.find(dt => dt.time)?.time || null;
+  
+  return {
+    cycle_id: schedule.cycle_id,
+    custom_start_date: schedule.custom_start_date,
+    custom_end_date: schedule.custom_end_date,
+    sessions_per_week: sessionsPerWeek,
+    preferred_time: firstTime,
+    duration: schedule.duration,
+    // Keep computed_days to preserve user's selections during migration
+    computed_days: schedule.day_times,
+  };
+}
+
+/**
+ * Convert flexible schedule back to enhanced format (for backward compatibility)
+ */
+export function flexibleToEnhancedSchedule(
+  schedule: FlexibleGroupSchedule
+): EnhancedGroupSchedule {
+  // If we have computed days, use them
+  if (schedule.computed_days && schedule.computed_days.length > 0) {
+    return {
+      cycle_id: schedule.cycle_id,
+      custom_start_date: schedule.custom_start_date,
+      custom_end_date: schedule.custom_end_date,
+      day_times: schedule.computed_days,
+      duration: schedule.duration,
+    };
+  }
+  
+  // Otherwise generate from sessions_per_week using default patterns
+  const patterns: Record<number, WeekDay[]> = {
+    2: ['tuesday', 'thursday'],
+    3: ['monday', 'wednesday', 'friday'],
+    4: ['monday', 'tuesday', 'thursday', 'friday'],
+    5: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+  };
+  
+  const selectedDays = new Set(patterns[schedule.sessions_per_week] || patterns[3]);
+  const allDays: WeekDay[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+  
+  return {
+    cycle_id: schedule.cycle_id,
+    custom_start_date: schedule.custom_start_date,
+    custom_end_date: schedule.custom_end_date,
+    day_times: allDays.map(day => ({
+      day,
+      time: selectedDays.has(day) ? (schedule.preferred_time || '09:00') : '',
+      enabled: selectedDays.has(day),
+    })),
+    duration: schedule.duration,
+  };
+}
+
+/**
+ * Get sessions per week from any schedule format
+ */
+export function getSessionsPerWeek(
+  schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null
+): number {
+  if (!schedule) return 0;
+  
+  if (isFlexibleSchedule(schedule)) {
+    return schedule.sessions_per_week;
+  }
+  
+  if (isEnhancedSchedule(schedule)) {
+    return getEnabledDays(schedule).length;
+  }
+  
+  // Basic GroupSchedule
+  return (schedule.days || []).length;
+}
+
+// ===========================================
 // ATTENDANCE HELPERS
 // ===========================================
 

@@ -163,6 +163,95 @@ export async function deleteStudent(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Add an existing student to a group with proper syncing
+ * This ensures:
+ * 1. Student's group_id is updated
+ * 2. Student is assigned to the group's owner (if any)
+ */
+export async function addStudentToGroupWithSync(
+  studentId: string,
+  groupId: string,
+  addedBy: string | null
+): Promise<Student> {
+  // Get the group to find owner_id
+  const group = await fetchGroupById(groupId);
+  if (!group) {
+    throw new Error('Group not found');
+  }
+
+  // Update student's group_id
+  const student = await updateStudent(studentId, { group_id: groupId });
+
+  // If group has an owner, ensure student is assigned to them
+  if (group.owner_id) {
+    try {
+      // Check if assignment already exists
+      const { data: existing } = await supabase
+        .from('student_assignments')
+        .select('id')
+        .eq('student_id', studentId)
+        .eq('interventionist_id', group.owner_id)
+        .single();
+
+      if (!existing) {
+        // Create assignment
+        await supabase
+          .from('student_assignments')
+          .insert({
+            student_id: studentId,
+            interventionist_id: group.owner_id,
+            assigned_by: addedBy,
+          });
+      }
+    } catch (err) {
+      // Log but don't fail - assignment sync is best-effort
+      console.warn('Failed to sync student assignment:', err);
+    }
+  }
+
+  return student;
+}
+
+/**
+ * Remove a student from a group (sets group_id to null)
+ * Optionally removes the assignment to the group's owner
+ */
+export async function removeStudentFromGroup(
+  studentId: string,
+  groupId: string,
+  removeAssignment: boolean = false
+): Promise<Student> {
+  // Get the group to find owner_id (if we need to remove assignment)
+  const group = removeAssignment ? await fetchGroupById(groupId) : null;
+
+  // Remove from group (set group_id to null directly)
+  const { data, error } = await supabase
+    .from('students')
+    .update({ group_id: null })
+    .eq('id', studentId)
+    .select()
+    .single();
+    
+  if (error) throw new Error(error.message);
+  const student = data as Student;
+
+  // Optionally remove assignment
+  if (removeAssignment && group?.owner_id) {
+    try {
+      await supabase
+        .from('student_assignments')
+        .delete()
+        .eq('student_id', studentId)
+        .eq('interventionist_id', group.owner_id);
+    } catch (err) {
+      console.warn('Failed to remove student assignment:', err);
+    }
+  }
+
+  return student;
+}
+
 // ============================================
 // SESSIONS
 // ============================================

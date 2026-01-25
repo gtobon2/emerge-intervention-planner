@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Users } from 'lucide-react';
+import { ArrowLeft, Plus, Users, UserPlus } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { StudentList } from '@/components/students/student-list';
 import { StudentFormModal } from '@/components/students/student-form-modal';
 import { DeleteStudentModal } from '@/components/students/delete-student-modal';
+import { AddExistingStudentModal } from '@/components/students/add-existing-student-modal';
 import { useGroupsStore } from '@/stores/groups';
 import { useStudents } from '@/hooks/use-students';
 import { useAIContextStore } from '@/stores/ai-context';
@@ -48,6 +49,7 @@ export default function StudentsManagementPage() {
     student: null,
   });
 
+  const [addExistingModalOpen, setAddExistingModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -185,10 +187,20 @@ export default function StudentsManagementPage() {
               Add and manage students in this intervention group
             </p>
           </div>
-          <Button onClick={handleAddStudent} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add Student
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="secondary" 
+              onClick={() => setAddExistingModalOpen(true)} 
+              className="gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Existing
+            </Button>
+            <Button onClick={handleAddStudent} className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Student
+            </Button>
+          </div>
         </div>
 
         {/* Success Message */}
@@ -263,6 +275,19 @@ export default function StudentsManagementPage() {
         onConfirm={handleConfirmDelete}
         student={deleteModalState.student}
         isLoading={studentsLoading}
+      />
+
+      <AddExistingStudentModal
+        isOpen={addExistingModalOpen}
+        onClose={() => setAddExistingModalOpen(false)}
+        onSuccess={() => {
+          setSuccessMessage('Student added to group successfully');
+          // Refresh students list
+          fetchGroupById(groupId);
+        }}
+        groupId={groupId}
+        groupCurriculum={selectedGroup.curriculum}
+        existingStudentIds={students.map(s => s.id)}
       />
     </AppLayout>
   );
