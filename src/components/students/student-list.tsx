@@ -9,9 +9,17 @@ export interface StudentListProps {
   students: Student[];
   onEdit: (student: Student) => void;
   onDelete: (student: Student) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
-export function StudentList({ students, onEdit, onDelete }: StudentListProps) {
+export function StudentList({ 
+  students, 
+  onEdit, 
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: StudentListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleExpand = (id: string) => {
@@ -79,24 +87,28 @@ export function StudentList({ students, onEdit, onDelete }: StudentListProps) {
                       )}
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onEdit(student)}
-                    className="gap-1"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onDelete(student)}
-                    className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(student)}
+                      className="gap-1"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(student)}
+                      className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </div>
               {isExpanded && hasNotes && (

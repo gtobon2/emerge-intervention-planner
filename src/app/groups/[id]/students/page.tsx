@@ -13,6 +13,7 @@ import { AddExistingStudentModal } from '@/components/students/add-existing-stud
 import { useGroupsStore } from '@/stores/groups';
 import { useStudents } from '@/hooks/use-students';
 import { useAIContextStore } from '@/stores/ai-context';
+import { useAuthStore } from '@/stores/auth';
 import type { Student } from '@/lib/supabase/types';
 
 export default function StudentsManagementPage() {
@@ -31,6 +32,11 @@ export default function StudentsManagementPage() {
     clearError,
   } = useStudents(groupId);
   const { setContext, clearContext } = useAIContextStore();
+  const { userRole, isAdmin } = useAuthStore();
+  
+  // Only admins can create new students or delete students
+  const canCreateStudents = isAdmin();
+  const canDeleteStudents = isAdmin();
 
   const [formModalState, setFormModalState] = useState<{
     isOpen: boolean;
@@ -196,10 +202,12 @@ export default function StudentsManagementPage() {
               <UserPlus className="w-4 h-4" />
               Add Existing
             </Button>
-            <Button onClick={handleAddStudent} className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Student
-            </Button>
+            {canCreateStudents && (
+              <Button onClick={handleAddStudent} className="gap-2">
+                <Plus className="w-4 h-4" />
+                New Student
+              </Button>
+            )}
           </div>
         </div>
 
@@ -241,11 +249,25 @@ export default function StudentsManagementPage() {
                   No students yet
                 </h3>
                 <p className="text-text-muted mb-6">
-                  Get started by adding students to this intervention group.
+                  {canCreateStudents 
+                    ? 'Get started by adding students to this intervention group.'
+                    : 'Add existing students from the master list to this group.'}
                 </p>
-                <Button onClick={handleAddStudent} className="gap-2">
-                  <Plus className="w-4 h-4" />
-                  Add First Student
+                <Button 
+                  onClick={() => canCreateStudents ? handleAddStudent() : setAddExistingModalOpen(true)} 
+                  className="gap-2"
+                >
+                  {canCreateStudents ? (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Add First Student
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      Add Existing Student
+                    </>
+                  )}
                 </Button>
               </div>
             ) : (
@@ -253,6 +275,8 @@ export default function StudentsManagementPage() {
                 students={students}
                 onEdit={handleEditStudent}
                 onDelete={handleDeleteStudent}
+                canEdit={canCreateStudents}
+                canDelete={canDeleteStudents}
               />
             )}
           </CardContent>
