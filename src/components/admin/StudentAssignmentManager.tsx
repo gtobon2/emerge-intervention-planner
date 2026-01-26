@@ -11,6 +11,7 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle2,
+  FolderPlus,
 } from 'lucide-react';
 import {
   Card,
@@ -30,10 +31,15 @@ import {
 } from '@/lib/supabase/student-assignments';
 import { fetchInterventionists, type Profile } from '@/lib/supabase/profiles';
 import {
+  fetchGroupsByOwner,
+  addStudentToGroup,
+} from '@/lib/supabase/services';
+import {
   GRADE_LEVELS,
   type GradeLevel,
   type StudentWithAssignments,
   type StudentAssignment,
+  type Group,
 } from '@/lib/supabase/types';
 import { isMockMode } from '@/lib/supabase/config';
 
@@ -59,6 +65,13 @@ export function StudentAssignmentManager({ currentUserId }: StudentAssignmentMan
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [targetInterventionistId, setTargetInterventionistId] = useState<string>('');
+
+  // Group selection modal (shown after assignment)
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [interventionistGroups, setInterventionistGroups] = useState<Group[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [recentlyAssignedStudentId, setRecentlyAssignedStudentId] = useState<string | null>(null);
+  const [recentlyAssignedInterventionistId, setRecentlyAssignedInterventionistId] = useState<string | null>(null);
 
   // Expanded rows for showing assignments
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
@@ -260,8 +273,29 @@ export function StudentAssignmentManager({ currentUserId }: StudentAssignmentMan
         interventionist_id: targetInterventionistId,
         assigned_by: currentUserId || null,
       });
-      setSuccessMessage('Student assigned successfully');
-      setShowAssignModal(false);
+      
+      // After successful assignment, check if interventionist has groups
+      try {
+        const groups = await fetchGroupsByOwner(targetInterventionistId);
+        if (groups.length > 0) {
+          // Store info for group modal
+          setRecentlyAssignedStudentId(selectedStudentId);
+          setRecentlyAssignedInterventionistId(targetInterventionistId);
+          setInterventionistGroups(groups);
+          setSelectedGroupId('');
+          setShowAssignModal(false);
+          setShowGroupModal(true);
+          setSuccessMessage('Student assigned! Would you like to add them to a group?');
+        } else {
+          setSuccessMessage('Student assigned successfully');
+          setShowAssignModal(false);
+        }
+      } catch {
+        // If fetching groups fails, just complete the assignment
+        setSuccessMessage('Student assigned successfully');
+        setShowAssignModal(false);
+      }
+      
       await fetchData(); // Refresh data
     } catch (err) {
       console.error('Error assigning student:', err);
@@ -269,6 +303,39 @@ export function StudentAssignmentManager({ currentUserId }: StudentAssignmentMan
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Handle adding student to a group after assignment
+  const handleAddToGroup = async () => {
+    if (!recentlyAssignedStudentId || !selectedGroupId) return;
+
+    setIsSaving(true);
+    try {
+      await addStudentToGroup(
+        recentlyAssignedStudentId,
+        selectedGroupId,
+        currentUserId || null,
+        { syncAssignment: false } // Already assigned
+      );
+      setSuccessMessage('Student added to group successfully!');
+      setShowGroupModal(false);
+      setRecentlyAssignedStudentId(null);
+      setRecentlyAssignedInterventionistId(null);
+      setInterventionistGroups([]);
+      await fetchData();
+    } catch (err) {
+      console.error('Error adding student to group:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add student to group');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSkipGroupAssignment = () => {
+    setShowGroupModal(false);
+    setRecentlyAssignedStudentId(null);
+    setRecentlyAssignedInterventionistId(null);
+    setInterventionistGroups([]);
   };
 
   const handleUnassignStudent = async (studentId: string, assignmentId: string) => {
@@ -544,6 +611,59 @@ export function StudentAssignmentManager({ currentUserId }: StudentAssignmentMan
                 Assign Student
               </Button>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Group Selection Modal (shown after assignment) */}
+      <Modal
+        isOpen={showGroupModal}
+        onClose={handleSkipGroupAssignment}
+        title="Add Student to Group"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <FolderPlus className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-blue-800 font-medium">
+                Student assigned successfully!
+              </p>
+              <p className="text-sm text-blue-700 mt-1">
+                Would you like to add this student to one of the interventionist&apos;s groups?
+                This will allow them to participate in group sessions.
+              </p>
+            </div>
+          </div>
+
+          {interventionistGroups.length > 0 && (
+            <Select
+              label="Select Group (Optional)"
+              value={selectedGroupId}
+              onChange={e => setSelectedGroupId(e.target.value)}
+              options={[
+                { value: '', label: 'Select a group...' },
+                ...interventionistGroups.map(g => ({
+                  value: g.id,
+                  label: `${g.name} (${g.curriculum}, Tier ${g.tier})`,
+                })),
+              ]}
+            />
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="ghost" onClick={handleSkipGroupAssignment}>
+              Skip for Now
+            </Button>
+            <Button
+              onClick={handleAddToGroup}
+              isLoading={isSaving}
+              disabled={!selectedGroupId}
+              className="gap-2"
+            >
+              <FolderPlus className="w-4 h-4" />
+              Add to Group
+            </Button>
           </div>
         </div>
       </Modal>

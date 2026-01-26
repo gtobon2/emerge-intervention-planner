@@ -30,6 +30,13 @@ import type {
   GroupMaterialWithCatalog,
   SessionMaterialWithCatalog,
   Curriculum,
+  StudentGroupMembership,
+  StudentGroupMembershipInsert,
+  StudentGroupMembershipUpdate,
+  MembershipWithGroup,
+  MembershipWithStudent,
+  StudentWithGroups,
+  MembershipStatus,
 } from './types';
 
 // ============================================
@@ -166,8 +173,9 @@ export async function deleteStudent(id: string): Promise<void> {
 /**
  * Add an existing student to a group with proper syncing
  * This ensures:
- * 1. Student's group_id is updated
- * 2. Student is assigned to the group's owner (if any)
+ * 1. Student's group_id is updated (legacy compatibility)
+ * 2. Junction table entry is created (new multi-group support)
+ * 3. Student is assigned to the group's owner (if any)
  */
 export async function addStudentToGroupWithSync(
   studentId: string,
@@ -180,8 +188,26 @@ export async function addStudentToGroupWithSync(
     throw new Error('Group not found');
   }
 
-  // Update student's group_id
+  // Update student's group_id (legacy - kept for backward compatibility)
   const student = await updateStudent(studentId, { group_id: groupId });
+
+  // Also create junction table entry for multi-group support
+  try {
+    await supabase
+      .from('student_group_memberships')
+      .upsert({
+        student_id: studentId,
+        group_id: groupId,
+        enrolled_by: addedBy,
+        status: 'active',
+      }, {
+        onConflict: 'student_id,group_id',
+        ignoreDuplicates: false,
+      });
+  } catch (err) {
+    // Log but don't fail - junction table sync is best-effort during transition
+    console.warn('Failed to create group membership:', err);
+  }
 
   // If group has an owner, ensure student is assigned to them
   if (group.owner_id) {
@@ -192,7 +218,7 @@ export async function addStudentToGroupWithSync(
         .select('id')
         .eq('student_id', studentId)
         .eq('interventionist_id', group.owner_id)
-        .single();
+        .maybeSingle();
 
       if (!existing) {
         // Create assignment
@@ -250,6 +276,298 @@ export async function removeStudentFromGroup(
   }
 
   return student;
+}
+
+// ============================================
+// STUDENT GROUP MEMBERSHIPS (Multi-group support)
+// ============================================
+
+/**
+ * Get all active group memberships for a student
+ */
+export async function getStudentGroups(studentId: string): Promise<MembershipWithGroup[]> {
+  const { data, error } = await supabase
+    .from('student_group_memberships')
+    .select(`
+      *,
+      group:groups!inner (
+        *,
+        owner:profiles!groups_owner_id_fkey (id, full_name)
+      )
+    `)
+    .eq('student_id', studentId)
+    .eq('status', 'active')
+    .order('enrolled_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  
+  return (data || []).map((row: any) => ({
+    ...row,
+    group: row.group,
+    owner: row.group?.owner || null,
+  })) as MembershipWithGroup[];
+}
+
+/**
+ * Get all student memberships for a group
+ */
+export async function getGroupStudents(groupId: string): Promise<MembershipWithStudent[]> {
+  const { data, error } = await supabase
+    .from('student_group_memberships')
+    .select(`
+      *,
+      student:students!inner (*)
+    `)
+    .eq('group_id', groupId)
+    .eq('status', 'active')
+    .order('enrolled_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  
+  return (data || []).map((row: any) => ({
+    ...row,
+    student: row.student,
+  })) as MembershipWithStudent[];
+}
+
+/**
+ * Add a student to a group via the junction table
+ * This is the preferred method for multi-group support
+ */
+export async function addStudentToGroup(
+  studentId: string,
+  groupId: string,
+  enrolledBy: string | null,
+  options?: { notes?: string; syncAssignment?: boolean }
+): Promise<StudentGroupMembership> {
+  const { data, error } = await supabase
+    .from('student_group_memberships')
+    .insert({
+      student_id: studentId,
+      group_id: groupId,
+      enrolled_by: enrolledBy,
+      status: 'active',
+      notes: options?.notes || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('Student is already enrolled in this group');
+    }
+    throw new Error(error.message);
+  }
+
+  // Optionally sync with student_assignments
+  if (options?.syncAssignment !== false) {
+    const group = await fetchGroupById(groupId);
+    if (group?.owner_id) {
+      try {
+        const { data: existing } = await supabase
+          .from('student_assignments')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('interventionist_id', group.owner_id)
+          .maybeSingle();
+
+        if (!existing) {
+          await supabase
+            .from('student_assignments')
+            .insert({
+              student_id: studentId,
+              interventionist_id: group.owner_id,
+              assigned_by: enrolledBy,
+            });
+        }
+      } catch (err) {
+        console.warn('Failed to sync student assignment:', err);
+      }
+    }
+  }
+
+  return data as StudentGroupMembership;
+}
+
+/**
+ * Remove a student from a group (updates status to inactive)
+ * Can optionally hard-delete the membership
+ */
+export async function removeStudentFromGroupMembership(
+  studentId: string,
+  groupId: string,
+  options?: { hardDelete?: boolean; removeAssignment?: boolean }
+): Promise<void> {
+  if (options?.hardDelete) {
+    const { error } = await supabase
+      .from('student_group_memberships')
+      .delete()
+      .eq('student_id', studentId)
+      .eq('group_id', groupId);
+
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from('student_group_memberships')
+      .update({ status: 'inactive' as MembershipStatus, updated_at: new Date().toISOString() })
+      .eq('student_id', studentId)
+      .eq('group_id', groupId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  // Optionally remove assignment
+  if (options?.removeAssignment) {
+    const group = await fetchGroupById(groupId);
+    if (group?.owner_id) {
+      // Only remove if student has no other groups with this owner
+      const { data: otherGroups } = await supabase
+        .from('student_group_memberships')
+        .select('group_id, groups!inner(owner_id)')
+        .eq('student_id', studentId)
+        .eq('status', 'active')
+        .neq('group_id', groupId);
+
+      const hasOtherGroupsWithOwner = (otherGroups || []).some(
+        (g: any) => g.groups?.owner_id === group.owner_id
+      );
+
+      if (!hasOtherGroupsWithOwner) {
+        await supabase
+          .from('student_assignments')
+          .delete()
+          .eq('student_id', studentId)
+          .eq('interventionist_id', group.owner_id);
+      }
+    }
+  }
+}
+
+/**
+ * Update a student's group membership
+ */
+export async function updateGroupMembership(
+  studentId: string,
+  groupId: string,
+  updates: StudentGroupMembershipUpdate
+): Promise<StudentGroupMembership> {
+  const { data, error } = await supabase
+    .from('student_group_memberships')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('student_id', studentId)
+    .eq('group_id', groupId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as StudentGroupMembership;
+}
+
+/**
+ * Graduate a student from a group
+ */
+export async function graduateStudentFromGroup(
+  studentId: string,
+  groupId: string
+): Promise<StudentGroupMembership> {
+  return updateGroupMembership(studentId, groupId, {
+    status: 'graduated',
+    notes: `Graduated on ${new Date().toLocaleDateString()}`,
+  });
+}
+
+/**
+ * Get a student with all their active group memberships
+ */
+export async function fetchStudentWithGroups(studentId: string): Promise<StudentWithGroups | null> {
+  const student = await fetchStudentById(studentId);
+  if (!student) return null;
+
+  const memberships = await getStudentGroups(studentId);
+
+  return {
+    ...student,
+    memberships,
+  };
+}
+
+/**
+ * Check if a student is already in a group with the same curriculum
+ * (using the new junction table)
+ */
+export async function checkCurriculumConflictForMembership(
+  studentId: string,
+  curriculum: string,
+  excludeGroupId?: string
+): Promise<{
+  hasConflict: boolean;
+  conflictingGroupName?: string;
+  conflictingGroupId?: string;
+}> {
+  let query = supabase
+    .from('student_group_memberships')
+    .select(`
+      group_id,
+      groups!inner (
+        id,
+        name,
+        curriculum
+      )
+    `)
+    .eq('student_id', studentId)
+    .eq('status', 'active')
+    .eq('groups.curriculum', curriculum);
+
+  if (excludeGroupId) {
+    query = query.neq('group_id', excludeGroupId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw new Error(error.message);
+
+  if (data && data.length > 0) {
+    const group = (data[0] as any).groups;
+    return {
+      hasConflict: true,
+      conflictingGroupName: group?.name,
+      conflictingGroupId: group?.id,
+    };
+  }
+
+  return { hasConflict: false };
+}
+
+/**
+ * Get all groups for an interventionist that a student is NOT already in
+ */
+export async function getAvailableGroupsForStudent(
+  interventionistId: string,
+  studentId: string
+): Promise<Group[]> {
+  // Get groups owned by this interventionist
+  const { data: groups, error: groupsError } = await supabase
+    .from('groups')
+    .select('*')
+    .eq('owner_id', interventionistId)
+    .order('name');
+
+  if (groupsError) throw new Error(groupsError.message);
+  if (!groups || groups.length === 0) return [];
+
+  // Get student's current memberships
+  const { data: memberships, error: membError } = await supabase
+    .from('student_group_memberships')
+    .select('group_id')
+    .eq('student_id', studentId)
+    .eq('status', 'active');
+
+  if (membError) throw new Error(membError.message);
+
+  const enrolledGroupIds = new Set((memberships || []).map(m => m.group_id));
+
+  // Filter out groups the student is already in
+  return groups.filter(g => !enrolledGroupIds.has(g.id)) as Group[];
 }
 
 // ============================================

@@ -191,6 +191,47 @@ export interface StudentGroupStatus {
   is_in_group: boolean;
 }
 
+// ===========================================
+// STUDENT GROUP MEMBERSHIPS (Multi-group support)
+// ===========================================
+
+export type MembershipStatus = 'active' | 'inactive' | 'graduated';
+
+// Student group membership - allows students to belong to multiple groups
+export interface StudentGroupMembership {
+  id: string;
+  student_id: string;
+  group_id: string;
+  enrolled_at: string;
+  enrolled_by: string | null;
+  status: MembershipStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StudentGroupMembershipInsert = Omit<StudentGroupMembership, 'id' | 'created_at' | 'updated_at' | 'enrolled_at'> & {
+  enrolled_at?: string;
+};
+
+export type StudentGroupMembershipUpdate = Partial<Omit<StudentGroupMembershipInsert, 'student_id' | 'group_id'>>;
+
+// Membership with group details for display
+export interface MembershipWithGroup extends StudentGroupMembership {
+  group: Group;
+  owner?: { id: string; full_name: string } | null;
+}
+
+// Membership with student details for display
+export interface MembershipWithStudent extends StudentGroupMembership {
+  student: Student;
+}
+
+// Student with all their group memberships
+export interface StudentWithGroups extends Student {
+  memberships: MembershipWithGroup[];
+}
+
 export interface Session {
   id: string;
   group_id: string;
