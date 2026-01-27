@@ -238,3 +238,57 @@ export function scoreTimeSlot(slot: TimeBlock): number {
     return 3; // Late afternoon or early morning - less preferred
   }
 }
+
+/**
+ * Get all dates in a cycle that fall on a specific weekday
+ * @param startDate - Cycle start date (YYYY-MM-DD)
+ * @param endDate - Cycle end date (YYYY-MM-DD)
+ * @param weekday - Target weekday ('monday', 'tuesday', etc.)
+ * @returns Array of date strings (YYYY-MM-DD)
+ */
+export function getCycleDatesForWeekday(
+  startDate: string,
+  endDate: string,
+  weekday: WeekDay
+): string[] {
+  const dates: string[] = [];
+  const weekdayIndex = WEEKDAYS.indexOf(weekday); // 0=monday, 1=tuesday, etc.
+  
+  // Parse dates
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  
+  // Find the first occurrence of the target weekday on or after start
+  const current = new Date(start);
+  
+  // JavaScript's getDay(): 0=Sunday, 1=Monday, ... 6=Saturday
+  // Our weekdayIndex: 0=Monday, 1=Tuesday, ... 4=Friday
+  // Convert: JS Monday=1 -> our Monday=0, etc.
+  const targetJsDay = weekdayIndex + 1; // Convert to JS day (1=Monday, 2=Tuesday, etc.)
+  
+  // Move to first matching weekday
+  while (current.getDay() !== targetJsDay && current <= end) {
+    current.setDate(current.getDate() + 1);
+  }
+  
+  // Collect all matching dates
+  while (current <= end) {
+    const year = current.getFullYear();
+    const month = String(current.getMonth() + 1).padStart(2, '0');
+    const day = String(current.getDate()).padStart(2, '0');
+    dates.push(`${year}-${month}-${day}`);
+    
+    // Move to next week
+    current.setDate(current.getDate() + 7);
+  }
+  
+  return dates;
+}
+
+/**
+ * Format date for display (e.g., "Jan 27")
+ */
+export function formatDateShort(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}

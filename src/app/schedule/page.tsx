@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
-import { Button, Modal, Input, Select, Card } from '@/components/ui';
+import { Button, Modal, Input, Select, Card, Checkbox } from '@/components/ui';
 import { useScheduleStore } from '@/stores/schedule';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
@@ -13,7 +13,7 @@ import { ScheduleGrid } from '@/components/schedule/ScheduleGrid';
 import { InterventionistModal } from '@/components/schedule/InterventionistModal';
 import { ConstraintsModal } from '@/components/schedule/ConstraintsModal';
 import { SuggestionsPanel } from '@/components/schedule/SuggestionsPanel';
-import { formatTimeDisplay, WEEKDAYS, getDayDisplayName } from '@/lib/scheduling/time-utils';
+import { formatTimeDisplay, WEEKDAYS, getDayDisplayName, getCycleDatesForWeekday, formatDateShort } from '@/lib/scheduling/time-utils';
 import {
   UnscheduledDaySlot,
   SchedulableGroup,
@@ -51,6 +51,16 @@ export default function SchedulePage() {
   const [draggingGroup, setDraggingGroup] = useState<SchedulableGroup | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ day: WeekDay; timeStr: string } | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
+  
+  // Cycle scheduling confirmation modal
+  const [pendingDrop, setPendingDrop] = useState<{
+    group: SchedulableGroup;
+    day: WeekDay;
+    time: string;
+    date: string;
+    cycleDates: string[]; // All dates in cycle for this weekday
+  } | null>(null);
+  const [isCreatingSessions, setIsCreatingSessions] = useState(false);
 
   useEffect(() => {
     fetchAll();
@@ -166,6 +176,30 @@ export default function SchedulePage() {
       return;
     }
 
+    // If there's a current cycle, show confirmation modal to schedule for whole cycle
+    if (currentCycle) {
+      const cycleDates = getCycleDatesForWeekday(
+        currentCycle.start_date,
+        currentCycle.end_date,
+        day
+      );
+      
+      // Only show modal if there are future dates in the cycle
+      if (cycleDates.length > 1) {
+        setPendingDrop({
+          group: draggingGroup,
+          day,
+          time: sessionTime,
+          date: dateStr,
+          cycleDates,
+        });
+        setDraggingGroup(null);
+        setDragOverSlot(null);
+        return;
+      }
+    }
+
+    // No cycle or single date - create session directly
     try {
       await createSession({
         group_id: draggingGroup.group.id,
@@ -201,7 +235,59 @@ export default function SchedulePage() {
 
     setDraggingGroup(null);
     setDragOverSlot(null);
-  }, [draggingGroup, allSessions, weekDates, constraints, createSession, fetchAllSessions]);
+  }, [draggingGroup, allSessions, weekDates, constraints, currentCycle, createSession, fetchAllSessions]);
+
+  // Handle creating sessions for the cycle
+  const handleCreateCycleSessions = useCallback(async (forEntireCycle: boolean) => {
+    if (!pendingDrop) return;
+    
+    setIsCreatingSessions(true);
+    
+    try {
+      const datesToSchedule = forEntireCycle 
+        ? pendingDrop.cycleDates 
+        : [pendingDrop.date];
+      
+      // Create sessions for each date
+      for (const date of datesToSchedule) {
+        await createSession({
+          group_id: pendingDrop.group.group.id,
+          date,
+          time: pendingDrop.time,
+          status: 'planned',
+          curriculum_position: pendingDrop.group.group.current_position,
+          advance_after: false,
+          notes: null,
+          planned_otr_target: null,
+          planned_response_formats: null,
+          planned_practice_items: null,
+          cumulative_review_items: null,
+          anticipated_errors: null,
+          actual_otr_estimate: null,
+          pacing: null,
+          components_completed: null,
+          exit_ticket_correct: null,
+          exit_ticket_total: null,
+          mastery_demonstrated: null,
+          errors_observed: null,
+          unexpected_errors: null,
+          pm_score: null,
+          pm_trend: null,
+          dbi_adaptation_notes: null,
+          next_session_notes: null,
+          fidelity_checklist: null,
+        });
+      }
+      
+      fetchAllSessions();
+    } catch (error) {
+      console.error('Failed to create sessions:', error);
+      setDropError('Failed to create sessions. Please try again.');
+    } finally {
+      setIsCreatingSessions(false);
+      setPendingDrop(null);
+    }
+  }, [pendingDrop, createSession, fetchAllSessions]);
 
   return (
     <AppLayout>
@@ -432,6 +518,62 @@ export default function SchedulePage() {
           isOpen={isConstraintsModalOpen}
           onClose={() => setIsConstraintsModalOpen(false)}
         />
+
+        {/* Cycle Scheduling Confirmation Modal */}
+        <Modal
+          isOpen={!!pendingDrop}
+          onClose={() => !isCreatingSessions && setPendingDrop(null)}
+          title="Schedule for Entire Cycle?"
+          size="sm"
+        >
+          {pendingDrop && (
+            <div className="space-y-4">
+              <p className="text-text-secondary">
+                <strong>{pendingDrop.group.group.name}</strong> on{' '}
+                <strong>{getDayDisplayName(pendingDrop.day)}s</strong> at{' '}
+                <strong>{formatTimeDisplay(pendingDrop.time)}</strong>
+              </p>
+              
+              {currentCycle && (
+                <div className="p-3 bg-surface rounded-lg">
+                  <p className="text-sm text-text-muted mb-2">
+                    <strong>{currentCycle.name}</strong>: {formatDateShort(currentCycle.start_date)} – {formatDateShort(currentCycle.end_date)}
+                  </p>
+                  <p className="text-sm">
+                    This will create <strong>{pendingDrop.cycleDates.length} sessions</strong> for every {getDayDisplayName(pendingDrop.day)} in the cycle.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => handleCreateCycleSessions(false)}
+                  disabled={isCreatingSessions}
+                  className="flex-1"
+                >
+                  Just This Week
+                </Button>
+                <Button
+                  onClick={() => handleCreateCycleSessions(true)}
+                  disabled={isCreatingSessions}
+                  isLoading={isCreatingSessions}
+                  className="flex-1"
+                >
+                  Entire Cycle ({pendingDrop.cycleDates.length})
+                </Button>
+              </div>
+
+              <button
+                onClick={() => setPendingDrop(null)}
+                disabled={isCreatingSessions}
+                className="w-full text-center text-sm text-text-muted hover:text-text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </Modal>
       </div>
     </AppLayout>
   );
