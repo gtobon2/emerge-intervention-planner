@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
-import { Clock } from 'lucide-react';
+import { useMemo, useEffect, useState } from 'react';
+import { Clock, X, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import {
   WEEKDAYS,
@@ -24,6 +24,9 @@ interface ScheduleGridProps {
   dragOverSlot?: { day: WeekDay; timeStr: string } | null;
   onDragOver?: (slot: { day: WeekDay; timeStr: string } | null) => void;
   draggingDay?: WeekDay | null; // The specific day being dragged
+  // Session management
+  onCancelSession?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string) => void;
 }
 
 // Generate 30-minute time slots from 7:00 AM to 5:00 PM
@@ -82,8 +85,18 @@ export function ScheduleGrid({
   dragOverSlot,
   onDragOver,
   draggingDay = null,
+  onCancelSession,
+  onDeleteSession,
 }: ScheduleGridProps) {
   const { allSessions, fetchAllSessions } = useSessionsStore();
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    sessionId: string;
+    sessionName: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Fetch sessions on mount
   useEffect(() => {
@@ -374,19 +387,48 @@ export function ScheduleGrid({
                     {sessions.length > 0 && (
                       <div className="absolute inset-0.5 flex flex-col gap-0.5">
                         {sessions.map(session => (
-                          <Link
+                          <div
                             key={session.id}
-                            href={`/groups/${session.group_id}`}
                             className={`
                               ${getGroupColor(session)} text-white
                               rounded px-1.5 py-0.5 text-[10px] font-medium
-                              hover:opacity-90 transition-opacity
-                              truncate
+                              transition-opacity relative group/session
+                              truncate cursor-pointer
                             `}
-                            title={`${session.group.name} - ${formatTimeDisplay(session.time || '')}`}
+                            title={`${session.group.name} - ${formatTimeDisplay(session.time || '')} (right-click for options)`}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setContextMenu({
+                                sessionId: session.id,
+                                sessionName: session.group.name,
+                                x: e.clientX,
+                                y: e.clientY,
+                              });
+                            }}
+                            onClick={() => {
+                              // Navigate to group on click
+                              window.location.href = `/groups/${session.group_id}`;
+                            }}
                           >
                             {session.group.name}
-                          </Link>
+                            {/* Delete button on hover */}
+                            {onDeleteSession && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete session for ${session.group.name}?`)) {
+                                    onDeleteSession(session.id);
+                                  }
+                                }}
+                                className="absolute -right-1 -top-1 hidden group-hover/session:flex
+                                  w-4 h-4 bg-red-500 rounded-full items-center justify-center
+                                  hover:bg-red-600 transition-colors shadow-sm"
+                                title="Delete session"
+                              >
+                                <X className="w-3 h-3 text-white" />
+                              </button>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -448,6 +490,52 @@ export function ScheduleGrid({
           </div>
         </div>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          {/* Backdrop to close menu */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+          />
+          {/* Menu */}
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+              <span className="text-xs font-medium text-text-muted">{contextMenu.sessionName}</span>
+            </div>
+            {onCancelSession && (
+              <button
+                onClick={() => {
+                  onCancelSession(contextMenu.sessionId);
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Cancel Session
+              </button>
+            )}
+            {onDeleteSession && (
+              <button
+                onClick={() => {
+                  if (confirm(`Delete session for ${contextMenu.sessionName}?`)) {
+                    onDeleteSession(contextMenu.sessionId);
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Session
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

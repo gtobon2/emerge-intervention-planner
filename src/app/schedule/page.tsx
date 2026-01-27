@@ -39,7 +39,7 @@ export default function SchedulePage() {
   } = useScheduleStore();
 
   const { groups, fetchGroups } = useGroupsStore();
-  const { allSessions, fetchAllSessions, createSession } = useSessionsStore();
+  const { allSessions, fetchAllSessions, createSession, deleteSession, cancelSession } = useSessionsStore();
   const { currentCycle, fetchCurrentCycle } = useCyclesStore();
   const { events: calendarEvents, fetchAllEvents } = useSchoolCalendarStore();
 
@@ -279,6 +279,14 @@ export default function SchedulePage() {
                 isDragging={!!draggingGroup}
                 dragOverSlot={dragOverSlot}
                 onDragOver={setDragOverSlot}
+                onDeleteSession={async (id) => {
+                  await deleteSession(id);
+                  fetchAllSessions();
+                }}
+                onCancelSession={async (id) => {
+                  await cancelSession(id);
+                  fetchAllSessions();
+                }}
               />
             </Card>
           </div>
