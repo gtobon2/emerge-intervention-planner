@@ -251,3 +251,60 @@ export function getSchedulableGroups(
   // Sort by remaining slots (most needed first)
   return result.sort((a, b) => b.remainingSlots - a.remainingSlots);
 }
+
+// ============================================
+// CONSTRAINT VALIDATION
+// ============================================
+
+import type { ScheduleConstraint } from '@/lib/supabase/types';
+
+/**
+ * Convert time string (HH:MM) to minutes since midnight
+ */
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * Check if two time ranges overlap
+ */
+function timeRangesOverlap(
+  start1: number, end1: number,
+  start2: number, end2: number
+): boolean {
+  return start1 < end2 && end1 > start2;
+}
+
+/**
+ * Check if scheduling a session would conflict with any constraints
+ * Returns the conflicting constraint if found, null otherwise
+ */
+export function checkConstraintConflict(
+  day: WeekDay,
+  sessionTime: string,
+  sessionDuration: number,
+  grade: number,
+  constraints: ScheduleConstraint[]
+): ScheduleConstraint | null {
+  const sessionStart = timeToMinutes(sessionTime);
+  const sessionEnd = sessionStart + sessionDuration;
+
+  for (const constraint of constraints) {
+    // Check if constraint applies to this day
+    if (!constraint.days.includes(day)) continue;
+
+    // Check if constraint applies to this grade
+    if (!constraint.applicable_grades.includes(grade)) continue;
+
+    // Check for time overlap
+    const constraintStart = timeToMinutes(constraint.start_time);
+    const constraintEnd = timeToMinutes(constraint.end_time);
+
+    if (timeRangesOverlap(sessionStart, sessionEnd, constraintStart, constraintEnd)) {
+      return constraint;
+    }
+  }
+
+  return null;
+}

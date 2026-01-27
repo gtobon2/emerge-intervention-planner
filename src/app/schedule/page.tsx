@@ -22,6 +22,7 @@ import {
   getSchedulableGroups,
   hasSessionOnDay,
   getScheduleDuration,
+  checkConstraintConflict,
 } from '@/lib/scheduling/day-slots';
 import Link from 'next/link';
 import type { WeekDay, Group } from '@/lib/supabase/types';
@@ -49,6 +50,7 @@ export default function SchedulePage() {
   // Drag and drop state - now using SchedulableGroup for flexible drops
   const [draggingGroup, setDraggingGroup] = useState<SchedulableGroup | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ day: WeekDay; timeStr: string } | null>(null);
+  const [dropError, setDropError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAll();
@@ -122,6 +124,7 @@ export default function SchedulePage() {
     }));
     e.dataTransfer.effectAllowed = 'move';
     setDraggingGroup(schedulable);
+    setDropError(null); // Clear any previous error when starting a new drag
   }, []);
 
   const handleDragEnd = useCallback(() => {
@@ -131,10 +134,11 @@ export default function SchedulePage() {
 
   const handleDrop = useCallback(async (day: WeekDay, timeStr: string, dateStr: string) => {
     if (!draggingGroup) return;
+    setDropError(null);
 
     // Check if group already has a session on this day (prevent duplicates)
     if (hasSessionOnDay(draggingGroup.group.id, day, allSessions, weekDates)) {
-      console.warn(`${draggingGroup.group.name} already has a session on ${day}`);
+      setDropError(`${draggingGroup.group.name} already has a session on ${day}`);
       setDraggingGroup(null);
       setDragOverSlot(null);
       return;
@@ -142,6 +146,25 @@ export default function SchedulePage() {
 
     // Use configured preferred time if available, otherwise use drop target time
     const sessionTime = draggingGroup.preferredTime || timeStr;
+
+    // Check for constraint conflicts (lunch, core instruction, etc.)
+    const conflictingConstraint = checkConstraintConflict(
+      day,
+      sessionTime,
+      draggingGroup.duration,
+      draggingGroup.group.grade,
+      constraints
+    );
+
+    if (conflictingConstraint) {
+      setDropError(
+        `Cannot schedule Grade ${draggingGroup.group.grade} during ${conflictingConstraint.label} ` +
+        `(${conflictingConstraint.start_time}-${conflictingConstraint.end_time})`
+      );
+      setDraggingGroup(null);
+      setDragOverSlot(null);
+      return;
+    }
 
     try {
       await createSession({
@@ -178,7 +201,7 @@ export default function SchedulePage() {
 
     setDraggingGroup(null);
     setDragOverSlot(null);
-  }, [draggingGroup, allSessions, weekDates, createSession, fetchAllSessions]);
+  }, [draggingGroup, allSessions, weekDates, constraints, createSession, fetchAllSessions]);
 
   return (
     <AppLayout>
@@ -226,6 +249,22 @@ export default function SchedulePage() {
             </p>
           )}
         </div>
+
+        {/* Drop Error Message */}
+        {dropError && (
+          <div 
+            className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm flex items-center justify-between"
+            onClick={() => setDropError(null)}
+          >
+            <span>⚠️ {dropError}</span>
+            <button 
+              className="text-red-500 hover:text-red-700 ml-2"
+              onClick={() => setDropError(null)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
