@@ -13,7 +13,7 @@ import { ScheduleGrid } from '@/components/schedule/ScheduleGrid';
 import { InterventionistModal } from '@/components/schedule/InterventionistModal';
 import { ConstraintsModal } from '@/components/schedule/ConstraintsModal';
 import { SuggestionsPanel } from '@/components/schedule/SuggestionsPanel';
-import { formatTimeDisplay, WEEKDAYS, getDayDisplayName, getCycleDatesForWeekday, formatDateShort } from '@/lib/scheduling/time-utils';
+import { formatTimeDisplay, WEEKDAYS, getDayDisplayName, getCycleDatesForWeekday, formatDateShort, getWeekDayFromDate } from '@/lib/scheduling/time-utils';
 import {
   UnscheduledDaySlot,
   SchedulableGroup,
@@ -62,6 +62,17 @@ export default function SchedulePage() {
     cycleDates: string[]; // All dates in cycle for this weekday
   } | null>(null);
   const [isCreatingSessions, setIsCreatingSessions] = useState(false);
+
+  // Session reschedule confirmation modal
+  const [pendingReschedule, setPendingReschedule] = useState<{
+    session: SessionWithGroup;
+    newDay: WeekDay;
+    newTime: string;
+    newDate: string;
+    originalDay: WeekDay;
+    futureSessionsCount: number; // How many future sessions on the original weekday
+  } | null>(null);
+  const [isRescheduling, setIsRescheduling] = useState(false);
 
   useEffect(() => {
     fetchAll();
@@ -173,8 +184,96 @@ export default function SchedulePage() {
   }, []);
 
   const handleDrop = useCallback(async (day: WeekDay, timeStr: string, dateStr: string) => {
-    if (!draggingGroup) return;
     setDropError(null);
+
+    // Handle session rescheduling (dragging existing session)
+    if (draggingSession) {
+      // Check if dropping on the same slot (no change needed)
+      const currentDay = getWeekDayFromDate(draggingSession.date);
+      const currentTime = draggingSession.time;
+      if (currentDay === day && currentTime === timeStr) {
+        setDraggingSession(null);
+        setDragOverSlot(null);
+        return;
+      }
+
+      // Check if group already has a different session on this day
+      const otherSessionOnDay = allSessions.find(s => 
+        s.group_id === draggingSession.group_id && 
+        s.id !== draggingSession.id &&
+        getWeekDayFromDate(s.date) === day &&
+        weekDates.get(day) === s.date
+      );
+      
+      if (otherSessionOnDay) {
+        setDropError(`${draggingSession.group.name} already has another session on ${day}`);
+        setDraggingSession(null);
+        setDragOverSlot(null);
+        return;
+      }
+
+      // Check for constraint conflicts
+      const duration = getScheduleDuration(draggingSession.group.schedule);
+      const conflictingConstraint = checkConstraintConflict(
+        day,
+        timeStr,
+        duration,
+        draggingSession.group.grade,
+        constraints
+      );
+
+      if (conflictingConstraint) {
+        setDropError(
+          `Cannot reschedule Grade ${draggingSession.group.grade} during ${conflictingConstraint.label} ` +
+          `(${conflictingConstraint.start_time}-${conflictingConstraint.end_time})`
+        );
+        setDraggingSession(null);
+        setDragOverSlot(null);
+        return;
+      }
+
+      // Count future sessions for this group on the original weekday
+      const originalDay = currentDay!;
+      const futureSessionsOnOriginalDay = allSessions.filter(s => {
+        if (s.group_id !== draggingSession.group_id) return false;
+        if (s.id === draggingSession.id) return false;
+        if (s.status === 'cancelled' || s.status === 'completed') return false;
+        if (s.date <= draggingSession.date) return false;
+        
+        const sessionDay = getWeekDayFromDate(s.date);
+        return sessionDay === originalDay;
+      }).length;
+
+      // If there are future sessions on the same weekday, show the confirmation modal
+      if (futureSessionsOnOriginalDay > 0) {
+        setPendingReschedule({
+          session: draggingSession,
+          newDay: day,
+          newTime: timeStr,
+          newDate: dateStr,
+          originalDay,
+          futureSessionsCount: futureSessionsOnOriginalDay,
+        });
+        setDraggingSession(null);
+        setDragOverSlot(null);
+        return;
+      }
+
+      // No future sessions, just reschedule this one session
+      try {
+        await rescheduleSession(draggingSession.id, dateStr, timeStr, false);
+      } catch (error) {
+        console.error('Failed to reschedule session:', error);
+        setDropError('Failed to reschedule session. Please try again.');
+      }
+
+      setDraggingSession(null);
+      setDragOverSlot(null);
+      return;
+    }
+
+    // Handle new group scheduling (dragging from sidebar)
+    if (!draggingGroup) return;
 
     // Check if group already has a session on this day (prevent duplicates)
     if (hasSessionOnDay(draggingGroup.group.id, day, allSessions, weekDates)) {
@@ -265,7 +364,7 @@ export default function SchedulePage() {
 
     setDraggingGroup(null);
     setDragOverSlot(null);
-  }, [draggingGroup, allSessions, weekDates, constraints, currentCycle, createSession, fetchAllSessions]);
+  }, [draggingGroup, draggingSession, allSessions, weekDates, constraints, currentCycle, createSession, updateSession, fetchAllSessions]);
 
   // Handle creating sessions for the cycle
   const handleCreateCycleSessions = useCallback(async (forEntireCycle: boolean) => {
@@ -318,6 +417,33 @@ export default function SchedulePage() {
       setPendingDrop(null);
     }
   }, [pendingDrop, createSession, fetchAllSessions]);
+
+  // Handle rescheduling sessions (single or all future)
+  const handleRescheduleConfirm = useCallback(async (applyToFuture: boolean) => {
+    if (!pendingReschedule) return;
+    
+    setIsRescheduling(true);
+    
+    try {
+      const result = await rescheduleSession(
+        pendingReschedule.session.id,
+        pendingReschedule.newDate,
+        pendingReschedule.newTime,
+        applyToFuture
+      );
+      
+      if (result) {
+        // Show success feedback (optional - could add a toast here)
+        console.log(`Rescheduled ${result.count} session(s)`);
+      }
+    } catch (error) {
+      console.error('Failed to reschedule sessions:', error);
+      setDropError('Failed to reschedule sessions. Please try again.');
+    } finally {
+      setIsRescheduling(false);
+      setPendingReschedule(null);
+    }
+  }, [pendingReschedule, rescheduleSession]);
 
   return (
     <AppLayout>
@@ -437,6 +563,9 @@ export default function SchedulePage() {
                 isDragging={!!draggingGroup}
                 dragOverSlot={dragOverSlot}
                 onDragOver={setDragOverSlot}
+                onSessionDragStart={handleSessionDragStart}
+                onSessionDragEnd={handleSessionDragEnd}
+                draggingSession={draggingSession}
                 onDeleteSession={async (id) => {
                   await deleteSession(id);
                   fetchAllSessions();
