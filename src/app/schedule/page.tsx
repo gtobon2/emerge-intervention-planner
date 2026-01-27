@@ -775,6 +775,65 @@ export default function SchedulePage() {
             </div>
           )}
         </Modal>
+
+        {/* Session Reschedule Confirmation Modal */}
+        <Modal
+          isOpen={!!pendingReschedule}
+          onClose={() => !isRescheduling && setPendingReschedule(null)}
+          title="Apply to Future Sessions?"
+          size="sm"
+        >
+          {pendingReschedule && (
+            <div className="space-y-4">
+              <p className="text-text-secondary">
+                Moving <strong>{pendingReschedule.session.group.name}</strong> from{' '}
+                <strong>{getDayDisplayName(pendingReschedule.originalDay)}</strong> to{' '}
+                <strong>{getDayDisplayName(pendingReschedule.newDay)}</strong> at{' '}
+                <strong>{formatTimeDisplay(pendingReschedule.newTime)}</strong>
+              </p>
+              
+              <div className="p-3 bg-surface rounded-lg">
+                <p className="text-sm">
+                  There {pendingReschedule.futureSessionsCount === 1 ? 'is' : 'are'}{' '}
+                  <strong>{pendingReschedule.futureSessionsCount}</strong> future{' '}
+                  {pendingReschedule.futureSessionsCount === 1 ? 'session' : 'sessions'} for this group on{' '}
+                  {getDayDisplayName(pendingReschedule.originalDay)}s.
+                </p>
+                <p className="text-sm text-text-muted mt-2">
+                  Would you like to move all future {getDayDisplayName(pendingReschedule.originalDay)} sessions
+                  to {getDayDisplayName(pendingReschedule.newDay)}?
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => handleRescheduleConfirm(false)}
+                  disabled={isRescheduling}
+                  className="flex-1"
+                >
+                  Just This One
+                </Button>
+                <Button
+                  onClick={() => handleRescheduleConfirm(true)}
+                  disabled={isRescheduling}
+                  isLoading={isRescheduling}
+                  className="flex-1"
+                >
+                  All Future ({pendingReschedule.futureSessionsCount + 1})
+                </Button>
+              </div>
+
+              <button
+                onClick={() => setPendingReschedule(null)}
+                disabled={isRescheduling}
+                className="w-full text-center text-sm text-text-muted hover:text-text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </Modal>
       </div>
     </AppLayout>
   );
