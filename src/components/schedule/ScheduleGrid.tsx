@@ -18,12 +18,17 @@ interface ScheduleGridProps {
   interventionist: LocalInterventionist | null;
   groups: Group[];
   constraints: ScheduleConstraint[];
+  weekDates: Map<WeekDay, string>; // Dates for the displayed week
   // Drag and drop props - now uses timeStr instead of hour
   onDrop?: (day: WeekDay, timeStr: string, dateStr: string) => void;
   isDragging?: boolean;
   dragOverSlot?: { day: WeekDay; timeStr: string } | null;
   onDragOver?: (slot: { day: WeekDay; timeStr: string } | null) => void;
   draggingDay?: WeekDay | null; // The specific day being dragged
+  // Session rescheduling (drag existing sessions)
+  onSessionDragStart?: (session: SessionWithGroup) => void;
+  onSessionDragEnd?: () => void;
+  draggingSession?: SessionWithGroup | null;
   // Session management
   onCancelSession?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
@@ -80,11 +85,15 @@ export function ScheduleGrid({
   interventionist,
   groups,
   constraints,
+  weekDates,
   onDrop,
   isDragging = false,
   dragOverSlot,
   onDragOver,
   draggingDay = null,
+  onSessionDragStart,
+  onSessionDragEnd,
+  draggingSession = null,
   onCancelSession,
   onDeleteSession,
 }: ScheduleGridProps) {
@@ -102,9 +111,6 @@ export function ScheduleGrid({
   useEffect(() => {
     fetchAllSessions();
   }, [fetchAllSessions]);
-
-  // Get current week dates
-  const weekDates = useMemo(() => getCurrentWeekDates(), []);
 
   // Get unique grades from visible groups
   const visibleGrades = useMemo(() => {
@@ -329,7 +335,10 @@ export function ScheduleGrid({
                 const isDragOver = dragOverSlot?.day === day && dragOverSlot?.timeStr === timeStr;
                 // Allow drop on any day (flexible scheduling) - drop handler validates constraints
                 // Visual blocking is just a hint; the real validation happens in handleDrop
-                const canDrop = isDragging && sessions.length === 0 && (available || !interventionist);
+                // For session rescheduling: can drop on empty slots OR slots where only the dragged session exists
+                const isDraggingAny = isDragging || !!draggingSession;
+                const slotHasOnlyDraggedSession = draggingSession && sessions.length === 1 && sessions[0].id === draggingSession.id;
+                const canDrop = isDraggingAny && (sessions.length === 0 || slotHasOnlyDraggedSession) && (available || !interventionist);
 
                 return (
                   <div
@@ -389,13 +398,30 @@ export function ScheduleGrid({
                         {sessions.map(session => (
                           <div
                             key={session.id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.stopPropagation();
+                              e.dataTransfer.setData('application/json', JSON.stringify({
+                                sessionId: session.id,
+                                type: 'session',
+                              }));
+                              e.dataTransfer.effectAllowed = 'move';
+                              onSessionDragStart?.(session);
+                            }}
+                            onDragEnd={(e) => {
+                              e.stopPropagation();
+                              onSessionDragEnd?.();
+                            }}
                             className={`
                               ${getGroupColor(session)} text-white
                               rounded px-1.5 py-0.5 text-[10px] font-medium
-                              transition-opacity relative group/session
-                              truncate cursor-pointer
+                              transition-all relative group/session
+                              truncate cursor-grab active:cursor-grabbing
+                              ${draggingSession?.id === session.id 
+                                ? 'opacity-50 ring-2 ring-white scale-95' 
+                                : 'hover:scale-[1.02] hover:shadow-md'}
                             `}
-                            title={`${session.group.name} - ${formatTimeDisplay(session.time || '')} (right-click for options)`}
+                            title={`${session.group.name} - ${formatTimeDisplay(session.time || '')} (drag to reschedule, right-click for options)`}
                             onContextMenu={(e) => {
                               e.preventDefault();
                               setContextMenu({
@@ -405,9 +431,11 @@ export function ScheduleGrid({
                                 y: e.clientY,
                               });
                             }}
-                            onClick={() => {
-                              // Navigate to group on click
-                              window.location.href = `/groups/${session.group_id}`;
+                            onClick={(e) => {
+                              // Navigate to group on click (only if not dragging)
+                              if (!draggingSession) {
+                                window.location.href = `/groups/${session.group_id}`;
+                              }
                             }}
                           >
                             {session.group.name}

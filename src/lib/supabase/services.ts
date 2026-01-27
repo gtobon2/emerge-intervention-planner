@@ -641,6 +641,144 @@ export async function deleteSession(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Bulk update sessions (for rescheduling multiple sessions at once)
+ * @param sessionIds - Array of session IDs to update
+ * @param updates - Updates to apply to all sessions
+ * @returns Array of updated sessions
+ */
+export async function bulkUpdateSessions(
+  sessionIds: string[],
+  updates: SessionUpdate
+): Promise<Session[]> {
+  if (sessionIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .in('id', sessionIds)
+    .select();
+
+  if (error) throw new Error(error.message);
+  return (data || []) as Session[];
+}
+
+/**
+ * Get future sessions for a group on a specific weekday
+ * Used for "apply to all future sessions" when rescheduling
+ * @param groupId - The group ID
+ * @param weekday - The weekday to match (0=Sunday, 1=Monday, etc. in JS)
+ * @param fromDate - Only include sessions on or after this date
+ * @param excludeSessionId - Optional session ID to exclude (the one being moved)
+ */
+export async function getFutureSessionsForGroupOnWeekday(
+  groupId: string,
+  weekday: number,
+  fromDate: string,
+  excludeSessionId?: string
+): Promise<Session[]> {
+  let query = supabase
+    .from('sessions')
+    .select('*')
+    .eq('group_id', groupId)
+    .gte('date', fromDate)
+    .in('status', ['planned', 'scheduled']);
+
+  if (excludeSessionId) {
+    query = query.neq('id', excludeSessionId);
+  }
+
+  const { data, error } = await query.order('date', { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  // Filter by weekday in JS since Supabase doesn't have a direct weekday function
+  const sessions = (data || []) as Session[];
+  return sessions.filter(session => {
+    const [year, month, day] = session.date.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getDay() === weekday;
+  });
+}
+
+/**
+ * Reschedule a session and optionally all future sessions for the same group/weekday
+ * @param sessionId - The session being rescheduled
+ * @param newDate - The new date
+ * @param newTime - The new time (optional)
+ * @param applyToFuture - Whether to apply to all future sessions on the same weekday
+ * @returns Object with updated sessions and count
+ */
+export async function rescheduleSession(
+  sessionId: string,
+  newDate: string,
+  newTime?: string,
+  applyToFuture: boolean = false
+): Promise<{ updated: Session[]; count: number }> {
+  // Get the original session
+  const session = await fetchSessionById(sessionId);
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  const updates: SessionUpdate = { date: newDate };
+  if (newTime) {
+    updates.time = newTime;
+  }
+
+  if (!applyToFuture) {
+    // Just update this one session
+    const updated = await updateSession(sessionId, updates);
+    return { updated: [updated], count: 1 };
+  }
+
+  // Get the original weekday
+  const [origYear, origMonth, origDay] = session.date.split('-').map(Number);
+  const originalDate = new Date(origYear, origMonth - 1, origDay);
+  const originalWeekday = originalDate.getDay();
+
+  // Get the new weekday
+  const [newYear, newMonth, newDay] = newDate.split('-').map(Number);
+  const newDateObj = new Date(newYear, newMonth - 1, newDay);
+  const newWeekday = newDateObj.getDay();
+
+  // Get all future sessions for this group on the original weekday
+  const futureSessions = await getFutureSessionsForGroupOnWeekday(
+    session.group_id,
+    originalWeekday,
+    session.date,
+    sessionId
+  );
+
+  // Update the original session first
+  const updatedOriginal = await updateSession(sessionId, updates);
+  const allUpdated: Session[] = [updatedOriginal];
+
+  // Calculate the day difference (e.g., moving from Monday to Wednesday = +2)
+  const dayDiff = newWeekday - originalWeekday;
+
+  // Update each future session
+  for (const futureSession of futureSessions) {
+    const [fYear, fMonth, fDay] = futureSession.date.split('-').map(Number);
+    const futureDate = new Date(fYear, fMonth - 1, fDay);
+    
+    // Shift by the same day difference
+    futureDate.setDate(futureDate.getDate() + dayDiff);
+    
+    const newFutureDate = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
+    
+    const futureUpdates: SessionUpdate = { date: newFutureDate };
+    if (newTime) {
+      futureUpdates.time = newTime;
+    }
+    
+    const updated = await updateSession(futureSession.id, futureUpdates);
+    allUpdated.push(updated);
+  }
+
+  return { updated: allUpdated, count: allUpdated.length };
+}
+
 // ============================================
 // PROGRESS MONITORING
 // ============================================

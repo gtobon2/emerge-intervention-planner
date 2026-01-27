@@ -55,6 +55,12 @@ interface SessionsState {
   ) => Promise<Session | null>;
   deleteSession: (id: string) => Promise<void>;
   cancelSession: (id: string, reason?: string) => Promise<void>;
+  rescheduleSession: (
+    sessionId: string,
+    newDate: string,
+    newTime?: string,
+    applyToFuture?: boolean
+  ) => Promise<{ updated: Session[]; count: number } | null>;
   setSelectedSession: (session: SessionWithGroup | null) => void;
   clearError: () => void;
 }
@@ -405,6 +411,33 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       await get().updateSession(id, updates);
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
+    }
+  },
+
+  rescheduleSession: async (
+    sessionId: string,
+    newDate: string,
+    newTime?: string,
+    applyToFuture: boolean = false
+  ) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const result = await supabaseService.rescheduleSession(
+        sessionId,
+        newDate,
+        newTime,
+        applyToFuture
+      );
+
+      // Refresh all sessions to get updated state
+      await get().fetchAllSessions();
+      
+      set({ isLoading: false });
+      return result;
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false });
+      return null;
     }
   },
 

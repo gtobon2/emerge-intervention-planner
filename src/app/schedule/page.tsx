@@ -25,7 +25,7 @@ import {
   checkConstraintConflict,
 } from '@/lib/scheduling/day-slots';
 import Link from 'next/link';
-import type { WeekDay, Group } from '@/lib/supabase/types';
+import type { WeekDay, Group, SessionWithGroup } from '@/lib/supabase/types';
 
 export default function SchedulePage() {
   const {
@@ -39,7 +39,7 @@ export default function SchedulePage() {
   } = useScheduleStore();
 
   const { groups, fetchGroups } = useGroupsStore();
-  const { allSessions, fetchAllSessions, createSession, deleteSession, cancelSession } = useSessionsStore();
+  const { allSessions, fetchAllSessions, createSession, updateSession, deleteSession, cancelSession, rescheduleSession } = useSessionsStore();
   const { currentCycle, fetchCurrentCycle } = useCyclesStore();
   const { events: calendarEvents, fetchAllEvents } = useSchoolCalendarStore();
 
@@ -49,6 +49,7 @@ export default function SchedulePage() {
 
   // Drag and drop state - now using SchedulableGroup for flexible drops
   const [draggingGroup, setDraggingGroup] = useState<SchedulableGroup | null>(null);
+  const [draggingSession, setDraggingSession] = useState<SessionWithGroup | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ day: WeekDay; timeStr: string } | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
   
@@ -70,13 +71,19 @@ export default function SchedulePage() {
     fetchAllEvents();
   }, [fetchAll, fetchGroups, fetchAllSessions, fetchCurrentCycle, fetchAllEvents]);
 
-  // Get dates for current week (Monday-Friday) - matching ScheduleGrid
+  // Week navigation state
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Get dates for selected week (Monday-Friday)
   const weekDates = useMemo(() => {
     const today = new Date();
     const dayOfWeek = today.getDay();
     const monday = new Date(today);
     const daysFromMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     monday.setDate(today.getDate() + daysFromMonday);
+    
+    // Apply week offset
+    monday.setDate(monday.getDate() + (weekOffset * 7));
 
     const dates = new Map<WeekDay, string>();
     WEEKDAYS.forEach((day, index) => {
@@ -89,7 +96,19 @@ export default function SchedulePage() {
     });
 
     return dates;
-  }, []);
+  }, [weekOffset]);
+
+  // Week navigation handlers
+  const goToPreviousWeek = useCallback(() => setWeekOffset(prev => prev - 1), []);
+  const goToNextWeek = useCallback(() => setWeekOffset(prev => prev + 1), []);
+  const goToCurrentWeek = useCallback(() => setWeekOffset(0), []);
+
+  // Format week range for display
+  const weekRangeDisplay = useMemo(() => {
+    const mondayDate = weekDates.get('monday')!;
+    const fridayDate = weekDates.get('friday')!;
+    return `${formatDateShort(mondayDate)} – ${formatDateShort(fridayDate)}`;
+  }, [weekDates]);
 
   // Get schedulable groups (flexible - can drop on any day)
   const schedulableGroups = useMemo(() => {
@@ -139,6 +158,17 @@ export default function SchedulePage() {
 
   const handleDragEnd = useCallback(() => {
     setDraggingGroup(null);
+    setDragOverSlot(null);
+  }, []);
+
+  // Session rescheduling handlers
+  const handleSessionDragStart = useCallback((session: SessionWithGroup) => {
+    setDraggingSession(session);
+    setDropError(null);
+  }, []);
+
+  const handleSessionDragEnd = useCallback(() => {
+    setDraggingSession(null);
     setDragOverSlot(null);
   }, []);
 
@@ -316,6 +346,47 @@ export default function SchedulePage() {
           </div>
         </div>
 
+        {/* Week Navigation */}
+        <div className="flex items-center justify-center gap-2 p-3 bg-surface rounded-xl">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={goToPreviousWeek}
+            className="p-2"
+            title="Previous Week"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          
+          <div className="flex items-center gap-3">
+            <Calendar className="w-4 h-4 text-text-muted" />
+            <span className="font-semibold text-text-primary min-w-[140px] text-center">
+              {weekRangeDisplay}
+            </span>
+          </div>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={goToNextWeek}
+            className="p-2"
+            title="Next Week"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+          
+          {weekOffset !== 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={goToCurrentWeek}
+              className="ml-2"
+            >
+              Today
+            </Button>
+          )}
+        </div>
+
         {/* Filters */}
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center p-4 bg-surface rounded-xl">
           <div className="flex items-center gap-2">
@@ -361,6 +432,7 @@ export default function SchedulePage() {
                 interventionist={selectedInterventionist}
                 groups={groups}
                 constraints={constraints}
+                weekDates={weekDates}
                 onDrop={handleDrop}
                 isDragging={!!draggingGroup}
                 dragOverSlot={dragOverSlot}
