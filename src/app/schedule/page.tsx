@@ -16,8 +16,12 @@ import { SuggestionsPanel } from '@/components/schedule/SuggestionsPanel';
 import { formatTimeDisplay, WEEKDAYS, getDayDisplayName } from '@/lib/scheduling/time-utils';
 import {
   UnscheduledDaySlot,
+  SchedulableGroup,
   getUnscheduledDaySlots,
   getScheduledDays,
+  getSchedulableGroups,
+  hasSessionOnDay,
+  getScheduleDuration,
 } from '@/lib/scheduling/day-slots';
 import Link from 'next/link';
 import type { WeekDay, Group } from '@/lib/supabase/types';
@@ -42,8 +46,8 @@ export default function SchedulePage() {
   const [isConstraintsModalOpen, setIsConstraintsModalOpen] = useState(false);
   const [editingInterventionist, setEditingInterventionist] = useState<string | null>(null);
 
-  // Drag and drop state
-  const [draggingSlot, setDraggingSlot] = useState<UnscheduledDaySlot | null>(null);
+  // Drag and drop state - now using SchedulableGroup for flexible drops
+  const [draggingGroup, setDraggingGroup] = useState<SchedulableGroup | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ day: WeekDay; timeStr: string } | null>(null);
 
   useEffect(() => {
@@ -75,17 +79,19 @@ export default function SchedulePage() {
     return dates;
   }, []);
 
-  // Get unscheduled day slots (one per group per scheduled day)
+  // Get schedulable groups (flexible - can drop on any day)
+  const schedulableGroups = useMemo(() => {
+    return getSchedulableGroups(groups, allSessions, weekDates);
+  }, [groups, allSessions, weekDates]);
+
+  // Legacy: unscheduled day slots (keeping for backward compatibility)
   const unscheduledDaySlots = useMemo(() => {
     return getUnscheduledDaySlots(groups, allSessions, weekDates);
   }, [groups, allSessions, weekDates]);
 
-  // Also keep track of groups without any schedule configured
+  // Groups that have no schedule configured at all (sessions_per_week = 0 or no schedule)
   const groupsWithoutSchedule = useMemo(() => {
-    return groups.filter(g => {
-      const days = getScheduledDays(g.schedule);
-      return days.length === 0;
-    });
+    return groups.filter(g => !g.schedule);
   }, [groups]);
 
   const selectedInterventionist = useMemo(() => {
@@ -108,43 +114,42 @@ export default function SchedulePage() {
     ...interventionists.map(i => ({ value: String(i.id), label: i.name }))
   ], [interventionists]);
 
-  // Drag and drop handlers
-  const handleDragStart = useCallback((e: React.DragEvent, slot: UnscheduledDaySlot) => {
+  // Drag and drop handlers - flexible scheduling
+  const handleDragStart = useCallback((e: React.DragEvent, schedulable: SchedulableGroup) => {
     e.dataTransfer.setData('application/json', JSON.stringify({
-      groupId: slot.group.id,
-      day: slot.day,
-      time: slot.time,
+      groupId: schedulable.group.id,
+      time: schedulable.preferredTime,
     }));
     e.dataTransfer.effectAllowed = 'move';
-    setDraggingSlot(slot);
+    setDraggingGroup(schedulable);
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    setDraggingSlot(null);
+    setDraggingGroup(null);
     setDragOverSlot(null);
   }, []);
 
   const handleDrop = useCallback(async (day: WeekDay, timeStr: string, dateStr: string) => {
-    if (!draggingSlot) return;
+    if (!draggingGroup) return;
 
-    // Validate day matches (must drop on the correct day column)
-    if (draggingSlot.day !== day) {
-      console.warn(`Cannot drop ${draggingSlot.group.name} (${draggingSlot.day}) on ${day}`);
-      setDraggingSlot(null);
+    // Check if group already has a session on this day (prevent duplicates)
+    if (hasSessionOnDay(draggingGroup.group.id, day, allSessions, weekDates)) {
+      console.warn(`${draggingGroup.group.name} already has a session on ${day}`);
+      setDraggingGroup(null);
       setDragOverSlot(null);
       return;
     }
 
-    // Use configured time if available, otherwise use drop target time
-    const sessionTime = draggingSlot.time || timeStr;
+    // Use configured preferred time if available, otherwise use drop target time
+    const sessionTime = draggingGroup.preferredTime || timeStr;
 
     try {
       await createSession({
-        group_id: draggingSlot.group.id,
+        group_id: draggingGroup.group.id,
         date: dateStr,
         time: sessionTime,
         status: 'planned',
-        curriculum_position: draggingSlot.group.current_position,
+        curriculum_position: draggingGroup.group.current_position,
         advance_after: false,
         notes: null,
         planned_otr_target: null,
@@ -171,9 +176,9 @@ export default function SchedulePage() {
       console.error('Failed to create session:', error);
     }
 
-    setDraggingSlot(null);
+    setDraggingGroup(null);
     setDragOverSlot(null);
-  }, [draggingSlot, createSession, fetchAllSessions]);
+  }, [draggingGroup, allSessions, weekDates, createSession, fetchAllSessions]);
 
   return (
     <AppLayout>
@@ -232,7 +237,7 @@ export default function SchedulePage() {
                 groups={groups}
                 constraints={constraints}
                 onDrop={handleDrop}
-                isDragging={!!draggingSlot}
+                isDragging={!!draggingGroup}
                 dragOverSlot={dragOverSlot}
                 onDragOver={setDragOverSlot}
               />
@@ -241,60 +246,65 @@ export default function SchedulePage() {
 
           {/* Sidebar - Groups & Suggestions */}
           <div className="space-y-4">
-            {/* Unscheduled Day Slots - Draggable */}
+            {/* Schedulable Groups - Draggable to ANY day */}
             <Card className="p-4">
               <h3 className="font-semibold text-text-primary mb-3 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
-                Unscheduled Sessions
-                {draggingSlot && (
+                Groups to Schedule
+                {draggingGroup && (
                   <span className="text-xs bg-movement/20 text-movement px-2 py-0.5 rounded">
-                    Drop on {getDayDisplayName(draggingSlot.day)}
+                    Drop on any day
                   </span>
                 )}
               </h3>
               {groups.length === 0 ? (
                 <p className="text-sm text-text-muted">No groups created yet</p>
-              ) : unscheduledDaySlots.length === 0 && groupsWithoutSchedule.length === 0 ? (
-                <p className="text-sm text-green-600">All sessions scheduled for this week!</p>
+              ) : schedulableGroups.length === 0 && groupsWithoutSchedule.length === 0 ? (
+                <p className="text-sm text-green-600">All sessions scheduled for this week! ✓</p>
               ) : (
                 <div className="space-y-2">
-                  {unscheduledDaySlots.length > 0 && (
+                  {schedulableGroups.length > 0 && (
                     <>
                       <p className="text-xs text-text-muted mb-2">
-                        Drag to matching day column to schedule
+                        Drag to any day column (one session per day max)
                       </p>
-                      {unscheduledDaySlots.slice(0, 15).map(slot => (
+                      {schedulableGroups.slice(0, 15).map(item => (
                         <div
-                          key={`${slot.group.id}-${slot.day}`}
+                          key={item.group.id}
                           draggable
-                          onDragStart={(e) => handleDragStart(e, slot)}
+                          onDragStart={(e) => handleDragStart(e, item)}
                           onDragEnd={handleDragEnd}
                           className={`
                             p-2 bg-background rounded-lg text-sm cursor-grab
                             hover:bg-surface-hover transition-colors
                             flex items-center gap-2
-                            ${draggingSlot?.group.id === slot.group.id && draggingSlot?.day === slot.day
+                            ${draggingGroup?.group.id === item.group.id
                               ? 'opacity-50 ring-2 ring-movement' : ''}
                           `}
                         >
                           <GripVertical className="w-4 h-4 text-text-muted flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium truncate">{slot.group.name}</span>
+                              <span className="font-medium truncate">{item.group.name}</span>
                               <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
-                                {getDayDisplayName(slot.day).slice(0, 3)}
+                                {item.remainingSlots}/{item.sessionsNeeded}
                               </span>
                             </div>
                             <div className="text-text-muted text-xs">
-                              Grade {slot.group.grade} | {slot.group.curriculum}
-                              {slot.time && ` | ${formatTimeDisplay(slot.time)}`}
+                              Grade {item.group.grade} | {item.group.curriculum}
+                              {item.preferredTime && ` | ${formatTimeDisplay(item.preferredTime)}`}
                             </div>
+                            {item.scheduledDays.length > 0 && (
+                              <div className="text-xs text-green-600 mt-0.5">
+                                ✓ {item.scheduledDays.map(d => d.slice(0, 3)).join(', ')}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
-                      {unscheduledDaySlots.length > 15 && (
+                      {schedulableGroups.length > 15 && (
                         <p className="text-xs text-text-muted text-center">
-                          +{unscheduledDaySlots.length - 15} more sessions
+                          +{schedulableGroups.length - 15} more groups
                         </p>
                       )}
                     </>

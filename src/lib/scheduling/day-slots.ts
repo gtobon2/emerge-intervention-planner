@@ -131,3 +131,123 @@ export function getUnscheduledDaySlots(
   const allSlots = expandGroupsToDaySlots(groups);
   return allSlots.filter(slot => !isDaySlotScheduled(slot, sessions, weekDates));
 }
+
+// ============================================
+// FLEXIBLE SCHEDULING (drop on any day)
+// ============================================
+
+/**
+ * Represents a group that needs more sessions scheduled this week
+ */
+export interface SchedulableGroup {
+  group: Group;
+  sessionsNeeded: number;      // Total sessions needed per week
+  sessionsScheduled: number;   // Already scheduled this week
+  remainingSlots: number;      // How many more to schedule
+  scheduledDays: WeekDay[];    // Days already scheduled (to prevent duplicates)
+  preferredTime: string | null; // Preferred time if configured
+  duration: number;            // Session duration
+}
+
+/**
+ * Get sessions per week for a group (from schedule config)
+ */
+export function getSessionsPerWeek(schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null): number {
+  if (!schedule) return 3; // Default
+
+  // FlexibleGroupSchedule has explicit sessions_per_week
+  if (isFlexibleSchedule(schedule)) {
+    return schedule.sessions_per_week || 3;
+  }
+
+  // EnhancedGroupSchedule - count enabled days
+  if ('day_times' in schedule) {
+    return schedule.day_times.filter(dt => dt.enabled).length || 3;
+  }
+
+  // Basic GroupSchedule - count days array
+  return schedule.days?.length || 3;
+}
+
+/**
+ * Get preferred time from schedule (for display/default)
+ */
+export function getPreferredTime(schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null): string | null {
+  if (!schedule) return null;
+
+  if (isFlexibleSchedule(schedule)) {
+    return schedule.preferred_time || null;
+  }
+
+  if ('day_times' in schedule) {
+    const firstWithTime = schedule.day_times.find(dt => dt.enabled && dt.time);
+    return firstWithTime?.time || null;
+  }
+
+  return schedule.time || null;
+}
+
+/**
+ * Check if a group has a session on a specific day this week
+ */
+export function hasSessionOnDay(
+  groupId: string,
+  day: WeekDay,
+  sessions: Session[],
+  weekDates: Map<WeekDay, string>
+): boolean {
+  const dateForDay = weekDates.get(day);
+  if (!dateForDay) return false;
+
+  return sessions.some(s =>
+    s.group_id === groupId &&
+    s.date === dateForDay &&
+    s.status !== 'cancelled'
+  );
+}
+
+/**
+ * Get schedulable groups (groups that need more sessions this week)
+ * This is for flexible scheduling where users can drop on any day
+ */
+export function getSchedulableGroups(
+  groups: Group[],
+  sessions: Session[],
+  weekDates: Map<WeekDay, string>
+): SchedulableGroup[] {
+  const result: SchedulableGroup[] = [];
+  const weekdays: WeekDay[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+  for (const group of groups) {
+    const sessionsNeeded = getSessionsPerWeek(group.schedule);
+    
+    // Count sessions already scheduled this week for this group
+    const scheduledDays: WeekDay[] = [];
+    let sessionsScheduled = 0;
+
+    for (const day of weekdays) {
+      if (hasSessionOnDay(group.id, day, sessions, weekDates)) {
+        scheduledDays.push(day);
+        sessionsScheduled++;
+      }
+    }
+
+    const remainingSlots = Math.max(0, sessionsNeeded - sessionsScheduled);
+
+    // Only include if there are slots remaining
+    if (remainingSlots > 0) {
+      result.push({
+        group,
+        sessionsNeeded,
+        sessionsScheduled,
+        remainingSlots,
+        scheduledDays,
+        preferredTime: getPreferredTime(group.schedule),
+        duration: getScheduleDuration(group.schedule),
+      });
+    }
+  }
+
+  // Sort by remaining slots (most needed first)
+  return result.sort((a, b) => b.remainingSlots - a.remainingSlots);
+}
