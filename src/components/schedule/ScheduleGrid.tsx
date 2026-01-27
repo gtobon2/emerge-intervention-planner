@@ -314,9 +314,9 @@ export function ScheduleGrid({
                 const sessions = getSessionsForSlot(day, timeStr);
                 const dateStr = weekDates.get(day)!;
                 const isDragOver = dragOverSlot?.day === day && dragOverSlot?.timeStr === timeStr;
-                // Only allow drop if day matches the dragging day
-                const dayMatches = !draggingDay || draggingDay === day;
-                const canDrop = isDragging && dayMatches && !blocked && sessions.length === 0 && (available || !interventionist);
+                // Allow drop on any day (flexible scheduling) - drop handler validates constraints
+                // Visual blocking is just a hint; the real validation happens in handleDrop
+                const canDrop = isDragging && sessions.length === 0 && (available || !interventionist);
 
                 return (
                   <div
@@ -349,8 +349,8 @@ export function ScheduleGrid({
                           ? 'bg-white border-gray-300 dark:bg-gray-900 dark:border-gray-600'
                           : blocked
                             ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
-                            : isDragging && draggingDay && draggingDay !== day
-                              ? 'bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600 opacity-40'
+                            : false
+                              ? 'bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600 opacity-40' // Unused - flexible scheduling allows any day
                               : available
                                 ? `bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800
                                    ${isDragging && canDrop ? 'hover:bg-green-100 hover:border-green-300' : 'hover:bg-green-100'}
