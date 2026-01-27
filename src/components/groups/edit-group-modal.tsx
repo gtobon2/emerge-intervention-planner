@@ -260,6 +260,30 @@ export function EditGroupModal({
     }
 
     try {
+      // Generate default days based on sessions_per_week if not manually specified
+      // Default pattern: spread across week (Mon/Wed/Fri for 3, Mon/Tue/Wed/Thu for 4, etc.)
+      const defaultDayPatterns: Record<number, WeekDay[]> = {
+        1: ['wednesday'],
+        2: ['tuesday', 'thursday'],
+        3: ['monday', 'wednesday', 'friday'],
+        4: ['monday', 'tuesday', 'thursday', 'friday'],
+        5: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      };
+
+      // Use manual days if specified, otherwise generate defaults
+      let finalComputedDays: DayTimeSlot[];
+      if (useManualDays) {
+        finalComputedDays = dayTimeSlots;
+      } else {
+        // Generate from sessionsPerWeek
+        const daysToUse = defaultDayPatterns[sessionsPerWeek] || defaultDayPatterns[3];
+        finalComputedDays = dayOptions.map(d => ({
+          day: d.value,
+          time: preferredTime || '',
+          enabled: daysToUse.includes(d.value),
+        }));
+      }
+
       // Build flexible schedule (new format)
       const flexibleSchedule: FlexibleGroupSchedule = {
         sessions_per_week: sessionsPerWeek,
@@ -268,8 +292,8 @@ export function EditGroupModal({
         cycle_id: selectedCycleId || undefined,
         custom_start_date: useCustomDates ? customStartDate || undefined : undefined,
         custom_end_date: useCustomDates ? customEndDate || undefined : undefined,
-        // Include manual days if user overrode
-        computed_days: useManualDays ? dayTimeSlots : undefined,
+        // Always include computed_days for scheduling to work
+        computed_days: finalComputedDays,
       };
 
       // Convert to enhanced format for backward compatibility with session generation

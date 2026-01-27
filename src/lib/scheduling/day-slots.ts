@@ -1,6 +1,7 @@
 // src/lib/scheduling/day-slots.ts
 import { getWeekDayFromDate } from './time-utils';
-import type { Group, Session, WeekDay, GroupSchedule, EnhancedGroupSchedule } from '@/lib/supabase/types';
+import type { Group, Session, WeekDay, GroupSchedule, EnhancedGroupSchedule, FlexibleGroupSchedule } from '@/lib/supabase/types';
+import { isFlexibleSchedule } from '@/lib/supabase/types';
 
 /**
  * Represents a single schedulable day slot for a group
@@ -15,16 +16,25 @@ export interface UnscheduledDaySlot {
 /**
  * Get the configured time for a specific day from a group's schedule
  */
-export function getScheduledTimeForDay(schedule: GroupSchedule | EnhancedGroupSchedule | null, day: WeekDay): string | null {
+export function getScheduledTimeForDay(schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null, day: WeekDay): string | null {
   if (!schedule) return null;
 
-  // Check if enhanced schedule with per-day times
+  // FlexibleGroupSchedule - check computed_days or preferred_time
+  if (isFlexibleSchedule(schedule)) {
+    if (schedule.computed_days) {
+      const slot = schedule.computed_days.find(dt => dt.day === day && dt.enabled);
+      return slot?.time || schedule.preferred_time || null;
+    }
+    return schedule.preferred_time || null;
+  }
+
+  // EnhancedGroupSchedule - has day_times with per-day times
   if ('day_times' in schedule) {
     const slot = schedule.day_times.find(dt => dt.day === day && dt.enabled);
     return slot?.time || null;
   }
 
-  // Basic schedule - same time for all days
+  // Basic GroupSchedule - same time for all days
   if (schedule.days?.includes(day)) {
     return schedule.time || null;
   }
@@ -35,7 +45,7 @@ export function getScheduledTimeForDay(schedule: GroupSchedule | EnhancedGroupSc
 /**
  * Get duration from schedule, defaulting to 30 minutes
  */
-export function getScheduleDuration(schedule: GroupSchedule | EnhancedGroupSchedule | null): number {
+export function getScheduleDuration(schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null): number {
   if (!schedule) return 30;
   return schedule.duration || 30;
 }
@@ -43,13 +53,24 @@ export function getScheduleDuration(schedule: GroupSchedule | EnhancedGroupSched
 /**
  * Get all scheduled days for a group
  */
-export function getScheduledDays(schedule: GroupSchedule | EnhancedGroupSchedule | null): WeekDay[] {
+export function getScheduledDays(schedule: GroupSchedule | EnhancedGroupSchedule | FlexibleGroupSchedule | null): WeekDay[] {
   if (!schedule) return [];
 
+  // FlexibleGroupSchedule - check computed_days first
+  if (isFlexibleSchedule(schedule)) {
+    if (schedule.computed_days && schedule.computed_days.length > 0) {
+      return schedule.computed_days.filter(dt => dt.enabled).map(dt => dt.day);
+    }
+    // If no computed_days, return empty - needs to be computed by scheduler
+    return [];
+  }
+
+  // EnhancedGroupSchedule - has day_times
   if ('day_times' in schedule) {
     return schedule.day_times.filter(dt => dt.enabled).map(dt => dt.day);
   }
 
+  // Basic GroupSchedule - has days array
   return (schedule.days || []) as WeekDay[];
 }
 
