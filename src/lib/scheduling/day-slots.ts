@@ -289,13 +289,15 @@ export function checkConstraintConflict(
 ): ScheduleConstraint | null {
   const sessionStart = timeToMinutes(sessionTime);
   const sessionEnd = sessionStart + sessionDuration;
+  const gradeNum = Number(grade); // Ensure it's a number
 
   for (const constraint of constraints) {
     // Check if constraint applies to this day
     if (!constraint.days.includes(day)) continue;
 
-    // Check if constraint applies to this grade
-    if (!constraint.applicable_grades.includes(grade)) continue;
+    // Check if constraint applies to this grade (convert both sides to ensure type match)
+    const applicableGrades = (constraint.applicable_grades || []).map(Number);
+    if (!applicableGrades.includes(gradeNum)) continue;
 
     // Check for time overlap
     const constraintStart = timeToMinutes(constraint.start_time);
