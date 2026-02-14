@@ -211,6 +211,22 @@ export interface LocalStudentConstraint {
   created_at: string;
 }
 
+/**
+ * Student goal for progress monitoring
+ * Sets a target goal and benchmark per student per group
+ */
+export interface LocalStudentGoal {
+  id?: number;
+  student_id: number;
+  group_id: number;
+  goal_score: number;
+  benchmark_score: number | null;
+  measure_type: string;
+  set_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ============================================
 // DEXIE DATABASE CLASS
 // ============================================
@@ -231,6 +247,7 @@ export class EmergeDatabase extends Dexie {
   interventionists!: Table<LocalInterventionist, number>;
   gradeLevelConstraints!: Table<LocalGradeLevelConstraint, number>;
   studentConstraints!: Table<LocalStudentConstraint, number>;
+  studentGoals!: Table<LocalStudentGoal, number>;
 
   constructor() {
     super('emerge-intervention-planner');
@@ -314,6 +331,24 @@ export class EmergeDatabase extends Dexie {
       gradeLevelConstraints: '++id, grade, type, created_at',
       studentConstraints: '++id, student_id, type, created_at',
     });
+
+    // Version 7: Add student goals table
+    this.version(7).stores({
+      groups: '++id, name, curriculum, tier, grade, interventionist_id, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, series_id, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
+      wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
+      wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
+      caminoLessonElements: '++id, unit, lesson, lessonCode, createdAt, updatedAt',
+      caminoLessonPlans: '++id, sessionId, unit, lesson, lessonCode, createdAt, updatedAt',
+      interventionists: '++id, name, email, created_at, updated_at',
+      gradeLevelConstraints: '++id, grade, type, created_at',
+      studentConstraints: '++id, student_id, type, created_at',
+      studentGoals: '++id, student_id, group_id, measure_type, created_at, updated_at',
+    });
   }
 }
 
@@ -337,6 +372,9 @@ export type LocalStudentSessionTrackingInsert = Omit<LocalStudentSessionTracking
 export type LocalInterventionistInsert = Omit<LocalInterventionist, 'id' | 'created_at' | 'updated_at'>;
 export type LocalGradeLevelConstraintInsert = Omit<LocalGradeLevelConstraint, 'id' | 'created_at'>;
 export type LocalStudentConstraintInsert = Omit<LocalStudentConstraint, 'id' | 'created_at'>;
+// Goal insert/update types
+export type LocalStudentGoalInsert = Omit<LocalStudentGoal, 'id' | 'created_at' | 'updated_at'>;
+export type LocalStudentGoalUpdate = Partial<LocalStudentGoalInsert>;
 
 // ============================================
 // UPDATE TYPES (for updating records)
