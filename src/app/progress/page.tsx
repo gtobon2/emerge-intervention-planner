@@ -185,6 +185,16 @@ export default function ProgressPage() {
 
   const groupIdNum = useMemo(() => parseInt(selectedGroupId), [selectedGroupId]);
 
+  // Lock measure type from active goals (before target date)
+  const lockedMeasureType = useMemo(() => {
+    if (goals.length === 0) return null;
+    const today = new Date().toISOString().split('T')[0];
+    const activeGoal = goals.find(
+      g => g.measure_type && (!g.goal_target_date || g.goal_target_date >= today)
+    );
+    return activeGoal?.measure_type || null;
+  }, [goals]);
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -439,6 +449,7 @@ export default function ProgressPage() {
         onSubmit={handleAddDataPoint}
         groupId={selectedGroupId}
         students={students}
+        lockedMeasureType={lockedMeasureType}
       />
 
       {/* Goal Setting Modal — only mount when open to avoid store subscription cascade */}

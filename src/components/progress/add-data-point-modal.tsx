@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { Users } from 'lucide-react';
+import { Users, Lock } from 'lucide-react';
 import type { Student, ProgressMonitoringInsert } from '@/lib/supabase/types';
 
 export interface AddDataPointModalProps {
@@ -14,6 +14,8 @@ export interface AddDataPointModalProps {
   onSubmit: (dataPoint: ProgressMonitoringInsert) => Promise<void>;
   groupId: string;
   students?: Student[];
+  /** Measure type locked by active goals (auto-filled + disabled) */
+  lockedMeasureType?: string | null;
 }
 
 interface StudentScoreRow {
@@ -28,6 +30,7 @@ export function AddDataPointModal({
   onSubmit,
   groupId,
   students = [],
+  lockedMeasureType,
 }: AddDataPointModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +42,13 @@ export function AddDataPointModal({
 
   // Per-student score rows
   const [rows, setRows] = useState<StudentScoreRow[]>([]);
+
+  // Auto-fill measure type from locked goal when modal opens
+  useEffect(() => {
+    if (isOpen && lockedMeasureType) {
+      setMeasureType(lockedMeasureType);
+    }
+  }, [isOpen, lockedMeasureType]);
 
   // Initialize student rows when modal opens
   useEffect(() => {
@@ -147,6 +157,11 @@ export function AddDataPointModal({
           <div className="w-full">
             <label className="block text-sm font-medium text-text-primary mb-1.5">
               Measure Type *
+              {lockedMeasureType && (
+                <span className="inline-flex items-center gap-1 ml-2 text-xs text-text-muted font-normal">
+                  <Lock className="w-3 h-3" /> Locked by goal
+                </span>
+              )}
             </label>
             <Select
               options={[
@@ -163,6 +178,7 @@ export function AddDataPointModal({
               value={measureType}
               onChange={(e) => setMeasureType(e.target.value)}
               required
+              disabled={!!lockedMeasureType}
             />
           </div>
         </div>
