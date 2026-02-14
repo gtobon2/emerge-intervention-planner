@@ -4,4 +4,6 @@ export {
   exportStudentReportToPDF,
   exportGroupReportToPDF,
   exportPatternAnalysisToPDF,
+  exportScheduleToPDF,
+  exportScheduleToCSV,
 } from './pdf-export';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
+import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical, Download, FileText } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Modal, Input, Select, Card, Checkbox } from '@/components/ui';
 import { useScheduleStore } from '@/stores/schedule';
@@ -25,6 +25,7 @@ import {
   checkConstraintConflict,
 } from '@/lib/scheduling/day-slots';
 import Link from 'next/link';
+import { exportScheduleToPDF, exportScheduleToCSV } from '@/lib/export';
 import type { WeekDay, Group, SessionWithGroup } from '@/lib/supabase/types';
 
 export default function SchedulePage() {
@@ -113,6 +114,16 @@ export default function SchedulePage() {
   const goToPreviousWeek = useCallback(() => setWeekOffset(prev => prev - 1), []);
   const goToNextWeek = useCallback(() => setWeekOffset(prev => prev + 1), []);
   const goToCurrentWeek = useCallback(() => setWeekOffset(0), []);
+
+  // Sessions for the current week (used for exports)
+  const weekSessions = useMemo(() => {
+    const weekDateSet = new Set(weekDates.values());
+    const groupMap = new Map(groups.map(g => [g.id, g]));
+    return allSessions
+      .filter(s => weekDateSet.has(s.date))
+      .map(s => ({ ...s, group: groupMap.get(s.group_id)! }))
+      .filter(s => s.group) as SessionWithGroup[];
+  }, [allSessions, weekDates, groups]);
 
   // Format week range for display
   const weekRangeDisplay = useMemo(() => {
@@ -510,6 +521,29 @@ export default function SchedulePage() {
               Today
             </Button>
           )}
+
+          <div className="flex items-center gap-1 ml-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => exportScheduleToPDF(weekSessions, weekRangeDisplay)}
+              className="p-2"
+              title="Export PDF"
+              disabled={weekSessions.length === 0}
+            >
+              <FileText className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => exportScheduleToCSV(weekSessions, weekRangeDisplay)}
+              className="p-2"
+              title="Export CSV"
+              disabled={weekSessions.length === 0}
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}

@@ -7,9 +7,15 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Session, Student, Group, ProgressMonitoring } from '@/lib/supabase/types';
+import type { Session, SessionWithGroup, Student, Group, ProgressMonitoring } from '@/lib/supabase/types';
 import type { PatternAnalysisResult } from '@/lib/analytics';
 import { getCurriculumLabel, getTierLabel } from '@/lib/supabase/types';
+
+const WEEKDAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const;
+const WEEKDAY_LABELS: Record<string, string> = {
+  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
+  thursday: 'Thursday', friday: 'Friday',
+};
 
 // Extend jsPDF type to include autoTable
 declare module 'jspdf' {
@@ -482,4 +488,141 @@ export function exportPatternAnalysisToPDF(
 
   addFooter(doc);
   doc.save(`${exportOptions.fileName}.pdf`);
+}
+
+/**
+ * Export weekly schedule to PDF
+ */
+export function exportScheduleToPDF(
+  sessions: SessionWithGroup[],
+  weekLabel: string,
+  options: Partial<ExportOptions> = {}
+) {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const exportOptions: ExportOptions = {
+    title: 'Weekly Schedule',
+    subtitle: weekLabel,
+    fileName: `schedule-${weekLabel.replace(/\s+/g, '-').toLowerCase()}`,
+    ...options,
+  };
+
+  let yPos = addHeader(doc, exportOptions);
+
+  // Group sessions by day of week
+  const sessionsByDay = new Map<string, SessionWithGroup[]>();
+  WEEKDAY_ORDER.forEach(day => sessionsByDay.set(day, []));
+
+  sessions.forEach(session => {
+    const sessionDate = new Date(session.date + 'T00:00:00');
+    const dayIndex = sessionDate.getDay(); // 0=Sun, 1=Mon...
+    const dayName = WEEKDAY_ORDER[dayIndex - 1];
+    if (dayName) {
+      sessionsByDay.get(dayName)!.push(session);
+    }
+  });
+
+  // Sort each day's sessions by time
+  sessionsByDay.forEach(daySessions => {
+    daySessions.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  });
+
+  // Collect all unique times
+  const allTimes = new Set<string>();
+  sessions.forEach(s => { if (s.time) allTimes.add(s.time); });
+  const sortedTimes = Array.from(allTimes).sort();
+
+  // Build grid: rows = time slots, columns = days
+  const tableBody: string[][] = [];
+  sortedTimes.forEach(time => {
+    const row = [formatTime12(time)];
+    WEEKDAY_ORDER.forEach(day => {
+      const daySessions = sessionsByDay.get(day) || [];
+      const atTime = daySessions.filter(s => s.time === time);
+      row.push(atTime.map(s => {
+        const status = s.status === 'cancelled' ? ' [X]' : '';
+        return `${s.group.name}${status}`;
+      }).join('\n') || '');
+    });
+    tableBody.push(row);
+  });
+
+  if (tableBody.length === 0) {
+    doc.setFontSize(12);
+    doc.setTextColor(...COLORS.muted);
+    doc.text('No sessions scheduled for this week.', 14, yPos);
+  } else {
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Time', ...WEEKDAY_ORDER.map(d => WEEKDAY_LABELS[d])]],
+      body: tableBody,
+      theme: 'grid',
+      headStyles: {
+        fillColor: COLORS.primary,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        halign: 'center',
+      },
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        valign: 'top',
+      },
+      columnStyles: {
+        0: { cellWidth: 22, fontStyle: 'bold' },
+      },
+    });
+  }
+
+  addFooter(doc);
+  doc.save(`${exportOptions.fileName}.pdf`);
+}
+
+/**
+ * Export schedule to CSV
+ */
+export function exportScheduleToCSV(
+  sessions: SessionWithGroup[],
+  weekLabel: string
+) {
+  const headers = ['Date', 'Day', 'Time', 'Group', 'Curriculum', 'Grade', 'Tier', 'Status'];
+
+  const sorted = [...sessions].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return (a.time || '').localeCompare(b.time || '');
+  });
+
+  const rows = sorted.map(s => {
+    const sessionDate = new Date(s.date + 'T00:00:00');
+    const dayName = WEEKDAY_ORDER[sessionDate.getDay() - 1] || '';
+    return [
+      s.date,
+      WEEKDAY_LABELS[dayName] || '',
+      s.time ? formatTime12(s.time) : '',
+      s.group.name,
+      getCurriculumLabel(s.group.curriculum),
+      s.group.grade.toString(),
+      getTierLabel(s.group.tier),
+      s.status,
+    ];
+  });
+
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `schedule-${weekLabel.replace(/\s+/g, '-').toLowerCase()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function formatTime12(time24: string): string {
+  const [h, m] = time24.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour}:${m.toString().padStart(2, '0')} ${period}`;
 }
