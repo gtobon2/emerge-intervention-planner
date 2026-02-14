@@ -2,12 +2,14 @@
 
 import { useMemo } from 'react';
 import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
+import type { LocalStudentGoal } from '@/lib/local-db';
 
 export interface ProgressChartProps {
   students: Student[];
   progressData: ProgressMonitoring[];
   groupId: string;
   title?: string;
+  studentGoals?: LocalStudentGoal[];
 }
 
 interface DataPoint {
@@ -40,7 +42,7 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function ProgressChart({ students, progressData, groupId, title }: ProgressChartProps) {
+export function ProgressChart({ students, progressData, groupId, title, studentGoals }: ProgressChartProps) {
   const chartData = useMemo(() => {
     // Filter progress data for this group
     const groupProgress = progressData.filter(p => p.group_id === groupId);
@@ -66,14 +68,30 @@ export function ProgressChart({ students, progressData, groupId, title }: Progre
     return studentLines;
   }, [students, progressData, groupId]);
 
+  // Build goal lookup by student_id
+  const goalMap = useMemo(() => {
+    const map = new Map<number, LocalStudentGoal>();
+    if (studentGoals) {
+      studentGoals.forEach(g => map.set(g.student_id, g));
+    }
+    return map;
+  }, [studentGoals]);
+
   // Get all dates across all students for X-axis
   const allDates = useMemo(() => {
     const dates = new Set<string>();
     chartData.forEach(line => {
       line.dataPoints.forEach(point => dates.add(point.date));
     });
+    // Include benchmark and goal target dates
+    if (studentGoals) {
+      studentGoals.forEach(g => {
+        if (g.benchmark_date) dates.add(g.benchmark_date);
+        if (g.goal_target_date) dates.add(g.goal_target_date);
+      });
+    }
     return Array.from(dates).sort();
-  }, [chartData]);
+  }, [chartData, studentGoals]);
 
   // Calculate Y-axis domain
   const { minScore, maxScore } = useMemo(() => {
@@ -87,13 +105,25 @@ export function ProgressChart({ students, progressData, groupId, title }: Progre
       });
     });
 
+    // Include benchmark and goal scores in domain
+    if (studentGoals) {
+      studentGoals.forEach(g => {
+        if (g.benchmark_score !== null) {
+          min = Math.min(min, g.benchmark_score);
+          max = Math.max(max, g.benchmark_score);
+        }
+        min = Math.min(min, g.goal_score);
+        max = Math.max(max, g.goal_score);
+      });
+    }
+
     // Add padding
     const padding = (max - min) * 0.1 || 5;
     return {
       minScore: Math.max(0, Math.floor(min - padding)),
       maxScore: Math.ceil(max + padding),
     };
-  }, [chartData]);
+  }, [chartData, studentGoals]);
 
   if (chartData.length === 0) {
     return (
@@ -355,6 +385,70 @@ export function ProgressChart({ students, progressData, groupId, title }: Progre
                   })}
                 </g>
               ))}
+
+              {/* Goal lines, aimlines, and benchmark points per student */}
+              {chartData.map((line) => {
+                const studentIdNum = typeof line.studentId === 'string' ? parseInt(line.studentId) : line.studentId;
+                const goal = goalMap.get(studentIdNum);
+                if (!goal || !goal.benchmark_date || goal.benchmark_score === null) return null;
+
+                const benchmarkDateIndex = allDates.indexOf(goal.benchmark_date);
+                const goalDateIndex = goal.goal_target_date ? allDates.indexOf(goal.goal_target_date) : -1;
+
+                return (
+                  <g key={`goal-${line.studentId}`}>
+                    {/* Benchmark point (diamond) */}
+                    {benchmarkDateIndex >= 0 && (
+                      <rect
+                        x={xScale(benchmarkDateIndex) - 6}
+                        y={yScale(goal.benchmark_score) - 6}
+                        width={12}
+                        height={12}
+                        fill={line.color}
+                        stroke="#1F2937"
+                        strokeWidth={2}
+                        transform={`rotate(45, ${xScale(benchmarkDateIndex)}, ${yScale(goal.benchmark_score)})`}
+                      />
+                    )}
+
+                    {/* Goal horizontal dashed line */}
+                    <line
+                      x1={benchmarkDateIndex >= 0 ? xScale(benchmarkDateIndex) : 0}
+                      y1={yScale(goal.goal_score)}
+                      x2={goalDateIndex >= 0 ? xScale(goalDateIndex) : chartWidth}
+                      y2={yScale(goal.goal_score)}
+                      stroke={line.color}
+                      strokeWidth={1.5}
+                      strokeDasharray="6 4"
+                      opacity={0.5}
+                    />
+
+                    {/* Goal label */}
+                    <text
+                      x={goalDateIndex >= 0 ? xScale(goalDateIndex) + 5 : chartWidth + 5}
+                      y={yScale(goal.goal_score) + 4}
+                      className="text-xs fill-text-muted"
+                      fontSize={10}
+                    >
+                      Goal: {goal.goal_score}
+                    </text>
+
+                    {/* Aimline: dashed line from benchmark to goal */}
+                    {benchmarkDateIndex >= 0 && goalDateIndex >= 0 && (
+                      <line
+                        x1={xScale(benchmarkDateIndex)}
+                        y1={yScale(goal.benchmark_score)}
+                        x2={xScale(goalDateIndex)}
+                        y2={yScale(goal.goal_score)}
+                        stroke={line.color}
+                        strokeWidth={2}
+                        strokeDasharray="8 4"
+                        opacity={0.6}
+                      />
+                    )}
+                  </g>
+                );
+              })}
             </g>
           </svg>
         </div>
