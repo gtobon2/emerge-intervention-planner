@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, Plus, Filter, Calendar, BarChart3, Target } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Select } from '@/components/ui';
@@ -21,9 +21,14 @@ export default function ProgressPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
 
-  // Fetch groups
-  const { groups, fetchGroups, selectedGroup, fetchGroupById } = useGroupsStore();
-  const { goals, fetchGoalsForGroup } = useGoalsStore();
+  // Use individual selectors to avoid re-rendering on unrelated store changes
+  const groups = useGroupsStore(s => s.groups);
+  const fetchGroups = useGroupsStore(s => s.fetchGroups);
+  const selectedGroup = useGroupsStore(s => s.selectedGroup);
+  const fetchGroupById = useGroupsStore(s => s.fetchGroupById);
+
+  const goals = useGoalsStore(s => s.goals);
+  const fetchGoalsForGroup = useGoalsStore(s => s.fetchGoalsForGroup);
 
   // Fetch progress data
   const { data, isLoading, addDataPoint, trendLine, refetch } = useProgress(
@@ -113,8 +118,17 @@ export default function ProgressPage() {
     };
   }, [filteredData, trendLine, goals]);
 
-  // Get students from the selected group (actual roster, not derived from PM data)
-  const students = selectedGroup?.students ?? [];
+  // Stable students reference — avoid creating new [] on every render
+  const students = useMemo(
+    () => selectedGroup?.students ?? [],
+    [selectedGroup]
+  );
+
+  // Stable students list for GoalSettingModal (memoized to prevent cascade)
+  const goalModalStudents = useMemo(
+    () => students.map(s => ({ id: parseInt(s.id), name: s.name })),
+    [students]
+  );
 
   // Calculate ROI per student
   const roiData = useMemo(() => {
@@ -156,10 +170,20 @@ export default function ProgressPage() {
       .filter(Boolean) as { studentName: string; actualROI: number; expectedROI: number | null; onTrack: boolean | null }[];
   }, [goals, data, students, selectedGroupId]);
 
-  const handleAddDataPoint = async (dataPoint: any) => {
+  const handleAddDataPoint = useCallback(async (dataPoint: any) => {
     await addDataPoint(dataPoint);
     refetch();
-  };
+  }, [addDataPoint, refetch]);
+
+  const handleGoalModalClose = useCallback(() => {
+    setIsGoalModalOpen(false);
+    const groupIdNum = parseInt(selectedGroupId);
+    if (!isNaN(groupIdNum)) {
+      fetchGoalsForGroup(groupIdNum);
+    }
+  }, [selectedGroupId, fetchGoalsForGroup]);
+
+  const groupIdNum = useMemo(() => parseInt(selectedGroupId), [selectedGroupId]);
 
   return (
     <AppLayout>
@@ -417,19 +441,13 @@ export default function ProgressPage() {
         students={students}
       />
 
-      {/* Goal Setting Modal */}
-      {selectedGroup && (
+      {/* Goal Setting Modal — only mount when open to avoid store subscription cascade */}
+      {isGoalModalOpen && selectedGroup && (
         <GoalSettingModal
           isOpen={isGoalModalOpen}
-          onClose={() => {
-            setIsGoalModalOpen(false);
-            const groupIdNum = parseInt(selectedGroupId);
-            if (!isNaN(groupIdNum)) {
-              fetchGoalsForGroup(groupIdNum);
-            }
-          }}
-          groupId={parseInt(selectedGroupId)}
-          students={students.map(s => ({ id: parseInt(s.id), name: s.name }))}
+          onClose={handleGoalModalClose}
+          groupId={groupIdNum}
+          students={goalModalStudents}
           curriculum={selectedGroup.curriculum}
         />
       )}
