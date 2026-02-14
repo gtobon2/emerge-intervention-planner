@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, Plus, Filter, Calendar, BarChart3 } from 'lucide-react';
+import { TrendingUp, Plus, Filter, Calendar, BarChart3, Target } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Select } from '@/components/ui';
 import {
@@ -12,14 +12,18 @@ import {
 } from '@/components/progress';
 import { useProgress } from '@/hooks/use-progress';
 import { useGroupsStore } from '@/stores/groups';
+import { useGoalsStore } from '@/stores/goals';
+import { GoalSettingModal } from '@/components/goals/GoalSettingModal';
 
 export default function ProgressPage() {
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [dateRange, setDateRange] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
 
   // Fetch groups
   const { groups, fetchGroups, selectedGroup, fetchGroupById } = useGroupsStore();
+  const { goals, fetchGoalsForGroup } = useGoalsStore();
 
   // Fetch progress data
   const { data, isLoading, addDataPoint, trendLine, refetch } = useProgress(
@@ -30,12 +34,16 @@ export default function ProgressPage() {
     fetchGroups();
   }, [fetchGroups]);
 
-  // Fetch group details (including students) when selection changes
+  // Fetch group details (including students) and goals when selection changes
   useEffect(() => {
     if (selectedGroupId) {
       fetchGroupById(selectedGroupId);
+      const groupIdNum = parseInt(selectedGroupId);
+      if (!isNaN(groupIdNum)) {
+        fetchGoalsForGroup(groupIdNum);
+      }
     }
-  }, [selectedGroupId, fetchGroupById]);
+  }, [selectedGroupId, fetchGroupById, fetchGoalsForGroup]);
 
   // Filter data by date range
   const filteredData = useMemo(() => {
@@ -88,11 +96,11 @@ export default function ProgressPage() {
       trend = 'declining';
     }
 
-    // Calculate weeks to goal
+    // Calculate weeks to goal (using first goal from goals store)
     let weeksToGoal: number | null = null;
-    const goal = sortedData[0]?.goal;
-    if (goal && trendLine && trendLine.slope > 0 && currentScore < goal) {
-      const pointsNeeded = goal - currentScore;
+    const goalScore = goals[0]?.goal_score;
+    if (goalScore && trendLine && trendLine.slope > 0 && currentScore < goalScore) {
+      const pointsNeeded = goalScore - currentScore;
       const weeksNeeded = pointsNeeded / trendLine.slope;
       weeksToGoal = Math.ceil(weeksNeeded);
     }
@@ -103,14 +111,50 @@ export default function ProgressPage() {
       trend,
       weeksToGoal,
     };
-  }, [filteredData, trendLine]);
-
-  // Get benchmark and goal from most recent data point
-  const benchmark = filteredData[0]?.benchmark || undefined;
-  const goal = filteredData[0]?.goal || undefined;
+  }, [filteredData, trendLine, goals]);
 
   // Get students from the selected group (actual roster, not derived from PM data)
   const students = selectedGroup?.students ?? [];
+
+  // Calculate ROI per student
+  const roiData = useMemo(() => {
+    if (!selectedGroupId || goals.length === 0) return [];
+
+    return goals
+      .filter(g => g.benchmark_score !== null && g.benchmark_date)
+      .map(goal => {
+        const studentData = data
+          .filter(d => d.student_id && parseInt(d.student_id) === goal.student_id)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const latestScore = studentData[0]?.score;
+        if (latestScore === undefined || !goal.benchmark_date) return null;
+
+        const weeksElapsed = (new Date(studentData[0].date).getTime() - new Date(goal.benchmark_date).getTime()) / (7 * 24 * 60 * 60 * 1000);
+
+        if (weeksElapsed <= 0) return null;
+
+        const actualROI = (latestScore - (goal.benchmark_score ?? 0)) / weeksElapsed;
+
+        let expectedROI: number | null = null;
+        if (goal.goal_target_date && goal.benchmark_score !== null) {
+          const totalWeeks = (new Date(goal.goal_target_date).getTime() - new Date(goal.benchmark_date).getTime()) / (7 * 24 * 60 * 60 * 1000);
+          if (totalWeeks > 0) {
+            expectedROI = (goal.goal_score - goal.benchmark_score) / totalWeeks;
+          }
+        }
+
+        const student = students.find(s => parseInt(s.id) === goal.student_id);
+
+        return {
+          studentName: student?.name || 'Unknown',
+          actualROI: Math.round(actualROI * 100) / 100,
+          expectedROI: expectedROI !== null ? Math.round(expectedROI * 100) / 100 : null,
+          onTrack: expectedROI !== null ? actualROI >= expectedROI : null,
+        };
+      })
+      .filter(Boolean) as { studentName: string; actualROI: number; expectedROI: number | null; onTrack: boolean | null }[];
+  }, [goals, data, students, selectedGroupId]);
 
   const handleAddDataPoint = async (dataPoint: any) => {
     await addDataPoint(dataPoint);
@@ -128,14 +172,25 @@ export default function ProgressPage() {
               Track student progress and make data-based decisions
             </p>
           </div>
-          <Button
-            className="gap-2"
-            onClick={() => setIsModalOpen(true)}
-            disabled={!selectedGroupId}
-          >
-            <Plus className="w-4 h-4" />
-            Add Data Point
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              className="gap-2"
+              onClick={() => setIsGoalModalOpen(true)}
+              disabled={!selectedGroupId}
+            >
+              <Target className="w-4 h-4" />
+              Set Goals & Benchmarks
+            </Button>
+            <Button
+              className="gap-2"
+              onClick={() => setIsModalOpen(true)}
+              disabled={!selectedGroupId}
+            >
+              <Plus className="w-4 h-4" />
+              Add Data Point
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -225,6 +280,38 @@ export default function ProgressPage() {
               </div>
             )}
 
+            {/* ROI Cards */}
+            {roiData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-movement" />
+                    Rate of Improvement (ROI)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {roiData.map((roi) => (
+                      <div key={roi.studentName} className="p-3 rounded-lg border border-border bg-surface">
+                        <p className="text-sm font-medium text-text-primary mb-1">{roi.studentName}</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xl font-bold text-text-primary">
+                            {roi.actualROI > 0 ? '+' : ''}{roi.actualROI}
+                          </span>
+                          <span className="text-xs text-text-muted">/week</span>
+                        </div>
+                        {roi.expectedROI !== null && (
+                          <p className={`text-xs mt-1 ${roi.onTrack ? 'text-emerald-500' : 'text-red-400'}`}>
+                            {roi.onTrack ? 'On track' : 'Below expected'} (need {roi.expectedROI > 0 ? '+' : ''}{roi.expectedROI}/week)
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Main Content */}
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Chart Area */}
@@ -246,6 +333,7 @@ export default function ProgressPage() {
                         students={students}
                         progressData={filteredData}
                         groupId={selectedGroupId}
+                        studentGoals={goals}
                       />
                     )}
                   </CardContent>
@@ -268,7 +356,7 @@ export default function ProgressPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <DecisionRuleAlert data={filteredData} goal={goal} />
+                    <DecisionRuleAlert data={filteredData} goal={goals[0]?.goal_score} />
                   </CardContent>
                 </Card>
 
@@ -327,9 +415,24 @@ export default function ProgressPage() {
         onSubmit={handleAddDataPoint}
         groupId={selectedGroupId}
         students={students}
-        defaultBenchmark={benchmark}
-        defaultGoal={goal}
       />
+
+      {/* Goal Setting Modal */}
+      {selectedGroup && (
+        <GoalSettingModal
+          isOpen={isGoalModalOpen}
+          onClose={() => {
+            setIsGoalModalOpen(false);
+            const groupIdNum = parseInt(selectedGroupId);
+            if (!isNaN(groupIdNum)) {
+              fetchGoalsForGroup(groupIdNum);
+            }
+          }}
+          groupId={parseInt(selectedGroupId)}
+          students={students.map(s => ({ id: parseInt(s.id), name: s.name }))}
+          curriculum={selectedGroup.curriculum}
+        />
+      )}
     </AppLayout>
   );
 }
