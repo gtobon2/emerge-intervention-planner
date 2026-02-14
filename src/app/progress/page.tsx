@@ -19,17 +19,23 @@ export default function ProgressPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch groups
-  const { groups, fetchGroups } = useGroupsStore();
-  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
+  const { groups, fetchGroups, selectedGroup, fetchGroupById } = useGroupsStore();
 
   // Fetch progress data
-  const { data, isLoading, addDataPoint, trendLine, dataWithStudents, refetch } = useProgress(
+  const { data, isLoading, addDataPoint, trendLine, refetch } = useProgress(
     selectedGroupId || undefined
   );
 
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
+
+  // Fetch group details (including students) when selection changes
+  useEffect(() => {
+    if (selectedGroupId) {
+      fetchGroupById(selectedGroupId);
+    }
+  }, [selectedGroupId, fetchGroupById]);
 
   // Filter data by date range
   const filteredData = useMemo(() => {
@@ -103,18 +109,8 @@ export default function ProgressPage() {
   const benchmark = filteredData[0]?.benchmark || undefined;
   const goal = filteredData[0]?.goal || undefined;
 
-  // Get students for the selected group
-  const students = useMemo(() => {
-    if (!selectedGroupId) return [];
-    const groupData = dataWithStudents.filter((d) => d.student);
-    const uniqueStudents = new Map();
-    groupData.forEach((d) => {
-      if (d.student && !uniqueStudents.has(d.student.id)) {
-        uniqueStudents.set(d.student.id, d.student);
-      }
-    });
-    return Array.from(uniqueStudents.values());
-  }, [selectedGroupId, dataWithStudents]);
+  // Get students from the selected group (actual roster, not derived from PM data)
+  const students = selectedGroup?.students ?? [];
 
   const handleAddDataPoint = async (dataPoint: any) => {
     await addDataPoint(dataPoint);
