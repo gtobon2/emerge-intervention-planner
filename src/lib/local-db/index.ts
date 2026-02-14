@@ -220,7 +220,10 @@ export interface LocalStudentGoal {
   student_id: number;
   group_id: number;
   goal_score: number;
+  smart_goal_text: string;
+  goal_target_date: string;
   benchmark_score: number | null;
+  benchmark_date: string | null;
   measure_type: string;
   set_date: string;
   created_at: string;
@@ -348,6 +351,30 @@ export class EmergeDatabase extends Dexie {
       gradeLevelConstraints: '++id, grade, type, created_at',
       studentConstraints: '++id, student_id, type, created_at',
       studentGoals: '++id, student_id, group_id, measure_type, created_at, updated_at',
+    });
+
+    // Version 8: Add SMART goal text, benchmark date, goal target date to student goals
+    this.version(8).stores({
+      groups: '++id, name, curriculum, tier, grade, interventionist_id, created_at, updated_at',
+      students: '++id, name, group_id, created_at',
+      sessions: '++id, group_id, date, status, series_id, created_at, updated_at',
+      progressMonitoring: '++id, student_id, group_id, date, created_at',
+      errorBank: '++id, curriculum, error_pattern, created_at',
+      studentSessionTracking: '++id, session_id, student_id, created_at',
+      wilsonLessonElements: '++id, substep, stepNumber, createdAt, updatedAt',
+      wilsonLessonPlans: '++id, sessionId, substep, createdAt, updatedAt',
+      caminoLessonElements: '++id, unit, lesson, lessonCode, createdAt, updatedAt',
+      caminoLessonPlans: '++id, sessionId, unit, lesson, lessonCode, createdAt, updatedAt',
+      interventionists: '++id, name, email, created_at, updated_at',
+      gradeLevelConstraints: '++id, grade, type, created_at',
+      studentConstraints: '++id, student_id, type, created_at',
+      studentGoals: '++id, student_id, group_id, measure_type, created_at, updated_at',
+    }).upgrade(tx => {
+      return tx.table('studentGoals').toCollection().modify(goal => {
+        if (!goal.smart_goal_text) goal.smart_goal_text = '';
+        if (!goal.goal_target_date) goal.goal_target_date = '';
+        if (!goal.benchmark_date) goal.benchmark_date = null;
+      });
     });
   }
 }
