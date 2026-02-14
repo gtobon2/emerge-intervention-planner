@@ -20,6 +20,7 @@ import {
   Languages,
   Package,
   Shield,
+  Download,
   X,
   LogOut
 } from 'lucide-react';
@@ -46,6 +47,7 @@ const navItems: NavItem[] = [
   { href: '/materials', label: 'Materials', icon: Package },
   { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
+  { href: '/admin/export', label: 'Data Export', icon: Download, adminOnly: true },
 ];
 
 export function Sidebar() {
