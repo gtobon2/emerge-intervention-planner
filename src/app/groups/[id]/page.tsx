@@ -18,12 +18,14 @@ import {
   MoreVertical,
   ShieldAlert,
   Eye,
+  Target,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, CurriculumBadge, TierBadge, StatusBadge } from '@/components/ui';
 import { PlanSessionModal, EditSessionModal, CancelSessionModal, SessionPlanData } from '@/components/sessions';
 import { EditGroupModal, DeleteGroupModal } from '@/components/groups';
 import { GroupMaterialsSection } from '@/components/materials';
+import { GoalSettingModal } from '@/components/goals/GoalSettingModal';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useAIContextStore } from '@/stores/ai-context';
@@ -61,6 +63,7 @@ export default function GroupDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditSessionModal, setShowEditSessionModal] = useState(false);
   const [showCancelSessionModal, setShowCancelSessionModal] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -403,6 +406,14 @@ export default function GroupDetailPage() {
                 >
                   <Trash2 className="w-4 h-4" />
                   <span className="hidden md:inline">Delete</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="gap-2 min-h-[44px]"
+                  onClick={() => setShowGoalModal(true)}
+                >
+                  <Target className="w-4 h-4" />
+                  <span className="hidden md:inline">Set Goals</span>
                 </Button>
                 <Button
                   className="gap-2 flex-1 md:flex-initial min-h-[44px]"
@@ -827,6 +838,18 @@ export default function GroupDetailPage() {
           onSave={handleEditSession}
         />
       )}
+
+      {/* Goal Setting Modal */}
+      <GoalSettingModal
+        isOpen={showGoalModal}
+        onClose={() => setShowGoalModal(false)}
+        groupId={parseInt(groupId)}
+        students={(selectedGroup.students || []).map((s) => ({
+          id: typeof s.id === 'string' ? parseInt(s.id) : s.id,
+          name: s.name,
+        }))}
+        curriculum={selectedGroup.curriculum}
+      />
 
       {/* Cancel Session Modal */}
       {selectedSession && selectedGroup && (
