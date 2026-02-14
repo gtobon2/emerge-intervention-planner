@@ -620,6 +620,190 @@ export function exportScheduleToCSV(
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Export Session Plan to PDF
+ */
+export function exportSessionPlanToPDF(
+  session: {
+    date: string;
+    time: string | null;
+    status: string;
+    curriculum_position: any;
+    planned_otr_target: number | null;
+    planned_response_formats: string[] | null;
+    planned_practice_items: any[] | null;
+    anticipated_errors: any[] | null;
+    notes: string | null;
+    mastery_demonstrated: string | null;
+  },
+  group: {
+    name: string;
+    curriculum: string;
+    tier: number;
+    grade: number;
+  },
+  students: Array<{ name: string }>
+) {
+  const doc = new jsPDF();
+  const sessionDate = new Date(session.date + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  let yPos = addHeader(doc, {
+    title: group.name,
+    subtitle: `Session Plan - ${sessionDate}`,
+    fileName: `session-plan-${group.name.replace(/\s+/g, '-').toLowerCase()}-${session.date}`,
+  });
+
+  // Group info table
+  autoTable(doc, {
+    startY: yPos,
+    head: [['Curriculum', 'Tier', 'Grade', 'Status']],
+    body: [[
+      getCurriculumLabel(group.curriculum as any),
+      getTierLabel(group.tier as any),
+      `Grade ${group.grade}`,
+      session.status,
+    ]],
+    theme: 'striped',
+    headStyles: {
+      fillColor: COLORS.primary,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    styles: { fontSize: 10, cellPadding: 3 },
+  });
+
+  yPos = (doc as any).lastAutoTable?.finalY + 10 || yPos + 30;
+
+  // Students list
+  if (students.length > 0) {
+    doc.setFontSize(12);
+    doc.setTextColor(...COLORS.text);
+    doc.text('Students', 14, yPos);
+    yPos += 6;
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['#', 'Student Name']],
+      body: students.map((s, i) => [(i + 1).toString(), s.name]),
+      theme: 'striped',
+      headStyles: {
+        fillColor: COLORS.secondary,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      styles: { fontSize: 9, cellPadding: 3 },
+    });
+
+    yPos = (doc as any).lastAutoTable?.finalY + 10 || yPos + 30;
+  }
+
+  // Session plan section
+  doc.setFontSize(12);
+  doc.setTextColor(...COLORS.text);
+  doc.text('Session Plan', 14, yPos);
+  yPos += 6;
+
+  const planRows: string[][] = [];
+  planRows.push(['OTR Target', (session.planned_otr_target || 40).toString()]);
+
+  if (session.planned_response_formats && session.planned_response_formats.length > 0) {
+    planRows.push(['Response Formats', session.planned_response_formats.join(', ')]);
+  }
+
+  if (session.time) {
+    planRows.push(['Time', session.time]);
+  }
+
+  autoTable(doc, {
+    startY: yPos,
+    body: planRows,
+    theme: 'plain',
+    styles: { fontSize: 10, cellPadding: 2 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 } },
+  });
+
+  yPos = (doc as any).lastAutoTable?.finalY + 10 || yPos + 30;
+
+  // Practice items
+  if (session.planned_practice_items && session.planned_practice_items.length > 0) {
+    if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+    doc.setFontSize(12);
+    doc.setTextColor(...COLORS.text);
+    doc.text('Practice Items', 14, yPos);
+    yPos += 6;
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Type', 'Item']],
+      body: session.planned_practice_items.map((item: any) => [
+        item.type || '-',
+        item.item || '-',
+      ]),
+      theme: 'striped',
+      headStyles: {
+        fillColor: COLORS.success,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      styles: { fontSize: 9, cellPadding: 3 },
+    });
+
+    yPos = (doc as any).lastAutoTable?.finalY + 10 || yPos + 30;
+  }
+
+  // Anticipated errors
+  if (session.anticipated_errors && session.anticipated_errors.length > 0) {
+    if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+    doc.setFontSize(12);
+    doc.setTextColor(...COLORS.text);
+    doc.text('Anticipated Errors', 14, yPos);
+    yPos += 6;
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Error Pattern', 'Correction Protocol']],
+      body: session.anticipated_errors.map((e: any) => [
+        e.error_pattern || '-',
+        e.correction_protocol || '-',
+      ]),
+      theme: 'striped',
+      headStyles: {
+        fillColor: COLORS.warning,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      styles: { fontSize: 9, cellPadding: 3 },
+    });
+
+    yPos = (doc as any).lastAutoTable?.finalY + 10 || yPos + 30;
+  }
+
+  // Notes
+  if (session.notes) {
+    if (yPos > 260) { doc.addPage(); yPos = 20; }
+
+    doc.setFontSize(12);
+    doc.setTextColor(...COLORS.text);
+    doc.text('Notes', 14, yPos);
+    yPos += 6;
+
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.muted);
+    const noteLines = doc.splitTextToSize(session.notes, 180);
+    doc.text(noteLines, 14, yPos);
+  }
+
+  addFooter(doc);
+  doc.save(`session-plan-${group.name.replace(/\s+/g, '-').toLowerCase()}-${session.date}.pdf`);
+}
+
 function formatTime12(time24: string): string {
   const [h, m] = time24.split(':').map(Number);
   const period = h >= 12 ? 'PM' : 'AM';

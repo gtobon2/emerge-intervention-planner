@@ -6,4 +6,5 @@ export {
   exportPatternAnalysisToPDF,
   exportScheduleToPDF,
   exportScheduleToCSV,
+  exportSessionPlanToPDF,
 } from './pdf-export';
