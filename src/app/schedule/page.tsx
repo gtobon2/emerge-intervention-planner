@@ -5,6 +5,7 @@ import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, Grip
 import { AppLayout } from '@/components/layout';
 import { Button, Modal, Input, Select, Card, Checkbox } from '@/components/ui';
 import { useScheduleStore } from '@/stores/schedule';
+import { db } from '@/lib/local-db';
 import { useGroupsStore } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useCyclesStore } from '@/stores/cycles';
@@ -32,6 +33,7 @@ export default function SchedulePage() {
   const {
     interventionists,
     constraints,
+    studentConstraints,
     fetchAll,
     isLoading,
     error,
@@ -82,6 +84,23 @@ export default function SchedulePage() {
     fetchCurrentCycle();
     fetchAllEvents();
   }, [fetchAll, fetchGroups, fetchAllSessions, fetchCurrentCycle, fetchAllEvents]);
+
+  // Student names for student constraint display
+  const [studentNames, setStudentNames] = useState<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    const loadStudentNames = async () => {
+      if (studentConstraints.length === 0) return;
+      const studentIds = [...new Set(studentConstraints.map(sc => sc.student_id))];
+      const students = await Promise.all(
+        studentIds.map(id => db.students.get(id))
+      );
+      const names = new Map<number, string>();
+      students.forEach(s => { if (s) names.set(s.id!, s.name); });
+      setStudentNames(names);
+    };
+    loadStudentNames();
+  }, [studentConstraints]);
 
   // Bulk selection state
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
@@ -701,6 +720,8 @@ export default function SchedulePage() {
                 bulkSelectMode={bulkSelectMode}
                 selectedSessionIds={selectedSessionIds}
                 onToggleSessionSelection={toggleSessionSelection}
+                studentConstraints={studentConstraints}
+                studentNames={studentNames}
               />
             </Card>
           </div>

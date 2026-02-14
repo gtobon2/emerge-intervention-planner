@@ -11,7 +11,7 @@ import {
   getWeekDayFromDate,
 } from '@/lib/scheduling/time-utils';
 import { useSessionsStore } from '@/stores/sessions';
-import type { LocalInterventionist } from '@/lib/local-db';
+import type { LocalInterventionist, LocalStudentConstraint } from '@/lib/local-db';
 import type { WeekDay, TimeBlock, Group, SessionWithGroup, ScheduleConstraint } from '@/lib/supabase/types';
 
 interface ScheduleGridProps {
@@ -36,6 +36,9 @@ interface ScheduleGridProps {
   bulkSelectMode?: boolean;
   selectedSessionIds?: Set<string>;
   onToggleSessionSelection?: (sessionId: string) => void;
+  // Student constraints
+  studentConstraints?: LocalStudentConstraint[];
+  studentNames?: Map<number, string>;
 }
 
 // Generate 30-minute time slots from 7:00 AM to 5:00 PM
@@ -103,6 +106,8 @@ export function ScheduleGrid({
   bulkSelectMode = false,
   selectedSessionIds = new Set(),
   onToggleSessionSelection,
+  studentConstraints = [],
+  studentNames = new Map(),
 }: ScheduleGridProps) {
   const { allSessions, fetchAllSessions } = useSessionsStore();
 
@@ -150,6 +155,39 @@ export function ScheduleGrid({
 
     return byDay;
   }, [relevantConstraints]);
+
+  // Group student constraints by day
+  const studentConstraintsByDay = useMemo(() => {
+    const byDay = new Map<WeekDay, LocalStudentConstraint[]>();
+    WEEKDAYS.forEach(day => byDay.set(day, []));
+
+    studentConstraints.forEach(sc => {
+      sc.schedule.days.forEach(day => {
+        byDay.get(day as WeekDay)?.push(sc);
+      });
+    });
+
+    return byDay;
+  }, [studentConstraints]);
+
+  // Get student constraint info for a time slot
+  const getStudentConstraintInfo = (day: WeekDay, time: string): { label: string; studentName: string } | null => {
+    const dayConstraints = studentConstraintsByDay.get(day) || [];
+    const slotStart = timeToMinutes(time);
+    const slotEnd = slotStart + 30;
+
+    const match = dayConstraints.find(sc => {
+      const start = timeToMinutes(sc.schedule.startTime);
+      const end = timeToMinutes(sc.schedule.endTime);
+      return slotStart < end && slotEnd > start;
+    });
+
+    if (!match) return null;
+    return {
+      label: match.label,
+      studentName: studentNames.get(match.student_id) || `Student ${match.student_id}`,
+    };
+  };
 
   // Get interventionist availability by day
   const availabilityByDay = useMemo(() => {
@@ -337,6 +375,7 @@ export function ScheduleGrid({
                 const blocked = isTimeBlocked(day, timeStr);
                 const available = isAvailable(day, timeStr);
                 const constraintInfo = getConstraintInfo(day, timeStr);
+                const studentConstraintInfo = getStudentConstraintInfo(day, timeStr);
                 const sessions = getSessionsForSlot(day, timeStr);
                 const dateStr = weekDates.get(day)!;
                 const isDragOver = dragOverSlot?.day === day && dragOverSlot?.timeStr === timeStr;
@@ -384,11 +423,17 @@ export function ScheduleGrid({
                                 ? `bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800
                                    ${isDragging && canDrop ? 'hover:bg-green-100 hover:border-green-300' : 'hover:bg-green-100'}
                                    dark:hover:bg-green-900/30 cursor-pointer`
-                                : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
+                                : studentConstraintInfo
+                                  ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+                                  : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
                       }
                       ${isDragging && canDrop ? 'ring-1 ring-movement/30' : ''}
                     `}
-                    title={constraintInfo ? `${constraintInfo.label} (${constraintInfo.grades})` : formatTimeDisplay(timeStr)}
+                    title={constraintInfo
+                      ? `${constraintInfo.label} (${constraintInfo.grades})`
+                      : studentConstraintInfo
+                        ? `${studentConstraintInfo.studentName}: ${studentConstraintInfo.label}`
+                        : formatTimeDisplay(timeStr)}
                   >
                     {/* Drop indicator */}
                     {isDragOver && canDrop && (
@@ -495,6 +540,15 @@ export function ScheduleGrid({
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-[8px] text-red-400">
                           {constraintInfo.grades}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Show student constraint indicator */}
+                    {!blocked && studentConstraintInfo && !isDragOver && isHourStart(timeStr) && (
+                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center">
+                        <span className="text-[8px] text-orange-600 dark:text-orange-400 font-medium truncate px-0.5" title={`${studentConstraintInfo.studentName}: ${studentConstraintInfo.label}`}>
+                          {studentConstraintInfo.studentName.split(' ')[0]}: {studentConstraintInfo.label}
                         </span>
                       </div>
                     )}
