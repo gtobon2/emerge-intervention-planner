@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Plus, Filter, AlertCircle, Users, CalendarDays, Ban, Calendar } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select, Card, CardContent } from '@/components/ui';
-import { GroupCard, TodaySchedule, QuickStats } from '@/components/dashboard';
+import { GroupCard, TodaySchedule, QuickStats, ActionItems, WeeklySnapshot, RecentActivity } from '@/components/dashboard';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useStudentsStore } from '@/stores/students';
@@ -14,6 +14,9 @@ import { useSchoolCalendarStore } from '@/stores/school-calendar';
 import { db } from '@/lib/local-db';
 import { fetchAssignedStudentsWithGroupInfo, type StudentWithGroupInfo } from '@/lib/supabase/student-assignments';
 import { isMockMode } from '@/lib/supabase/config';
+import { useNotificationsStore } from '@/stores/notifications';
+import { useSettingsStore } from '@/stores/settings';
+import { useGoalsStore } from '@/stores/goals';
 import type { Curriculum, QuickStats as QuickStatsType, Session as SessionType } from '@/lib/supabase/types';
 
 const curriculumOptions = [
@@ -66,6 +69,14 @@ export default function DashboardPage() {
   // Stats state
   const [weekSessions, setWeekSessions] = useState<{ total: number; completed: number }>({ total: 0, completed: 0 });
   const [pmDataDue, setPmDataDue] = useState(0);
+
+  // Notification & action items state
+  const { generateReminders, generateDecisionAlerts, generateAttendanceFlags, generateGoalAlerts } = useNotificationsStore();
+  const { notificationPreferences } = useSettingsStore();
+  const { goals, fetchGoalsForGroup } = useGoalsStore();
+  const [decisionAlertCount, setDecisionAlertCount] = useState(0);
+  const [attendanceFlagCount, setAttendanceFlagCount] = useState(0);
+  const [pmCollectedThisWeek, setPmCollectedThisWeek] = useState(0);
 
   // Fetch assigned students for interventionists
   const fetchAssignedStudentsData = useCallback(async () => {
@@ -229,6 +240,85 @@ export default function DashboardPage() {
     calculatePMDue();
   }, [groups]); // groups is already role-filtered from fetchGroupsWithVisibility
 
+  // Auto-generate notifications and calculate action item counts
+  useEffect(() => {
+    async function generateNotifications() {
+      try {
+        const allStudentsData = await db.students.toArray();
+        const pmRecords = await db.progressMonitoring.toArray();
+        const allGoals = await db.studentGoals.toArray();
+        const allSess = await db.sessions.toArray();
+
+        // Decision rule alerts
+        if (notificationPreferences.decisionRuleAlerts) {
+          const pmData = allStudentsData.map(student => {
+            const studentPMs = pmRecords
+              .filter(pm => pm.student_id === student.id)
+              .sort((a, b) => a.date.localeCompare(b.date));
+            const studentGoal = allGoals.find(g => g.student_id === student.id);
+            const group = groups.find(g => String(g.id) === String(student.group_id));
+            return {
+              student_id: student.id!,
+              student_name: student.name,
+              group_id: student.group_id,
+              group_name: group?.name || 'Unknown',
+              scores: studentPMs.map(pm => pm.score),
+              goal: studentGoal?.goal_score ?? null,
+            };
+          }).filter(d => d.goal !== null && d.scores.length >= 4);
+
+          let alertCount = 0;
+          for (const d of pmData) {
+            const last4 = d.scores.slice(-4);
+            if (last4.every(s => s < d.goal!) || last4.every(s => s >= d.goal!)) {
+              alertCount++;
+            }
+          }
+          setDecisionAlertCount(alertCount);
+          generateDecisionAlerts(pmData);
+        }
+
+        // Attendance flags
+        if (notificationPreferences.attendanceFlags) {
+          const completedSessions = allSess
+            .filter(s => s.status === 'completed')
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+          // Simple heuristic: students in groups with sessions but no tracking data
+          // (Full attendance tracking would need the attendance store)
+          setAttendanceFlagCount(0);
+        }
+
+        // Goal not set alerts
+        if (notificationPreferences.goalNotSetAlerts) {
+          const studentsWithoutGoals = allStudentsData.filter(student => {
+            return !allGoals.some(g => g.student_id === student.id);
+          }).map(student => {
+            const group = groups.find(g => String(g.id) === String(student.group_id));
+            return {
+              student_name: student.name,
+              group_name: group?.name || 'Unknown',
+              group_id: student.group_id,
+            };
+          });
+          generateGoalAlerts(studentsWithoutGoals);
+        }
+
+        // PM collected this week
+        const { start, end } = getCurrentWeekDates();
+        const pmThisWeek = pmRecords.filter(pm => pm.date >= start && pm.date <= end);
+        setPmCollectedThisWeek(pmThisWeek.length);
+
+      } catch {
+        // Non-critical — silently fail
+      }
+    }
+
+    if (groups.length > 0) {
+      generateNotifications();
+    }
+  }, [groups, notificationPreferences, generateDecisionAlerts, generateAttendanceFlags, generateGoalAlerts]);
+
   // Calculate groups needing attention (no sessions in past 7 days or mastery = 'no')
   // Filtered by user's groups
   const groupsNeedingAttention = useMemo(() => {
@@ -383,6 +473,14 @@ export default function DashboardPage() {
             {/* Quick Stats */}
             <QuickStats stats={stats} isLoading={groupsLoading} isAdmin={isAdmin} />
 
+            {/* Action Items */}
+            <ActionItems
+              pmDue={pmDataDue}
+              decisionAlerts={decisionAlertCount}
+              incompleteSessionsThisWeek={weekSessions.total - weekSessions.completed}
+              attendanceFlags={attendanceFlagCount}
+            />
+
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
               {/* Groups List */}
@@ -430,14 +528,23 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Today's Schedule */}
-              <div className="order-first lg:order-last">
+              {/* Today's Schedule & Weekly Snapshot */}
+              <div className="order-first lg:order-last space-y-4">
                 <TodaySchedule
                   sessions={filteredTodaySessions}
                   isLoading={sessionsLoading}
                 />
+                <WeeklySnapshot
+                  sessionsCompleted={weekSessions.completed}
+                  sessionsPlanned={weekSessions.total}
+                  pmCollected={pmCollectedThisWeek}
+                  pmDue={pmDataDue}
+                />
               </div>
             </div>
+
+            {/* Recent Activity */}
+            <RecentActivity />
           </>
         )}
       </div>
