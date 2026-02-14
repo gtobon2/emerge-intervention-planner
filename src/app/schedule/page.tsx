@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical, Download, FileText } from 'lucide-react';
+import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical, Download, FileText, CheckSquare, X, Trash2, Ban } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Modal, Input, Select, Card, Checkbox } from '@/components/ui';
 import { useScheduleStore } from '@/stores/schedule';
@@ -82,6 +82,42 @@ export default function SchedulePage() {
     fetchCurrentCycle();
     fetchAllEvents();
   }, [fetchAll, fetchGroups, fetchAllSessions, fetchCurrentCycle, fetchAllEvents]);
+
+  // Bulk selection state
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
+
+  const toggleSessionSelection = useCallback((sessionId: string) => {
+    setSelectedSessionIds(prev => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }, []);
+
+  const exitBulkSelect = useCallback(() => {
+    setBulkSelectMode(false);
+    setSelectedSessionIds(new Set());
+  }, []);
+
+  const handleBulkCancel = useCallback(async () => {
+    if (selectedSessionIds.size === 0) return;
+    for (const id of selectedSessionIds) {
+      await cancelSession(id);
+    }
+    fetchAllSessions();
+    exitBulkSelect();
+  }, [selectedSessionIds, cancelSession, fetchAllSessions, exitBulkSelect]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedSessionIds.size === 0) return;
+    for (const id of selectedSessionIds) {
+      await deleteSession(id);
+    }
+    fetchAllSessions();
+    exitBulkSelect();
+  }, [selectedSessionIds, deleteSession, fetchAllSessions, exitBulkSelect]);
 
   // Week navigation state
   const [weekOffset, setWeekOffset] = useState(0);
@@ -564,7 +600,62 @@ export default function SchedulePage() {
               Add an interventionist to get started
             </p>
           )}
+
+          <div className="sm:ml-auto">
+            <Button
+              variant={bulkSelectMode ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => bulkSelectMode ? exitBulkSelect() : setBulkSelectMode(true)}
+              className="gap-2"
+            >
+              <CheckSquare className="w-4 h-4" />
+              {bulkSelectMode ? 'Exit Select' : 'Select'}
+            </Button>
+          </div>
         </div>
+
+        {/* Bulk Action Bar */}
+        {bulkSelectMode && (
+          <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+              {selectedSessionIds.size} session{selectedSessionIds.size !== 1 ? 's' : ''} selected
+            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleBulkCancel}
+                disabled={selectedSessionIds.size === 0}
+                className="gap-1.5 text-yellow-700"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                Cancel
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Delete ${selectedSessionIds.size} session(s)? This cannot be undone.`)) {
+                    handleBulkDelete();
+                  }
+                }}
+                disabled={selectedSessionIds.size === 0}
+                className="gap-1.5 text-red-700"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={exitBulkSelect}
+                className="p-1.5"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Drop Error Message */}
         {dropError && (
@@ -607,6 +698,9 @@ export default function SchedulePage() {
                   await cancelSession(id);
                   fetchAllSessions();
                 }}
+                bulkSelectMode={bulkSelectMode}
+                selectedSessionIds={selectedSessionIds}
+                onToggleSessionSelection={toggleSessionSelection}
               />
             </Card>
           </div>

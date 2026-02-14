@@ -32,6 +32,10 @@ interface ScheduleGridProps {
   // Session management
   onCancelSession?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
+  // Bulk selection
+  bulkSelectMode?: boolean;
+  selectedSessionIds?: Set<string>;
+  onToggleSessionSelection?: (sessionId: string) => void;
 }
 
 // Generate 30-minute time slots from 7:00 AM to 5:00 PM
@@ -96,6 +100,9 @@ export function ScheduleGrid({
   draggingSession = null,
   onCancelSession,
   onDeleteSession,
+  bulkSelectMode = false,
+  selectedSessionIds = new Set(),
+  onToggleSessionSelection,
 }: ScheduleGridProps) {
   const { allSessions, fetchAllSessions } = useSessionsStore();
 
@@ -398,8 +405,9 @@ export function ScheduleGrid({
                         {sessions.map(session => (
                           <div
                             key={session.id}
-                            draggable
+                            draggable={!bulkSelectMode}
                             onDragStart={(e) => {
+                              if (bulkSelectMode) { e.preventDefault(); return; }
                               e.stopPropagation();
                               e.dataTransfer.setData('application/json', JSON.stringify({
                                 sessionId: session.id,
@@ -416,13 +424,20 @@ export function ScheduleGrid({
                               ${getGroupColor(session)} text-white
                               rounded px-1.5 py-0.5 text-[10px] font-medium
                               transition-all relative group/session
-                              truncate cursor-grab active:cursor-grabbing
-                              ${draggingSession?.id === session.id 
-                                ? 'opacity-50 ring-2 ring-white scale-95' 
-                                : 'hover:scale-[1.02] hover:shadow-md'}
+                              truncate
+                              ${bulkSelectMode
+                                ? `cursor-pointer ${selectedSessionIds.has(session.id) ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : 'opacity-75 hover:opacity-100'}`
+                                : `cursor-grab active:cursor-grabbing ${draggingSession?.id === session.id
+                                  ? 'opacity-50 ring-2 ring-white scale-95'
+                                  : 'hover:scale-[1.02] hover:shadow-md'}`
+                              }
                             `}
-                            title={`${session.group.name} - ${formatTimeDisplay(session.time || '')} (drag to reschedule, right-click for options)`}
+                            title={bulkSelectMode
+                              ? `Click to ${selectedSessionIds.has(session.id) ? 'deselect' : 'select'} ${session.group.name}`
+                              : `${session.group.name} - ${formatTimeDisplay(session.time || '')} (drag to reschedule, right-click for options)`
+                            }
                             onContextMenu={(e) => {
+                              if (bulkSelectMode) return;
                               e.preventDefault();
                               setContextMenu({
                                 sessionId: session.id,
@@ -432,15 +447,20 @@ export function ScheduleGrid({
                               });
                             }}
                             onClick={(e) => {
-                              // Navigate to group on click (only if not dragging)
-                              if (!draggingSession) {
+                              if (bulkSelectMode) {
+                                e.stopPropagation();
+                                onToggleSessionSelection?.(session.id);
+                              } else if (!draggingSession) {
                                 window.location.href = `/groups/${session.group_id}`;
                               }
                             }}
                           >
+                            {bulkSelectMode && selectedSessionIds.has(session.id) && (
+                              <span className="mr-0.5">✓</span>
+                            )}
                             {session.group.name}
-                            {/* Delete button on hover */}
-                            {onDeleteSession && (
+                            {/* Delete button on hover (not in bulk mode) */}
+                            {onDeleteSession && !bulkSelectMode && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
