@@ -16,7 +16,6 @@ import { fetchAssignedStudentsWithGroupInfo, type StudentWithGroupInfo } from '@
 import { isMockMode } from '@/lib/supabase/config';
 import { useNotificationsStore } from '@/stores/notifications';
 import { useSettingsStore } from '@/stores/settings';
-import { useGoalsStore } from '@/stores/goals';
 import type { Curriculum, QuickStats as QuickStatsType, Session as SessionType } from '@/lib/supabase/types';
 
 const curriculumOptions = [
@@ -70,10 +69,12 @@ export default function DashboardPage() {
   const [weekSessions, setWeekSessions] = useState<{ total: number; completed: number }>({ total: 0, completed: 0 });
   const [pmDataDue, setPmDataDue] = useState(0);
 
-  // Notification & action items state
-  const { generateReminders, generateDecisionAlerts, generateAttendanceFlags, generateGoalAlerts } = useNotificationsStore();
+  // Notification & action items state — use individual selectors to avoid
+  // re-rendering when notification list/unreadCount changes
+  const generateDecisionAlerts = useNotificationsStore(s => s.generateDecisionAlerts);
+  const generateAttendanceFlags = useNotificationsStore(s => s.generateAttendanceFlags);
+  const generateGoalAlerts = useNotificationsStore(s => s.generateGoalAlerts);
   const { notificationPreferences } = useSettingsStore();
-  const { goals, fetchGoalsForGroup } = useGoalsStore();
   const [decisionAlertCount, setDecisionAlertCount] = useState(0);
   const [attendanceFlagCount, setAttendanceFlagCount] = useState(0);
   const [pmCollectedThisWeek, setPmCollectedThisWeek] = useState(0);
