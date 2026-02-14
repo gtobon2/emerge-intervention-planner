@@ -21,6 +21,8 @@ import {
   Save,
   Edit,
   XCircle,
+  Printer,
+  FileText,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,6 +61,7 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, useAIContextStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
 import { toNumericId } from '@/lib/utils/id';
+import { exportSessionPlanToPDF } from '@/lib/export';
 
 // Extended ObservedError type with id for local tracking
 interface ObservedErrorWithId extends ObservedError {
@@ -658,9 +661,31 @@ export default function SessionPage({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap print:hidden">
               {!isSessionActive && session.status === 'planned' && (
                 <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.print()}
+                    className="gap-1 min-h-[44px]"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span className="hidden sm:inline">Print</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => exportSessionPlanToPDF(
+                      session,
+                      { name: group.name, curriculum: group.curriculum, tier: group.tier, grade: group.grade },
+                      students.map(s => ({ name: s.name }))
+                    )}
+                    className="gap-1 min-h-[44px]"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="hidden sm:inline">PDF</span>
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1471,6 +1496,32 @@ export default function SessionPage({
           onSave={handleCreateRescheduledSession}
         />
       )}
+
+      {/* Print styles */}
+      <style jsx global>{`
+        @media print {
+          .sidebar, nav, aside, [class*="sidebar"] {
+            display: none !important;
+          }
+          button, .print\\:hidden {
+            display: none !important;
+          }
+          header {
+            position: static !important;
+          }
+          body, .min-h-screen {
+            background: white !important;
+          }
+          * {
+            box-shadow: none !important;
+            border-color: #e5e7eb !important;
+            color: black !important;
+          }
+          .max-w-7xl {
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
