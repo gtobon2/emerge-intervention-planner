@@ -21,6 +21,7 @@ import {
   Lock,
   Eye,
   EyeOff,
+  School,
 } from 'lucide-react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout';
@@ -52,11 +53,13 @@ export default function SettingsPage() {
     sessionDefaults,
     displayPreferences,
     notificationPreferences,
+    schoolSettings,
     isSaving,
     updateProfile,
     updateSessionDefaults,
     updateDisplayPreferences,
     updateNotificationPreferences,
+    updateSchoolSettings,
     saveSettings,
     exportData,
     clearAllData,
@@ -68,6 +71,7 @@ export default function SettingsPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
   const [localSessionDefaults, setLocalSessionDefaults] = useState(sessionDefaults);
+  const [localSchoolSettings, setLocalSchoolSettings] = useState(schoolSettings);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const { setSidebarCollapsed } = useUIStore();
@@ -98,6 +102,10 @@ export default function SettingsPage() {
   }, [sessionDefaults]);
 
   useEffect(() => {
+    setLocalSchoolSettings(schoolSettings);
+  }, [schoolSettings]);
+
+  useEffect(() => {
     fetchGroups();
     fetchAllStudents();
   }, [fetchGroups, fetchAllStudents]);
@@ -112,6 +120,14 @@ export default function SettingsPage() {
   const handleSaveSessionDefaults = async () => {
     updateSessionDefaults(localSessionDefaults);
     await saveSettings();
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 3000);
+  };
+
+  const handleSaveSchoolSettings = async () => {
+    updateSchoolSettings(localSchoolSettings);
+    await saveSettings();
+    setSuccessMessage('School settings saved!');
     setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 3000);
   };
@@ -356,6 +372,55 @@ export default function SettingsPage() {
               <Button onClick={handleSaveProfile} isLoading={isSaving} className="gap-2">
                 <Save className="w-4 h-4" />
                 Save Profile
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* School Information Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <School className="w-5 h-5 text-movement" />
+              <CardTitle>School Information</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-text-muted">
+              This information appears on family letters and reports.
+            </p>
+
+            <Input
+              label="School Name"
+              value={localSchoolSettings.schoolName}
+              onChange={(e) =>
+                setLocalSchoolSettings({ ...localSchoolSettings, schoolName: e.target.value })
+              }
+              placeholder="Enter school name"
+            />
+
+            <Input
+              label="School Address"
+              value={localSchoolSettings.schoolAddress}
+              onChange={(e) =>
+                setLocalSchoolSettings({ ...localSchoolSettings, schoolAddress: e.target.value })
+              }
+              placeholder="123 Main St, City, State ZIP"
+            />
+
+            <Input
+              label="School Phone"
+              value={localSchoolSettings.schoolPhone}
+              onChange={(e) =>
+                setLocalSchoolSettings({ ...localSchoolSettings, schoolPhone: e.target.value })
+              }
+              placeholder="(555) 123-4567"
+            />
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={handleSaveSchoolSettings} isLoading={isSaving} className="gap-2">
+                <Save className="w-4 h-4" />
+                Save School Info
               </Button>
             </div>
           </CardContent>

@@ -6,6 +6,7 @@ export function useSettings() {
     sessionDefaults,
     displayPreferences,
     notificationPreferences,
+    schoolSettings,
     isLoading,
     isSaving,
     lastSaved,
@@ -13,6 +14,7 @@ export function useSettings() {
     updateSessionDefaults,
     updateDisplayPreferences,
     updateNotificationPreferences,
+    updateSchoolSettings,
     saveSettings,
     loadSettings,
     resetToDefaults,
@@ -26,6 +28,7 @@ export function useSettings() {
     sessionDefaults,
     displayPreferences,
     notificationPreferences,
+    schoolSettings,
 
     // State
     isLoading,
@@ -37,6 +40,7 @@ export function useSettings() {
     updateSessionDefaults,
     updateDisplayPreferences,
     updateNotificationPreferences,
+    updateSchoolSettings,
     saveSettings,
     loadSettings,
     resetToDefaults,

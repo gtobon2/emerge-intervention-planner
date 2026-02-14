@@ -15,6 +15,12 @@ export interface ProfileSettings {
   role: UserRole;
 }
 
+export interface SchoolSettings {
+  schoolName: string;
+  schoolAddress: string;
+  schoolPhone: string;
+}
+
 export interface SessionDefaults {
   defaultDuration: number; // in minutes
   defaultOTRTarget: number; // per minute
@@ -45,6 +51,7 @@ export interface SettingsState {
   sessionDefaults: SessionDefaults;
   displayPreferences: DisplayPreferences;
   notificationPreferences: NotificationPreferences;
+  schoolSettings: SchoolSettings;
 
   // State
   isLoading: boolean;
@@ -56,6 +63,7 @@ export interface SettingsState {
   updateSessionDefaults: (defaults: Partial<SessionDefaults>) => void;
   updateDisplayPreferences: (preferences: Partial<DisplayPreferences>) => void;
   updateNotificationPreferences: (preferences: Partial<NotificationPreferences>) => void;
+  updateSchoolSettings: (settings: Partial<SchoolSettings>) => void;
   saveSettings: () => Promise<void>;
   loadSettings: () => Promise<void>;
   resetToDefaults: () => void;
@@ -91,6 +99,11 @@ const defaultSettings = {
     attendanceFlags: true,
     goalNotSetAlerts: true,
   },
+  schoolSettings: {
+    schoolName: 'EMERGE School',
+    schoolAddress: '',
+    schoolPhone: '',
+  },
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -101,6 +114,7 @@ export const useSettingsStore = create<SettingsState>()(
       sessionDefaults: defaultSettings.sessionDefaults,
       displayPreferences: defaultSettings.displayPreferences,
       notificationPreferences: defaultSettings.notificationPreferences,
+      schoolSettings: defaultSettings.schoolSettings,
       isLoading: false,
       isSaving: false,
       lastSaved: null,
@@ -141,6 +155,12 @@ export const useSettingsStore = create<SettingsState>()(
         }));
       },
 
+      updateSchoolSettings: (settings) => {
+        set((state) => ({
+          schoolSettings: { ...state.schoolSettings, ...settings },
+        }));
+      },
+
       saveSettings: async () => {
         set({ isSaving: true });
         try {
@@ -173,6 +193,7 @@ export const useSettingsStore = create<SettingsState>()(
           sessionDefaults: defaultSettings.sessionDefaults,
           displayPreferences: defaultSettings.displayPreferences,
           notificationPreferences: defaultSettings.notificationPreferences,
+          schoolSettings: defaultSettings.schoolSettings,
         });
       },
 
