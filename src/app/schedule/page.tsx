@@ -433,8 +433,7 @@ export default function SchedulePage() {
       );
       
       if (result) {
-        // Show success feedback (optional - could add a toast here)
-        console.log(`Rescheduled ${result.count} session(s)`);
+        // Success - could add a toast notification here
       }
     } catch (error) {
       console.error('Failed to reschedule sessions:', error);

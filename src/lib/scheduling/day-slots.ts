@@ -291,22 +291,15 @@ export function checkConstraintConflict(
   const sessionEnd = sessionStart + sessionDuration;
   const gradeNum = Number(grade); // Ensure it's a number
 
-  console.log(`[Constraint Check] Day: ${day}, Time: ${sessionTime}, Duration: ${sessionDuration}, Grade: ${gradeNum}`);
-  console.log(`[Constraint Check] Checking ${constraints.length} constraints`);
-
   for (const constraint of constraints) {
-    console.log(`[Constraint] "${constraint.label}" - Days: ${constraint.days.join(',')}, Grades: ${constraint.applicable_grades.join(',')}, Time: ${constraint.start_time}-${constraint.end_time}`);
-    
     // Check if constraint applies to this day
     if (!constraint.days.includes(day)) {
-      console.log(`  -> Skipped: day ${day} not in constraint days`);
       continue;
     }
 
     // Check if constraint applies to this grade (convert both sides to ensure type match)
     const applicableGrades = (constraint.applicable_grades || []).map(Number);
     if (!applicableGrades.includes(gradeNum)) {
-      console.log(`  -> Skipped: grade ${gradeNum} not in [${applicableGrades.join(',')}]`);
       continue;
     }
 
@@ -315,13 +308,8 @@ export function checkConstraintConflict(
     const constraintEnd = timeToMinutes(constraint.end_time);
 
     if (timeRangesOverlap(sessionStart, sessionEnd, constraintStart, constraintEnd)) {
-      console.log(`  -> CONFLICT: Time overlap detected!`);
       return constraint;
-    } else {
-      console.log(`  -> No time overlap (session ${sessionStart}-${sessionEnd} vs constraint ${constraintStart}-${constraintEnd})`);
     }
   }
-
-  console.log(`[Constraint Check] No conflicts found`);
   return null;
 }
