@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, memo } from 'react';
 import { Menu, User, LogOut, ChevronDown, HelpCircle, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './sidebar';
@@ -14,21 +14,31 @@ import { useNotificationGenerator } from '@/hooks/use-notifications';
 import { OnboardingTour, HelpPanel } from '@/components/help';
 import { useHelpStore } from '@/stores/help';
 
+// Isolated component so notification store subscriptions don't re-render AppLayout's children
+const NotificationGeneratorProvider = memo(function NotificationGeneratorProvider() {
+  useNotificationGenerator();
+  return null;
+});
+
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
-  const { students, group, recentSessions, additionalContext } = useAIContextStore();
+  // Use individual selectors to avoid re-rendering on unrelated store changes
+  const sidebarCollapsed = useUIStore(s => s.sidebarCollapsed);
+  const toggleSidebar = useUIStore(s => s.toggleSidebar);
+  const aiStudents = useAIContextStore(s => s.students);
+  const aiGroup = useAIContextStore(s => s.group);
+  const aiRecentSessions = useAIContextStore(s => s.recentSessions);
+  const aiAdditionalContext = useAIContextStore(s => s.additionalContext);
   const { user, signOut } = useAuth();
-  const { toggleHelpPanel, hasSeenOnboarding, startTour } = useHelpStore();
+  const toggleHelpPanel = useHelpStore(s => s.toggleHelpPanel);
+  const hasSeenOnboarding = useHelpStore(s => s.hasSeenOnboarding);
+  const startTour = useHelpStore(s => s.startTour);
   const router = useRouter();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
-
-  // Automatically generate notifications
-  useNotificationGenerator();
 
   // Start tour for first-time users
   useEffect(() => {
@@ -70,6 +80,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-foundation">
+      {/* Isolated so its store subscriptions don't cascade to children */}
+      <NotificationGeneratorProvider />
       <Sidebar />
 
       {/* Mobile header with hamburger menu and user menu */}
@@ -229,10 +241,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       <AIChat
         isOpen={showAIChat}
         onClose={() => setShowAIChat(false)}
-        students={students}
-        group={group ?? undefined}
-        recentSessions={recentSessions}
-        additionalContext={additionalContext}
+        students={aiStudents}
+        group={aiGroup ?? undefined}
+        recentSessions={aiRecentSessions}
+        additionalContext={aiAdditionalContext}
       />
     </div>
   );
