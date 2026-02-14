@@ -54,6 +54,41 @@ export interface CrossGroupPattern {
   suggestedIntervention: string;
 }
 
+export interface StudentOverlapAlert {
+  /** Students who share error patterns across different groups */
+  students: Array<{
+    studentId: number;
+    studentName: string;
+    groupId: number;
+    groupName: string;
+    curriculum: string;
+  }>;
+  /** The error patterns these students have in common */
+  sharedPatterns: string[];
+  /** Suggestion for regrouping */
+  suggestion: string;
+}
+
+export interface GroupProgressComparison {
+  groupId: number;
+  groupName: string;
+  curriculum: string;
+  tier: number;
+  grade: number;
+  /** Average PM score across all data points */
+  avgScore: number;
+  /** Trend slope from linear regression (positive = improving) */
+  trendSlope: number;
+  /** Trend direction label */
+  trend: 'improving' | 'declining' | 'stable';
+  /** Number of PM data points */
+  dataPoints: number;
+  /** Average mastery rate from completed sessions (0-100) */
+  masteryRate: number;
+  /** Number of completed sessions */
+  completedSessions: number;
+}
+
 export interface PatternAnalysisResult {
   summary: {
     totalGroups: number;
@@ -66,6 +101,8 @@ export interface PatternAnalysisResult {
   curriculumInsights: CurriculumInsight[];
   crossGroupPatterns: CrossGroupPattern[];
   studentProfiles: StudentErrorProfile[];
+  studentOverlaps: StudentOverlapAlert[];
+  groupProgressComparisons: GroupProgressComparison[];
   recommendations: string[];
 }
 
@@ -103,12 +140,21 @@ export async function analyzePatterns(): Promise<PatternAnalysisResult> {
   // Build student error profiles
   const studentProfiles = buildStudentProfiles(studentTracking, students, groups);
 
+  // Find student overlaps across groups
+  const studentOverlaps = findStudentOverlaps(studentProfiles, groups);
+
+  // Compare group progress
+  const progressData = await db.progressMonitoring.toArray();
+  const groupProgressComparisons = compareGroupProgress(groups, sessions, progressData);
+
   // Generate recommendations
   const recommendations = generateRecommendations(
     topErrorPatterns,
     crossGroupPatterns,
     curriculumInsights,
-    summary
+    summary,
+    studentOverlaps,
+    groupProgressComparisons
   );
 
   return {
@@ -117,6 +163,8 @@ export async function analyzePatterns(): Promise<PatternAnalysisResult> {
     curriculumInsights,
     crossGroupPatterns,
     studentProfiles,
+    studentOverlaps,
+    groupProgressComparisons,
     recommendations,
   };
 }
@@ -417,11 +465,141 @@ function buildStudentProfiles(
   return profiles.sort((a, b) => b.totalErrors - a.totalErrors).slice(0, 20);
 }
 
+function findStudentOverlaps(
+  studentProfiles: StudentErrorProfile[],
+  groups: any[]
+): StudentOverlapAlert[] {
+  const groupMap = new Map(groups.map((g: any) => [g.id, g]));
+  const alerts: StudentOverlapAlert[] = [];
+
+  // Only consider students with at least 2 error patterns
+  const profilesWithErrors = studentProfiles.filter(p => p.errorPatterns.length >= 2);
+
+  // Compare each pair of students in different groups
+  for (let i = 0; i < profilesWithErrors.length; i++) {
+    for (let j = i + 1; j < profilesWithErrors.length; j++) {
+      const a = profilesWithErrors[i];
+      const b = profilesWithErrors[j];
+
+      // Skip students in the same group
+      if (a.groupId === b.groupId) continue;
+
+      // Find shared error patterns
+      const shared = a.errorPatterns.filter(p => b.errorPatterns.includes(p));
+
+      // Alert if 2+ shared patterns
+      if (shared.length >= 2) {
+        const groupA = groupMap.get(a.groupId);
+        const groupB = groupMap.get(b.groupId);
+
+        alerts.push({
+          students: [
+            {
+              studentId: a.studentId,
+              studentName: a.studentName,
+              groupId: a.groupId,
+              groupName: a.groupName,
+              curriculum: groupA?.curriculum || 'unknown',
+            },
+            {
+              studentId: b.studentId,
+              studentName: b.studentName,
+              groupId: b.groupId,
+              groupName: b.groupName,
+              curriculum: groupB?.curriculum || 'unknown',
+            },
+          ],
+          sharedPatterns: shared,
+          suggestion: shared.length >= 3
+            ? `These students share ${shared.length} error patterns. Strongly consider grouping them together for targeted intervention.`
+            : `These students share ${shared.length} error patterns. They may benefit from being in the same group.`,
+        });
+      }
+    }
+  }
+
+  // Sort by number of shared patterns (most overlap first), limit to top 10
+  return alerts
+    .sort((a, b) => b.sharedPatterns.length - a.sharedPatterns.length)
+    .slice(0, 10);
+}
+
+function compareGroupProgress(
+  groups: any[],
+  sessions: any[],
+  progressData: any[]
+): GroupProgressComparison[] {
+  return groups.map((group: any) => {
+    // Get PM data for this group
+    const groupPM = progressData
+      .filter((pm: any) => pm.group_id === group.id)
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Calculate average score
+    const avgScore = groupPM.length > 0
+      ? Math.round(groupPM.reduce((sum: number, pm: any) => sum + pm.score, 0) / groupPM.length)
+      : 0;
+
+    // Calculate trend using linear regression
+    let trendSlope = 0;
+    let trend: 'improving' | 'declining' | 'stable' = 'stable';
+
+    if (groupPM.length >= 2) {
+      const n = groupPM.length;
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+      groupPM.forEach((point: any, i: number) => {
+        sumX += i;
+        sumY += point.score;
+        sumXY += i * point.score;
+        sumXX += i * i;
+      });
+
+      trendSlope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+
+      // Normalize slope relative to average score for meaningful comparison
+      const normalizedSlope = avgScore > 0 ? trendSlope / avgScore : 0;
+      if (normalizedSlope > 0.02) trend = 'improving';
+      else if (normalizedSlope < -0.02) trend = 'declining';
+    }
+
+    // Calculate mastery rate from completed sessions
+    const groupSessions = sessions.filter(
+      (s: any) => s.group_id === group.id && s.status === 'completed'
+    );
+    const masteryCount = groupSessions.filter(
+      (s: any) => s.mastery_demonstrated === 'yes'
+    ).length;
+    const partialCount = groupSessions.filter(
+      (s: any) => s.mastery_demonstrated === 'partial'
+    ).length;
+    const masteryRate = groupSessions.length > 0
+      ? Math.round(((masteryCount + partialCount * 0.5) / groupSessions.length) * 100)
+      : 0;
+
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      curriculum: group.curriculum,
+      tier: group.tier,
+      grade: group.grade,
+      avgScore,
+      trendSlope: Math.round(trendSlope * 100) / 100,
+      trend,
+      dataPoints: groupPM.length,
+      masteryRate,
+      completedSessions: groupSessions.length,
+    };
+  }).filter((g: GroupProgressComparison) => g.completedSessions > 0 || g.dataPoints > 0);
+}
+
 function generateRecommendations(
   topPatterns: ErrorPatternInsight[],
   crossPatterns: CrossGroupPattern[],
   curriculumInsights: CurriculumInsight[],
-  summary: PatternAnalysisResult['summary']
+  summary: PatternAnalysisResult['summary'],
+  studentOverlaps: StudentOverlapAlert[],
+  groupProgress: GroupProgressComparison[]
 ): string[] {
   const recommendations: string[] = [];
 
@@ -471,6 +649,31 @@ function generateRecommendations(
   if (improving.length > 0) {
     recommendations.push(
       `Great progress! ${improving.length} error pattern(s) are decreasing in frequency, indicating effective interventions.`
+    );
+  }
+
+  // Student overlap alerts
+  if (studentOverlaps.length > 0) {
+    const strongOverlaps = studentOverlaps.filter(o => o.sharedPatterns.length >= 3);
+    if (strongOverlaps.length > 0) {
+      recommendations.push(
+        `${strongOverlaps.length} student pair(s) share 3+ error patterns across different groups. Review the Regrouping Suggestions section for details.`
+      );
+    }
+  }
+
+  // Group progress insights
+  const decliningGroups = groupProgress.filter(g => g.trend === 'declining');
+  if (decliningGroups.length > 0) {
+    recommendations.push(
+      `${decliningGroups.length} group(s) show declining progress trends: ${decliningGroups.map(g => `"${g.groupName}"`).slice(0, 3).join(', ')}. Review intervention approach.`
+    );
+  }
+
+  const lowMastery = groupProgress.filter(g => g.masteryRate < 30 && g.completedSessions >= 3);
+  if (lowMastery.length > 0) {
+    recommendations.push(
+      `${lowMastery.length} group(s) have mastery rates below 30%. Consider adjusting pacing or intervention intensity.`
     );
   }
 

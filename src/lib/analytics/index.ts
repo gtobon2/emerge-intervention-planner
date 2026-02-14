@@ -6,5 +6,7 @@ export {
   type CurriculumInsight,
   type StudentErrorProfile,
   type CrossGroupPattern,
+  type StudentOverlapAlert,
+  type GroupProgressComparison,
   type PatternAnalysisResult,
 } from './pattern-detection';

@@ -26,6 +26,8 @@ import {
   type PatternAnalysisResult,
   type ErrorPatternInsight,
   type CrossGroupPattern,
+  type StudentOverlapAlert,
+  type GroupProgressComparison,
 } from '@/lib/analytics';
 import { getCurriculumLabel } from '@/lib/supabase/types';
 import { exportPatternAnalysisToPDF } from '@/lib/export';
@@ -46,6 +48,8 @@ export function CrossGroupInsights() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     patterns: true,
     crossGroup: true,
+    studentOverlaps: true,
+    progressComparison: true,
     recommendations: true,
     aiRecommendations: true,
   });
@@ -512,6 +516,83 @@ export function CrossGroupInsights() {
         )}
       </Card>
 
+      {/* Student Overlap / Regrouping Suggestions */}
+      <Card>
+        <CardHeader>
+          <button
+            onClick={() => toggleSection('studentOverlaps')}
+            className="w-full flex items-center justify-between"
+          >
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-orange-500" />
+              Regrouping Suggestions
+              {analysis.studentOverlaps.length > 0 && (
+                <Badge variant="default" className="ml-2 bg-orange-100 text-orange-700">
+                  {analysis.studentOverlaps.length} found
+                </Badge>
+              )}
+            </CardTitle>
+            {expandedSections.studentOverlaps ? (
+              <ChevronUp className="w-5 h-5 text-text-muted" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-text-muted" />
+            )}
+          </button>
+        </CardHeader>
+        {expandedSections.studentOverlaps && (
+          <CardContent>
+            {analysis.studentOverlaps.length === 0 ? (
+              <p className="text-center text-text-muted py-8">
+                No student overlap patterns detected across groups yet.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {analysis.studentOverlaps.map((overlap, i) => (
+                  <StudentOverlapCard key={i} overlap={overlap} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Group Progress Comparison */}
+      <Card>
+        <CardHeader>
+          <button
+            onClick={() => toggleSection('progressComparison')}
+            className="w-full flex items-center justify-between"
+          >
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-500" />
+              Group Progress Comparison
+            </CardTitle>
+            {expandedSections.progressComparison ? (
+              <ChevronUp className="w-5 h-5 text-text-muted" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-text-muted" />
+            )}
+          </button>
+        </CardHeader>
+        {expandedSections.progressComparison && (
+          <CardContent>
+            {analysis.groupProgressComparisons.length === 0 ? (
+              <p className="text-center text-text-muted py-8">
+                No progress data available yet. Complete sessions and add PM data points to see comparisons.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {analysis.groupProgressComparisons
+                  .sort((a, b) => b.trendSlope - a.trendSlope)
+                  .map((group, i) => (
+                    <GroupProgressCard key={group.groupId} group={group} rank={i + 1} />
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
       {/* Curriculum Insights */}
       {analysis.curriculumInsights.length > 0 && (
         <Card>
@@ -671,6 +752,119 @@ function CrossGroupPatternCard({ pattern }: { pattern: CrossGroupPattern }) {
               <span className="font-medium">Suggested intervention:</span> {pattern.suggestedIntervention}
             </p>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentOverlapCard({ overlap }: { overlap: StudentOverlapAlert }) {
+  const strengthColor = overlap.sharedPatterns.length >= 3
+    ? 'border-orange-300 bg-orange-50'
+    : 'border-amber-200 bg-amber-50';
+
+  return (
+    <div className={`p-4 rounded-lg border ${strengthColor}`}>
+      <div className="flex items-start gap-3">
+        <Users className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            {overlap.students.map((student, i) => (
+              <span key={i} className="inline-flex items-center gap-1">
+                {i > 0 && <span className="text-text-muted mx-1">&amp;</span>}
+                <span className="font-medium text-text-primary">{student.studentName}</span>
+                <Badge variant="default" className="text-xs bg-gray-100 text-gray-600">
+                  {student.groupName}
+                </Badge>
+              </span>
+            ))}
+          </div>
+
+          <p className="text-sm text-text-muted mb-2">
+            Share <span className="font-medium text-orange-700">{overlap.sharedPatterns.length}</span> error pattern{overlap.sharedPatterns.length !== 1 ? 's' : ''}:
+          </p>
+
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {overlap.sharedPatterns.map((pattern, i) => (
+              <Badge key={i} variant="default" className="text-xs bg-orange-100 text-orange-700">
+                {pattern}
+              </Badge>
+            ))}
+          </div>
+
+          <p className="text-xs text-orange-800 italic">{overlap.suggestion}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GroupProgressCard({ group, rank }: { group: GroupProgressComparison; rank: number }) {
+  const TrendIcon = group.trend === 'improving' ? TrendingUp :
+    group.trend === 'declining' ? TrendingDown : Minus;
+
+  const trendColor = group.trend === 'improving' ? 'text-emerald-500' :
+    group.trend === 'declining' ? 'text-red-500' : 'text-gray-400';
+
+  const trendBg = group.trend === 'improving' ? 'bg-emerald-50' :
+    group.trend === 'declining' ? 'bg-red-50' : 'bg-gray-50';
+
+  return (
+    <div className="p-4 bg-foundation rounded-lg border border-text-muted/10 hover:border-blue-300/50 transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 font-bold text-sm">
+          {rank}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div>
+              <p className="font-medium text-text-primary">{group.groupName}</p>
+              <p className="text-xs text-text-muted">
+                Grade {group.grade} &middot; Tier {group.tier}
+              </p>
+            </div>
+            <div className={`flex items-center gap-1 px-2 py-1 rounded ${trendBg}`}>
+              <TrendIcon className={`w-4 h-4 ${trendColor}`} />
+              <span className={`text-xs font-medium ${trendColor}`}>
+                {group.trend === 'improving' ? 'Improving' :
+                  group.trend === 'declining' ? 'Declining' : 'Stable'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mt-3">
+            <div>
+              <p className="text-xs text-text-muted">Avg PM Score</p>
+              <p className="text-lg font-semibold text-text-primary">
+                {group.dataPoints > 0 ? group.avgScore : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-muted">Mastery Rate</p>
+              <p className={`text-lg font-semibold ${
+                group.masteryRate >= 70 ? 'text-emerald-600' :
+                group.masteryRate >= 40 ? 'text-amber-600' :
+                'text-red-600'
+              }`}>
+                {group.completedSessions > 0 ? `${group.masteryRate}%` : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-muted">Sessions</p>
+              <p className="text-lg font-semibold text-text-primary">
+                {group.completedSessions}
+              </p>
+            </div>
+          </div>
+
+          {group.dataPoints > 0 && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs text-text-muted mb-1">
+                <span>Trend slope: {group.trendSlope > 0 ? '+' : ''}{group.trendSlope}</span>
+                <span>{group.dataPoints} data points</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
