@@ -34,6 +34,9 @@ export interface NotificationPreferences {
   sessionReminders: boolean;
   pmDataDueReminders: boolean;
   reminderTiming: ReminderTiming;
+  decisionRuleAlerts: boolean;
+  attendanceFlags: boolean;
+  goalNotSetAlerts: boolean;
 }
 
 export interface SettingsState {
@@ -84,6 +87,9 @@ const defaultSettings = {
     sessionReminders: true,
     pmDataDueReminders: true,
     reminderTiming: '15min' as ReminderTiming,
+    decisionRuleAlerts: true,
+    attendanceFlags: true,
+    goalNotSetAlerts: true,
   },
 };
 
