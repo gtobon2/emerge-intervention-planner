@@ -14,7 +14,7 @@ The EMERGE Intervention Planner is deployed on a Synology NAS and runs via PM2 (
 | **Process Manager** | PM2 |
 | **PM2 App Name** | `emerge-planner` |
 | **GitHub Repo** | `https://github.com/gtobon2/emerge-intervention-planner.git` |
-| **Branch** | `claude/setup-project-structure-017VtwLJnseT2Xgo5iFGcjgB` |
+| **Branch** | `main` |
 
 ## How to Update the App
 
@@ -32,7 +32,7 @@ The EMERGE Intervention Planner is deployed on a Synology NAS and runs via PM2 (
 
 3. **Pull the latest changes:**
    ```bash
-   git pull origin claude/setup-project-structure-017VtwLJnseT2Xgo5iFGcjgB
+   git pull origin main
    ```
 
 4. **Install any new dependencies:**
