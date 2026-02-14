@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Users } from 'lucide-react';
-import { db } from '@/lib/local-db';
 import type { Student, ProgressMonitoringInsert } from '@/lib/supabase/types';
 
 export interface AddDataPointModalProps {
@@ -15,16 +14,12 @@ export interface AddDataPointModalProps {
   onSubmit: (dataPoint: ProgressMonitoringInsert) => Promise<void>;
   groupId: string;
   students?: Student[];
-  defaultBenchmark?: number;
-  defaultGoal?: number;
 }
 
 interface StudentScoreRow {
   studentId: string;
   studentName: string;
   score: string;
-  goal: string;
-  benchmark: string;
 }
 
 export function AddDataPointModal({
@@ -33,8 +28,6 @@ export function AddDataPointModal({
   onSubmit,
   groupId,
   students = [],
-  defaultBenchmark,
-  defaultGoal,
 }: AddDataPointModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,49 +40,13 @@ export function AddDataPointModal({
   // Per-student score rows
   const [rows, setRows] = useState<StudentScoreRow[]>([]);
 
-  // Load students and their goals when modal opens
+  // Initialize student rows when modal opens
   useEffect(() => {
     if (!isOpen || students.length === 0) return;
-
-    async function loadGoals() {
-      try {
-        const groupIdNum = parseInt(groupId);
-        const goals = isNaN(groupIdNum) ? [] : await db.studentGoals
-          .where('group_id')
-          .equals(groupIdNum)
-          .toArray();
-
-        const goalMap = new Map(goals.map(g => [g.student_id, g]));
-
-        setRows(
-          students.map((s) => {
-            const studentGoal = goalMap.get(typeof s.id === 'string' ? parseInt(s.id) : s.id);
-            return {
-              studentId: s.id,
-              studentName: s.name,
-              score: '',
-              goal: studentGoal?.goal_score?.toString() || defaultGoal?.toString() || '',
-              benchmark: studentGoal?.benchmark_score?.toString() || defaultBenchmark?.toString() || '',
-            };
-          })
-        );
-      } catch {
-        // Fallback without goals
-        setRows(
-          students.map((s) => ({
-            studentId: s.id,
-            studentName: s.name,
-            score: '',
-            goal: defaultGoal?.toString() || '',
-            benchmark: defaultBenchmark?.toString() || '',
-          }))
-        );
-      }
-    }
-    loadGoals();
+    setRows(students.map((s) => ({ studentId: s.id, studentName: s.name, score: '' })));
     setSavedCount(0);
     setError(null);
-  }, [isOpen, students, groupId, defaultBenchmark, defaultGoal]);
+  }, [isOpen, students]);
 
   const updateRow = (index: number, field: keyof StudentScoreRow, value: string) => {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
@@ -131,8 +88,8 @@ export function AddDataPointModal({
           date,
           measure_type: measureType.trim(),
           score: parseFloat(row.score),
-          benchmark: row.benchmark ? parseFloat(row.benchmark) : null,
-          goal: row.goal ? parseFloat(row.goal) : null,
+          benchmark: null,
+          goal: null,
           notes: null,
         };
         await onSubmit(dataPoint);
@@ -141,7 +98,7 @@ export function AddDataPointModal({
 
       setSavedCount(saved);
 
-      // Reset scores but keep goals
+      // Reset scores
       setRows((prev) => prev.map((row) => ({ ...row, score: '' })));
 
       // Close after brief delay so user sees success
@@ -214,18 +171,16 @@ export function AddDataPointModal({
         {rows.length > 0 ? (
           <div className="border border-border rounded-lg overflow-hidden">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_100px_100px_100px] gap-2 px-4 py-2 bg-surface text-xs font-semibold text-text-muted uppercase tracking-wider">
+            <div className="grid grid-cols-[1fr_120px] gap-2 px-4 py-2 bg-surface text-xs font-semibold text-text-muted uppercase tracking-wider">
               <div>Student</div>
               <div>Score *</div>
-              <div>Goal</div>
-              <div>Benchmark</div>
             </div>
             {/* Student rows */}
             <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
               {rows.map((row, index) => (
                 <div
                   key={row.studentId}
-                  className="grid grid-cols-[1fr_100px_100px_100px] gap-2 px-4 py-2 items-center hover:bg-surface/50"
+                  className="grid grid-cols-[1fr_120px] gap-2 px-4 py-2 items-center hover:bg-surface/50"
                 >
                   <div className="text-sm font-medium text-text-primary truncate">
                     {row.studentName}
@@ -237,22 +192,6 @@ export function AddDataPointModal({
                     onChange={(e) => updateRow(index, 'score', e.target.value)}
                     placeholder="—"
                     className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-md text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.goal}
-                    onChange={(e) => updateRow(index, 'goal', e.target.value)}
-                    placeholder="—"
-                    className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-md text-text-muted placeholder:text-text-muted/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.benchmark}
-                    onChange={(e) => updateRow(index, 'benchmark', e.target.value)}
-                    placeholder="—"
-                    className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-md text-text-muted placeholder:text-text-muted/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
                 </div>
               ))}
