@@ -45,6 +45,7 @@ const navItems: NavItem[] = [
   { href: '/worksheets', label: 'Worksheets', icon: ClipboardList },
   { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
   { href: '/materials', label: 'Materials', icon: Package },
+  { href: '/letters', label: 'Family Letters', icon: FileText },
   { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
   { href: '/admin/export', label: 'Data Export', icon: Download, adminOnly: true },
