@@ -36,15 +36,39 @@ const notificationTypeConfig: Record<
     textColor: 'text-text-muted',
     label: 'Info',
   },
+  pm_reminder: {
+    icon: '⏰',
+    bgColor: 'bg-phonics/10',
+    textColor: 'text-phonics',
+    label: 'PM Reminders',
+  },
+  decision_rule_alert: {
+    icon: '⚠️',
+    bgColor: 'bg-amber-500/10',
+    textColor: 'text-amber-600',
+    label: 'Decision Rules',
+  },
+  attendance_flag: {
+    icon: '🚩',
+    bgColor: 'bg-red-500/10',
+    textColor: 'text-red-600',
+    label: 'Attendance',
+  },
+  goal_not_set: {
+    icon: '🎯',
+    bgColor: 'bg-orange-500/10',
+    textColor: 'text-orange-600',
+    label: 'Goals',
+  },
 };
 
-type FilterType = 'all' | 'session_reminder' | 'pm_due' | 'session_completed' | 'info';
+type FilterType = NotificationType | 'all';
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<FilterType>('all');
   const { markAsRead, markAllAsRead, clearNotifications, deleteNotification } = useNotifications();
   const filteredNotifications = useFilteredNotifications(
-    filter === 'all' ? 'all' : (filter as NotificationType)
+    filter === 'all' ? 'all' : filter
   );
   const router = useRouter();
 

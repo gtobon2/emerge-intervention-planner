@@ -4,7 +4,7 @@ import { useStudentsStore } from '@/stores/students';
 import { useProgressStore } from '@/stores/progress';
 import { useSettingsStore } from '@/stores/settings';
 import { useEffect } from 'react';
-import type { Notification } from '@/stores/notifications';
+import type { Notification, NotificationType } from '@/stores/notifications';
 
 export function useNotifications() {
   const notifications = useNotificationsStore((state) => state.notifications);
@@ -77,7 +77,7 @@ export function useNotificationGenerator() {
 }
 
 // Hook to get filtered notifications
-export function useFilteredNotifications(filter: 'all' | 'session_reminder' | 'pm_due' | 'session_completed' | 'info') {
+export function useFilteredNotifications(filter: 'all' | NotificationType) {
   const { notifications } = useNotifications();
 
   if (filter === 'all') {

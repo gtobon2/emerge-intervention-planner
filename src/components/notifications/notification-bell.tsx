@@ -31,6 +31,26 @@ const notificationTypeConfig: Record<
     bgColor: 'bg-text-muted/10',
     textColor: 'text-text-muted',
   },
+  pm_reminder: {
+    icon: '⏰',
+    bgColor: 'bg-phonics/10',
+    textColor: 'text-phonics',
+  },
+  decision_rule_alert: {
+    icon: '⚠️',
+    bgColor: 'bg-amber-500/10',
+    textColor: 'text-amber-600',
+  },
+  attendance_flag: {
+    icon: '🚩',
+    bgColor: 'bg-red-500/10',
+    textColor: 'text-red-600',
+  },
+  goal_not_set: {
+    icon: '🎯',
+    bgColor: 'bg-orange-500/10',
+    textColor: 'text-orange-600',
+  },
 };
 
 export function NotificationBell() {

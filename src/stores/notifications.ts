@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionWithGroup } from '@/lib/supabase/types';
 
-export type NotificationType = 'session_reminder' | 'pm_due' | 'session_completed' | 'info';
+export type NotificationType = 'session_reminder' | 'pm_due' | 'session_completed' | 'info' | 'pm_reminder' | 'decision_rule_alert' | 'attendance_flag' | 'goal_not_set';
 
 export interface Notification {
   id: string;
@@ -28,6 +28,31 @@ interface NotificationsState {
     sessions: SessionWithGroup[],
     students: Array<{ id: string; name: string; group_id: string; lastPMDate?: string }>,
     reminderTiming: '15min' | '30min' | '1hour'
+  ) => void;
+  generateDecisionAlerts: (
+    pmData: Array<{
+      student_id: number;
+      student_name: string;
+      group_id: number;
+      group_name: string;
+      scores: number[];
+      goal: number | null;
+    }>
+  ) => void;
+  generateAttendanceFlags: (
+    studentAbsences: Array<{
+      student_name: string;
+      group_name: string;
+      consecutive_absences: number;
+      group_id: string;
+    }>
+  ) => void;
+  generateGoalAlerts: (
+    studentsWithoutGoals: Array<{
+      student_name: string;
+      group_name: string;
+      group_id: number;
+    }>
   ) => void;
 }
 
@@ -183,6 +208,56 @@ export const useNotificationsStore = create<NotificationsState>()(
               });
             }
           }
+        });
+      },
+
+      generateDecisionAlerts: (pmData) => {
+        pmData.forEach((student) => {
+          if (student.goal === null || student.scores.length < 4) return;
+
+          const lastFour = student.scores.slice(-4);
+          const allBelow = lastFour.every((score) => score < student.goal!);
+          const allAbove = lastFour.every((score) => score > student.goal!);
+
+          if (allBelow) {
+            get().addNotification({
+              type: 'decision_rule_alert',
+              title: 'Decision Rule Alert',
+              message: `4 consecutive PM points below goal for ${student.student_name} in ${student.group_name} - consider adjusting intervention`,
+              link: `/groups/${student.group_id}`,
+            });
+          } else if (allAbove) {
+            get().addNotification({
+              type: 'decision_rule_alert',
+              title: 'Decision Rule Alert',
+              message: `4 consecutive PM points above goal for ${student.student_name} in ${student.group_name} - consider raising goal`,
+              link: `/groups/${student.group_id}`,
+            });
+          }
+        });
+      },
+
+      generateAttendanceFlags: (studentAbsences) => {
+        studentAbsences.forEach((student) => {
+          if (student.consecutive_absences >= 2) {
+            get().addNotification({
+              type: 'attendance_flag',
+              title: 'Attendance Flag',
+              message: `${student.student_name} in ${student.group_name} has ${student.consecutive_absences} consecutive absences`,
+              link: `/groups/${student.group_id}`,
+            });
+          }
+        });
+      },
+
+      generateGoalAlerts: (studentsWithoutGoals) => {
+        studentsWithoutGoals.forEach((student) => {
+          get().addNotification({
+            type: 'goal_not_set',
+            title: 'Goal Not Set',
+            message: `No goal set for ${student.student_name} in ${student.group_name}`,
+            link: `/groups/${student.group_id}`,
+          });
         });
       },
     }),
