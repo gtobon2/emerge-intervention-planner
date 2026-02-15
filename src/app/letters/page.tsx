@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { FileText, Download, Eye, Users, User } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { FileText, Download, Eye, Users, User, Printer } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import {
   Card,
@@ -12,13 +12,14 @@ import {
   Select,
   Textarea,
 } from '@/components/ui';
-import { db } from '@/lib/local-db';
-import type { LocalStudent, LocalGroup, LocalProgressMonitoring } from '@/lib/local-db';
 import { generateLetterPDF, generateBatchLetterPDF, getLetterContent } from '@/lib/letters';
 import type { LetterType, LetterData } from '@/lib/letters';
 import { useSettingsStore } from '@/stores/settings';
+import { useGroupsStore } from '@/stores/groups';
+import { useStudentsStore } from '@/stores/students';
 import { getCurriculumLabel } from '@/lib/supabase/types';
-import type { Curriculum } from '@/lib/supabase/types';
+import type { Curriculum, Group, Student, ProgressMonitoring } from '@/lib/supabase/types';
+import * as supabaseService from '@/lib/supabase/services';
 
 const LETTER_TYPE_OPTIONS = [
   { value: 'assignment', label: 'Notice of Assignment' },
@@ -27,46 +28,58 @@ const LETTER_TYPE_OPTIONS = [
   { value: 'progress_report', label: 'Family Progress Report' },
 ];
 
-type Mode = 'single' | 'batch';
+type Mode = 'single' | 'batch' | 'all';
 
 export default function LettersPage() {
-  const [students, setStudents] = useState<LocalStudent[]>([]);
-  const [groups, setGroups] = useState<LocalGroup[]>([]);
-  const [pmData, setPmData] = useState<LocalProgressMonitoring[]>([]);
   const [mode, setMode] = useState<Mode>('single');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedGroupId, setSelectedGroupId] = useState('');
   const [letterType, setLetterType] = useState<LetterType>('assignment');
   const [comments, setComments] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [pmData, setPmData] = useState<ProgressMonitoring[]>([]);
+  const [pmLoading, setPmLoading] = useState(false);
 
+  // Stores
   const { profile, schoolSettings } = useSettingsStore();
+  const groups = useGroupsStore(s => s.groups);
+  const fetchGroups = useGroupsStore(s => s.fetchGroups);
+  const allStudents = useStudentsStore(s => s.allStudents);
+  const fetchAllStudents = useStudentsStore(s => s.fetchAllStudents);
 
-  // Load data from IndexedDB
+  // Load groups + students on mount
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [allStudents, allGroups, allPm] = await Promise.all([
-          db.students.toArray(),
-          db.groups.toArray(),
-          db.progressMonitoring.toArray(),
-        ]);
-        setStudents(allStudents);
-        setGroups(allGroups);
-        setPmData(allPm);
-      } catch (error) {
-        console.error('Failed to load data:', error);
-      } finally {
-        setIsLoading(false);
-      }
+    fetchGroups();
+    fetchAllStudents();
+  }, [fetchGroups, fetchAllStudents]);
+
+  // Fetch PM data when group or mode changes
+  useEffect(() => {
+    if (mode === 'single' && selectedStudentId) {
+      setPmLoading(true);
+      supabaseService.fetchProgressByStudentId(selectedStudentId)
+        .then(setPmData)
+        .catch(() => setPmData([]))
+        .finally(() => setPmLoading(false));
+    } else if (mode === 'batch' && selectedGroupId) {
+      setPmLoading(true);
+      supabaseService.fetchProgressByGroupId(selectedGroupId)
+        .then(setPmData)
+        .catch(() => setPmData([]))
+        .finally(() => setPmLoading(false));
+    } else if (mode === 'all') {
+      // Fetch PM data for all groups
+      setPmLoading(true);
+      Promise.all(groups.map(g => supabaseService.fetchProgressByGroupId(g.id)))
+        .then(results => setPmData(results.flat()))
+        .catch(() => setPmData([]))
+        .finally(() => setPmLoading(false));
     }
-    loadData();
-  }, []);
+  }, [mode, selectedStudentId, selectedGroupId, groups]);
 
   // --- Single mode ---
   const selectedStudent = useMemo(
-    () => students.find((s) => String(s.id) === selectedStudentId) ?? null,
-    [students, selectedStudentId]
+    () => allStudents.find((s) => s.id === selectedStudentId) ?? null,
+    [allStudents, selectedStudentId]
   );
 
   const studentGroup = useMemo(
@@ -83,21 +96,21 @@ export default function LettersPage() {
 
   // --- Batch mode ---
   const selectedGroup = useMemo(
-    () => groups.find((g) => String(g.id) === selectedGroupId) ?? null,
+    () => groups.find((g) => g.id === selectedGroupId) ?? null,
     [groups, selectedGroupId]
   );
 
   const groupStudents = useMemo(
-    () => (selectedGroupId ? students.filter((s) => String(s.group_id) === selectedGroupId) : []),
-    [students, selectedGroupId]
+    () => (selectedGroupId ? allStudents.filter((s) => s.group_id === selectedGroupId) : []),
+    [allStudents, selectedGroupId]
   );
 
   // Build LetterData for a single student
-  function buildLetterData(
-    student: LocalStudent,
-    group: LocalGroup,
-    studentPm: LocalProgressMonitoring[]
-  ): LetterData {
+  const buildLetterData = useCallback((
+    student: Student,
+    group: Group,
+    studentPm: ProgressMonitoring[]
+  ): LetterData => {
     const scores = studentPm
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((p) => ({ date: p.date, score: p.score }));
@@ -141,24 +154,35 @@ export default function LettersPage() {
       trend,
       comments: comments || undefined,
     };
-  }
+  }, [letterType, schoolSettings, profile, comments]);
 
   // Single letter data
   const letterData: LetterData | null = useMemo(() => {
     if (mode !== 'single' || !selectedStudent || !studentGroup) return null;
     return buildLetterData(selectedStudent, studentGroup, studentPmScores);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedStudent, studentGroup, studentPmScores, letterType, schoolSettings, profile, comments]);
+  }, [mode, selectedStudent, studentGroup, studentPmScores, buildLetterData]);
 
-  // Batch letter data
+  // Batch letter data (by group)
   const batchLetterData: LetterData[] = useMemo(() => {
     if (mode !== 'batch' || !selectedGroup || groupStudents.length === 0) return [];
     return groupStudents.map((student) => {
       const studentPm = pmData.filter((p) => p.student_id === student.id);
       return buildLetterData(student, selectedGroup, studentPm);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedGroup, groupStudents, pmData, letterType, schoolSettings, profile, comments]);
+  }, [mode, selectedGroup, groupStudents, pmData, buildLetterData]);
+
+  // All-students letter data
+  const allLetterData: LetterData[] = useMemo(() => {
+    if (mode !== 'all' || allStudents.length === 0) return [];
+    return allStudents
+      .map((student) => {
+        const group = groups.find((g) => g.id === student.group_id);
+        if (!group) return null;
+        const studentPm = pmData.filter((p) => p.student_id === student.id);
+        return buildLetterData(student, group, studentPm);
+      })
+      .filter(Boolean) as LetterData[];
+  }, [mode, allStudents, groups, pmData, buildLetterData]);
 
   // Preview content (single mode only)
   const previewContent = useMemo(() => {
@@ -171,9 +195,7 @@ export default function LettersPage() {
   }, [letterData]);
 
   const handleDownloadSingle = () => {
-    if (letterData) {
-      generateLetterPDF(letterData);
-    }
+    if (letterData) generateLetterPDF(letterData);
   };
 
   const handleDownloadBatch = () => {
@@ -182,14 +204,24 @@ export default function LettersPage() {
     }
   };
 
+  const handleDownloadAll = () => {
+    if (allLetterData.length > 0) {
+      generateBatchLetterPDF(allLetterData, 'all-students');
+    }
+  };
+
+  // Active data for the current mode
+  const activeBatchData = mode === 'batch' ? batchLetterData : mode === 'all' ? allLetterData : [];
+  const activeBatchStudents = mode === 'batch' ? groupStudents : mode === 'all' ? allStudents : [];
+
   const studentOptions = [
     { value: '', label: 'Select a student...' },
-    ...students.map((s) => ({ value: String(s.id), label: s.name })),
+    ...allStudents.map((s) => ({ value: s.id, label: s.name })),
   ];
 
   const groupOptions = [
     { value: '', label: 'Select a group...' },
-    ...groups.map((g) => ({ value: String(g.id ?? ''), label: g.name })),
+    ...groups.map((g) => ({ value: g.id, label: g.name })),
   ];
 
   return (
@@ -213,7 +245,7 @@ export default function LettersPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Mode toggle */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setMode('single')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -236,6 +268,17 @@ export default function LettersPage() {
                 <Users className="w-4 h-4" />
                 Batch by Group
               </button>
+              <button
+                onClick={() => setMode('all')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  mode === 'all'
+                    ? 'bg-movement text-white'
+                    : 'bg-surface text-text-muted hover:text-text-primary border border-border'
+                }`}
+              >
+                <Printer className="w-4 h-4" />
+                All Students
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -245,16 +288,20 @@ export default function LettersPage() {
                   options={studentOptions}
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
-                  disabled={isLoading}
                 />
-              ) : (
+              ) : mode === 'batch' ? (
                 <Select
                   label="Group"
                   options={groupOptions}
                   value={selectedGroupId}
                   onChange={(e) => setSelectedGroupId(e.target.value)}
-                  disabled={isLoading}
                 />
+              ) : (
+                <div className="flex items-end">
+                  <p className="text-sm text-text-muted pb-2">
+                    Letters will be generated for all {allStudents.length} students across {groups.length} groups.
+                  </p>
+                </div>
               )}
 
               <Select
@@ -292,14 +339,20 @@ export default function LettersPage() {
               </div>
             )}
 
-            {/* Batch student list */}
-            {mode === 'batch' && groupStudents.length > 0 && (
+            {/* Student list for batch/all modes */}
+            {(mode === 'batch' ? groupStudents.length > 0 : mode === 'all' && allStudents.length > 0) && (
               <div className="border border-border rounded-lg divide-y divide-border max-h-[200px] overflow-y-auto">
-                {groupStudents.map((s) => (
-                  <div key={s.id} className="px-4 py-2 text-sm text-text-primary">
-                    {s.name}
-                  </div>
-                ))}
+                {activeBatchStudents.map((s) => {
+                  const group = groups.find((g) => g.id === s.group_id);
+                  return (
+                    <div key={s.id} className="px-4 py-2 text-sm text-text-primary flex justify-between">
+                      <span>{s.name}</span>
+                      {mode === 'all' && group && (
+                        <span className="text-text-muted text-xs">{group.name}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -326,12 +379,12 @@ export default function LettersPage() {
                 </Button>
               ) : (
                 <Button
-                  onClick={handleDownloadBatch}
-                  disabled={batchLetterData.length === 0}
+                  onClick={mode === 'batch' ? handleDownloadBatch : handleDownloadAll}
+                  disabled={activeBatchData.length === 0 || pmLoading}
                   className="gap-2"
                 >
                   <Download className="w-4 h-4" />
-                  Download All ({batchLetterData.length} letters)
+                  Download All ({activeBatchData.length} letters)
                 </Button>
               )}
             </div>
@@ -390,7 +443,7 @@ export default function LettersPage() {
         )}
 
         {/* Batch preview summary */}
-        {mode === 'batch' && batchLetterData.length > 0 && (
+        {(mode === 'batch' || mode === 'all') && activeBatchData.length > 0 && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -400,10 +453,10 @@ export default function LettersPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-text-muted mb-3">
-                {batchLetterData.length} letter{batchLetterData.length !== 1 ? 's' : ''} will be generated — one per page in a single PDF.
+                {activeBatchData.length} letter{activeBatchData.length !== 1 ? 's' : ''} will be generated — one per page in a single PDF.
               </p>
-              <div className="border border-border rounded-lg divide-y divide-border">
-                {batchLetterData.map((ld, i) => (
+              <div className="border border-border rounded-lg divide-y divide-border max-h-[300px] overflow-y-auto">
+                {activeBatchData.map((ld, i) => (
                   <div key={i} className="px-4 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-text-primary">{ld.studentName}</p>
@@ -423,7 +476,7 @@ export default function LettersPage() {
         )}
 
         {/* Empty states */}
-        {mode === 'single' && !selectedStudentId && !isLoading && (
+        {mode === 'single' && !selectedStudentId && (
           <Card>
             <CardContent className="py-12 text-center">
               <FileText className="w-12 h-12 mx-auto text-text-muted/30 mb-4" />
@@ -434,7 +487,7 @@ export default function LettersPage() {
           </Card>
         )}
 
-        {mode === 'single' && selectedStudentId && !studentGroup && !isLoading && (
+        {mode === 'single' && selectedStudentId && !studentGroup && (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-text-muted">
@@ -444,12 +497,12 @@ export default function LettersPage() {
           </Card>
         )}
 
-        {mode === 'batch' && !selectedGroupId && !isLoading && (
+        {mode === 'batch' && !selectedGroupId && (
           <Card>
             <CardContent className="py-12 text-center">
               <Users className="w-12 h-12 mx-auto text-text-muted/30 mb-4" />
               <p className="text-text-muted">
-                Select a group and letter type to generate letters for all students at once.
+                Select a group and letter type to generate letters for all students in that group.
               </p>
             </CardContent>
           </Card>
