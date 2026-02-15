@@ -55,13 +55,7 @@ function addFooter(doc: jsPDF) {
   }
 }
 
-export function generateLetterPDF(data: LetterData): void {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'letter',
-  });
-
+function renderLetter(doc: jsPDF, data: LetterData): void {
   const content = getLetterContent(data);
   let yPos = PAGE_MARGIN;
 
@@ -80,14 +74,12 @@ export function generateLetterPDF(data: LetterData): void {
   yPos += 10;
 
   // --- English section ---
-  // Title
   doc.setFontSize(12);
   doc.setTextColor(...COLORS.text);
   doc.setFont('helvetica', 'bold');
   doc.text(content.titleEn, PAGE_MARGIN, yPos);
   yPos += 8;
 
-  // Body paragraphs
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.text);
@@ -95,7 +87,7 @@ export function generateLetterPDF(data: LetterData): void {
   for (const paragraph of content.paragraphsEn) {
     yPos = checkPageBreak(doc, yPos, 6);
     yPos = addWrappedText(doc, paragraph, PAGE_MARGIN, yPos, CONTENT_WIDTH, 5.5);
-    yPos += 4; // paragraph spacing
+    yPos += 4;
   }
 
   yPos += 6;
@@ -114,14 +106,12 @@ export function generateLetterPDF(data: LetterData): void {
   doc.text('--- Traduccion al Espanol ---', PAGE_WIDTH / 2, yPos, { align: 'center' });
   yPos += 10;
 
-  // Spanish title
   doc.setFontSize(12);
   doc.setTextColor(...COLORS.text);
   doc.setFont('helvetica', 'bold');
   doc.text(content.titleEs, PAGE_MARGIN, yPos);
   yPos += 8;
 
-  // Spanish body paragraphs
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.text);
@@ -141,12 +131,41 @@ export function generateLetterPDF(data: LetterData): void {
   yPos += 12;
   doc.setFont('helvetica', 'bold');
   doc.text(data.interventionistName, PAGE_MARGIN, yPos);
+}
 
-  // Footer
+export function generateLetterPDF(data: LetterData): void {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'letter',
+  });
+
+  renderLetter(doc, data);
   addFooter(doc);
 
-  // Save
   const safeName = data.studentName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
   const safeDate = data.date.replace(/\//g, '-');
   doc.save(`letter-${data.type}-${safeName}-${safeDate}.pdf`);
+}
+
+/** Generate a single PDF with one letter per student, each starting on a new page. */
+export function generateBatchLetterPDF(letters: LetterData[], groupName?: string): void {
+  if (letters.length === 0) return;
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'letter',
+  });
+
+  letters.forEach((data, index) => {
+    if (index > 0) doc.addPage();
+    renderLetter(doc, data);
+  });
+
+  addFooter(doc);
+
+  const safeGroup = (groupName || 'batch').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+  const safeDate = letters[0].date.replace(/\//g, '-');
+  doc.save(`letters-${letters[0].type}-${safeGroup}-${safeDate}.pdf`);
 }
