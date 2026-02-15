@@ -34,8 +34,7 @@ import { formatCurriculumPosition, isEnhancedSchedule, getEnabledDays, getTimeFo
 import type { EnhancedGroupSchedule, WeekDay } from '@/lib/supabase/types';
 import { canUserAccessGroup } from '@/lib/supabase/services';
 import { useCyclesStore } from '@/stores/cycles';
-import { db } from '@/lib/local-db';
-import { toNumericId } from '@/lib/utils/id';
+import * as supabaseService from '@/lib/supabase/services';
 import type { Session, PMTrend } from '@/lib/supabase/types';
 
 // Day label helper
@@ -168,14 +167,8 @@ export default function GroupDetailPage() {
       if (!groupId) return;
 
       try {
-        const numericGroupId = toNumericId(groupId);
-        if (numericGroupId === null) return;
-
-        // Get PM records for this group, sorted by date descending
-        const pmRecords = await db.progressMonitoring
-          .where('group_id')
-          .equals(numericGroupId)
-          .toArray();
+        // Fetch PM records from Supabase for this group
+        const pmRecords = await supabaseService.fetchProgressByGroupId(groupId);
 
         if (pmRecords.length < 2) {
           setPmTrend(null);

@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Clock, CheckCircle, BarChart3, Users } from 'lucide-react';
 import { Card } from '@/components/ui';
-import { db } from '@/lib/local-db';
+import { useSessionsStore } from '@/stores/sessions';
+import { useGroupsStore } from '@/stores/groups';
+import { useStudentsStore } from '@/stores/students';
+import { supabase } from '@/lib/supabase/client';
 
 interface ActivityItem {
   id: string;
@@ -12,6 +15,7 @@ interface ActivityItem {
   description: string;
   timeAgo: string;
   href: string;
+  sortDate: string;
 }
 
 function getTimeAgo(dateStr: string): string {
@@ -27,92 +31,93 @@ function getTimeAgo(dateStr: string): string {
 }
 
 export function RecentActivity() {
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const groups = useGroupsStore(s => s.groups);
+  const allSessions = useSessionsStore(s => s.allSessions);
+  const allStudents = useStudentsStore(s => s.allStudents);
+  const [pmActivities, setPmActivities] = useState<ActivityItem[]>([]);
 
+  // Fetch recent PM entries from Supabase
   useEffect(() => {
-    async function loadActivity() {
+    async function fetchRecentPM() {
+      const groupIds = groups.map(g => g.id);
+      if (groupIds.length === 0) return;
+
       try {
-        const items: ActivityItem[] = [];
+        const { data: recentPM } = await supabase
+          .from('progress_monitoring')
+          .select('*')
+          .in('group_id', groupIds)
+          .order('created_at', { ascending: false })
+          .limit(5);
 
-        // Recent completed sessions
-        const recentSessions = await db.sessions
-          .orderBy('updated_at')
-          .reverse()
-          .limit(10)
-          .toArray();
-
-        const groups = await db.groups.toArray();
-        const groupMap = new Map(groups.map(g => [g.id, g.name]));
-
-        for (const session of recentSessions) {
-          if (session.status === 'completed') {
-            items.push({
-              id: `session-${session.id}`,
-              icon: <CheckCircle className="w-4 h-4 text-emerald-500" />,
-              description: `Completed session with ${groupMap.get(session.group_id) || 'Unknown Group'}`,
-              timeAgo: getTimeAgo(session.updated_at),
-              href: `/groups/${session.group_id}/session/${session.id}`,
-            });
-          }
+        if (!recentPM || recentPM.length === 0) {
+          setPmActivities([]);
+          return;
         }
 
-        // Recent PM entries
-        const recentPM = await db.progressMonitoring
-          .orderBy('created_at')
-          .reverse()
-          .limit(5)
-          .toArray();
+        const studentMap = new Map(allStudents.map(s => [s.id, s.name]));
 
-        const students = await db.students.toArray();
-        const studentMap = new Map(students.map(s => [s.id, s.name]));
-
-        for (const pm of recentPM) {
-          items.push({
-            id: `pm-${pm.id}`,
-            icon: <BarChart3 className="w-4 h-4 text-blue-500" />,
-            description: `PM data entered for ${studentMap.get(pm.student_id ?? 0) || 'Unknown'}: ${pm.score}`,
-            timeAgo: getTimeAgo(pm.created_at),
-            href: `/progress`,
-          });
-        }
-
-        // Recent groups created
-        const recentGroups = await db.groups
-          .orderBy('created_at')
-          .reverse()
-          .limit(3)
-          .toArray();
-
-        for (const group of recentGroups) {
-          items.push({
-            id: `group-${group.id}`,
-            icon: <Users className="w-4 h-4 text-purple-500" />,
-            description: `Group "${group.name}" created`,
-            timeAgo: getTimeAgo(group.created_at),
-            href: `/groups/${group.id}`,
-          });
-        }
-
-        // Sort by recency and take top 5
-        items.sort((a, b) => {
-          // Parse timeAgo roughly for sorting (not precise, but good enough)
-          const order = { 'just now': 0, 'm ago': 1, 'h ago': 2, 'd ago': 3, 'w ago': 4 };
-          const getOrder = (s: string) => {
-            for (const [key, val] of Object.entries(order)) {
-              if (s.includes(key)) return val;
-            }
-            return 5;
-          };
-          return getOrder(a.timeAgo) - getOrder(b.timeAgo);
-        });
-
-        setActivities(items.slice(0, 5));
+        setPmActivities(recentPM.map(pm => ({
+          id: `pm-${pm.id}`,
+          icon: <BarChart3 className="w-4 h-4 text-blue-500" />,
+          description: `PM data entered for ${studentMap.get(pm.student_id ?? '') || 'Unknown'}: ${pm.score}`,
+          timeAgo: getTimeAgo(pm.created_at),
+          sortDate: pm.created_at,
+          href: '/progress',
+        })));
       } catch {
-        // Silently fail — activity feed is non-critical
+        // Non-critical — silently fail
       }
     }
-    loadActivity();
-  }, []);
+    fetchRecentPM();
+  }, [groups, allStudents]);
+
+  const activities = useMemo(() => {
+    const items: ActivityItem[] = [];
+
+    const groupMap = new Map(groups.map(g => [g.id, g.name]));
+
+    // Recent completed sessions
+    const completedSessions = [...allSessions]
+      .filter(s => s.status === 'completed')
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .slice(0, 10);
+
+    for (const session of completedSessions) {
+      items.push({
+        id: `session-${session.id}`,
+        icon: <CheckCircle className="w-4 h-4 text-emerald-500" />,
+        description: `Completed session with ${groupMap.get(session.group_id) || 'Unknown Group'}`,
+        timeAgo: getTimeAgo(session.updated_at),
+        sortDate: session.updated_at,
+        href: `/groups/${session.group_id}/session/${session.id}`,
+      });
+    }
+
+    // PM activities from Supabase
+    items.push(...pmActivities);
+
+    // Recent groups created
+    const recentGroups = [...groups]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 3);
+
+    for (const group of recentGroups) {
+      items.push({
+        id: `group-${group.id}`,
+        icon: <Users className="w-4 h-4 text-purple-500" />,
+        description: `Group "${group.name}" created`,
+        timeAgo: getTimeAgo(group.created_at),
+        sortDate: group.created_at,
+        href: `/groups/${group.id}`,
+      });
+    }
+
+    // Sort by actual date (most recent first) and take top 5
+    items.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+
+    return items.slice(0, 5);
+  }, [allSessions, groups, pmActivities]);
 
   if (activities.length === 0) return null;
 

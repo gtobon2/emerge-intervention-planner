@@ -11,9 +11,9 @@ import { useStudentsStore } from '@/stores/students';
 import { useAuthStore } from '@/stores/auth';
 import { useCyclesStore, getWeekOfCycle, getCycleProgress } from '@/stores/cycles';
 import { useSchoolCalendarStore } from '@/stores/school-calendar';
-import { db } from '@/lib/local-db';
 import { fetchAssignedStudentsWithGroupInfo, type StudentWithGroupInfo } from '@/lib/supabase/student-assignments';
 import { isMockMode } from '@/lib/supabase/config';
+import { supabase } from '@/lib/supabase/client';
 import { useNotificationsStore } from '@/stores/notifications';
 import { useSettingsStore } from '@/stores/settings';
 import type { Curriculum, QuickStats as QuickStatsType, Session as SessionType } from '@/lib/supabase/types';
@@ -128,12 +128,6 @@ export default function DashboardPage() {
     }
   }, [fetchSessionsByRole, fetchTodaySessionsByRole, fetchAllStudents, user, userRole, fetchAssignedStudentsData]);
 
-  // Get the set of group IDs the user owns
-  // This is used for IndexedDB filtering and other client-side operations
-  const userGroupIds = useMemo(() => {
-    return new Set(groups.map(g => g.id));
-  }, [groups]);
-
   // Sessions are now fetched filtered by role at the database level
   // These values come directly from the store (already role-filtered)
   // We just need to handle the case where data hasn't loaded yet
@@ -204,27 +198,32 @@ export default function DashboardPage() {
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        // Get PM records from IndexedDB
-        const pmRecords = await db.progressMonitoring.toArray();
-        // Get students from IndexedDB
-        const allStudentsData = await db.students.toArray();
+        // Fetch PM records from Supabase for all user groups
+        const groupIds = groups.map(g => g.id);
+        if (groupIds.length === 0) { setPmDataDue(0); return; }
+
+        const { data: pmRecords } = await supabase
+          .from('progress_monitoring')
+          .select('*')
+          .in('group_id', groupIds);
+
+        // Use students from store (admin/teacher have allStudents, interventionists have assignedStudents)
+        const studentsData = userRole === 'interventionist'
+          ? assignedStudents.map(s => ({ id: s.id, group_id: s.group_id }))
+          : allStudents.map(s => ({ id: s.id, group_id: s.group_id }));
 
         let dueCount = 0;
 
-        // Use the groups from store which are already role-filtered
         for (const group of groups) {
-          // Find students in this group
-          const groupStudents = allStudentsData.filter(s => String(s.group_id) === group.id);
+          const groupStudents = studentsData.filter(s => s.group_id === group.id);
 
           for (const student of groupStudents) {
-            // Get most recent PM for this student
-            const studentPM = pmRecords
+            const studentPM = (pmRecords || [])
               .filter(pm => pm.student_id === student.id)
               .sort((a, b) => b.date.localeCompare(a.date))[0];
 
             const lastPMDate = studentPM?.date || '1970-01-01';
 
-            // Tier 3 needs weekly PM, Tier 2 needs bi-weekly
             if (group.tier === 3 && lastPMDate < oneWeekAgo) {
               dueCount++;
             } else if (group.tier === 2 && lastPMDate < twoWeeksAgo) {
@@ -238,76 +237,49 @@ export default function DashboardPage() {
         console.error('Error calculating PM due:', error);
       }
     }
-    calculatePMDue();
-  }, [groups]); // groups is already role-filtered from fetchGroupsWithVisibility
+    if (groups.length > 0) {
+      calculatePMDue();
+    }
+  }, [groups, allStudents, assignedStudents, userRole]);
 
   // Auto-generate notifications and calculate action item counts
   useEffect(() => {
     async function generateNotifications() {
       try {
-        const allStudentsData = await db.students.toArray();
-        const pmRecords = await db.progressMonitoring.toArray();
-        const allGoals = await db.studentGoals.toArray();
-        const allSess = await db.sessions.toArray();
+        // Use students from store (role-appropriate)
+        const studentsData = userRole === 'interventionist'
+          ? assignedStudents.map(s => ({ id: s.id, name: s.name, group_id: s.group_id }))
+          : allStudents.map(s => ({ id: s.id, name: s.name, group_id: s.group_id }));
 
-        // Decision rule alerts
+        // Fetch PM records from Supabase for all user groups
+        const groupIds = groups.map(g => g.id);
+        const { data: pmRecords } = await supabase
+          .from('progress_monitoring')
+          .select('*')
+          .in('group_id', groupIds);
+        const pmData = pmRecords || [];
+
+        // Decision rule alerts (skipped when no goals — goals are not yet in Supabase)
         if (notificationPreferences.decisionRuleAlerts) {
-          const pmData = allStudentsData.map(student => {
-            const studentPMs = pmRecords
-              .filter(pm => pm.student_id === student.id)
-              .sort((a, b) => a.date.localeCompare(b.date));
-            const studentGoal = allGoals.find(g => g.student_id === student.id);
-            const group = groups.find(g => String(g.id) === String(student.group_id));
-            return {
-              student_id: student.id!,
-              student_name: student.name,
-              group_id: student.group_id,
-              group_name: group?.name || 'Unknown',
-              scores: studentPMs.map(pm => pm.score),
-              goal: studentGoal?.goal_score ?? null,
-            };
-          }).filter(d => d.goal !== null && d.scores.length >= 4);
-
-          let alertCount = 0;
-          for (const d of pmData) {
-            const last4 = d.scores.slice(-4);
-            if (last4.every(s => s < d.goal!) || last4.every(s => s >= d.goal!)) {
-              alertCount++;
-            }
-          }
-          setDecisionAlertCount(alertCount);
-          generateDecisionAlerts(pmData);
+          // Without a Supabase goals table, decision alerts can't fire.
+          // Set count to 0 and pass empty data.
+          setDecisionAlertCount(0);
+          generateDecisionAlerts([]);
         }
 
         // Attendance flags
         if (notificationPreferences.attendanceFlags) {
-          const completedSessions = allSess
-            .filter(s => s.status === 'completed')
-            .sort((a, b) => a.date.localeCompare(b.date));
-
-          // Simple heuristic: students in groups with sessions but no tracking data
-          // (Full attendance tracking would need the attendance store)
           setAttendanceFlagCount(0);
         }
 
-        // Goal not set alerts
+        // Goal not set alerts (skipped — no Supabase goals table yet)
         if (notificationPreferences.goalNotSetAlerts) {
-          const studentsWithoutGoals = allStudentsData.filter(student => {
-            return !allGoals.some(g => g.student_id === student.id);
-          }).map(student => {
-            const group = groups.find(g => String(g.id) === String(student.group_id));
-            return {
-              student_name: student.name,
-              group_name: group?.name || 'Unknown',
-              group_id: student.group_id,
-            };
-          });
-          generateGoalAlerts(studentsWithoutGoals);
+          generateGoalAlerts([]);
         }
 
         // PM collected this week
         const { start, end } = getCurrentWeekDates();
-        const pmThisWeek = pmRecords.filter(pm => pm.date >= start && pm.date <= end);
+        const pmThisWeek = pmData.filter(pm => pm.date >= start && pm.date <= end);
         setPmCollectedThisWeek(pmThisWeek.length);
 
       } catch {
@@ -318,7 +290,7 @@ export default function DashboardPage() {
     if (groups.length > 0) {
       generateNotifications();
     }
-  }, [groups, notificationPreferences, generateDecisionAlerts, generateAttendanceFlags, generateGoalAlerts]);
+  }, [groups, allStudents, assignedStudents, userRole, notificationPreferences, generateDecisionAlerts, generateAttendanceFlags, generateGoalAlerts]);
 
   // Calculate groups needing attention (no sessions in past 7 days or mastery = 'no')
   // Filtered by user's groups
