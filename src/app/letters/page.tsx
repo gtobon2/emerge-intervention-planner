@@ -19,6 +19,7 @@ import { useGroupsStore } from '@/stores/groups';
 import { useStudentsStore } from '@/stores/students';
 import { getCurriculumLabel } from '@/lib/supabase/types';
 import type { Curriculum, Group, Student, ProgressMonitoring } from '@/lib/supabase/types';
+import { Input } from '@/components/ui';
 import * as supabaseService from '@/lib/supabase/services';
 
 const LETTER_TYPE_OPTIONS = [
@@ -36,6 +37,8 @@ export default function LettersPage() {
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [letterType, setLetterType] = useState<LetterType>('assignment');
   const [comments, setComments] = useState('');
+  const [letterDate, setLetterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [signatureName, setSignatureName] = useState('');
   const [pmData, setPmData] = useState<ProgressMonitoring[]>([]);
   const [pmLoading, setPmLoading] = useState(false);
 
@@ -51,6 +54,13 @@ export default function LettersPage() {
     fetchGroups();
     fetchAllStudents();
   }, [fetchGroups, fetchAllStudents]);
+
+  // Default signature name from profile
+  useEffect(() => {
+    if (profile.displayName && !signatureName) {
+      setSignatureName(profile.displayName);
+    }
+  }, [profile.displayName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch PM data when group or mode changes
   useEffect(() => {
@@ -138,9 +148,9 @@ export default function LettersPage() {
       curriculum: group.curriculum,
       curriculumLabel: getCurriculumLabel(group.curriculum as Curriculum),
       tier: group.tier,
-      interventionistName: profile.displayName,
+      interventionistName: signatureName || profile.displayName,
       interventionistContact: profile.email,
-      date: new Date().toLocaleDateString(),
+      date: new Date(letterDate + 'T12:00:00').toLocaleDateString(),
       schedule: group.schedule?.days
         ? group.schedule.days.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ') +
           (group.schedule.time ? ` at ${group.schedule.time}` : '')
@@ -154,7 +164,7 @@ export default function LettersPage() {
       trend,
       comments: comments || undefined,
     };
-  }, [letterType, schoolSettings, profile, comments]);
+  }, [letterType, schoolSettings, profile, comments, signatureName, letterDate]);
 
   // Single letter data
   const letterData: LetterData | null = useMemo(() => {
@@ -309,6 +319,22 @@ export default function LettersPage() {
                 options={LETTER_TYPE_OPTIONS}
                 value={letterType}
                 onChange={(e) => setLetterType(e.target.value as LetterType)}
+              />
+            </div>
+
+            {/* Customization: date + signature */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Letter Date"
+                type="date"
+                value={letterDate}
+                onChange={(e) => setLetterDate(e.target.value)}
+              />
+              <Input
+                label="Signature Name"
+                value={signatureName}
+                onChange={(e) => setSignatureName(e.target.value)}
+                placeholder={profile.displayName || 'Your name'}
               />
             </div>
 
