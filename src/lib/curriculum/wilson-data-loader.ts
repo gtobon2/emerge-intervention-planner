@@ -52,6 +52,44 @@ function getSyllableType(substep: string): 'closed' | 'vce' | 'open' | 'r-contro
   return 'closed';
 }
 
+// Wilson sound card defaults: keyword and type
+const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
+const DIGRAPHS = new Set(['sh', 'ch', 'th', 'wh', 'ck', 'ph', 'kn', 'wr', 'gn', 'mb', 'ng']);
+const BLENDS = new Set(['bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'br', 'cr', 'dr', 'fr', 'gr', 'pr', 'tr', 'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw', 'tw', 'scr', 'spr', 'str', 'squ']);
+
+const SOUND_KEYWORDS: Record<string, string> = {
+  a: 'apple', b: 'bat', c: 'cat', d: 'dog', e: 'echo',
+  f: 'fish', g: 'gate', h: 'hat', i: 'itch', j: 'jug',
+  k: 'kite', l: 'lamp', m: 'map', n: 'net', o: 'octopus',
+  p: 'pig', q: 'queen', r: 'rat', s: 'sun', t: 'top',
+  u: 'up', v: 'van', w: 'web', x: 'fox', y: 'yak', z: 'zip',
+  sh: 'ship', ch: 'cherry', th: 'thumb', wh: 'whale', ck: 'duck',
+  ph: 'phone', ng: 'ring', qu: 'queen',
+};
+
+// Sounds introduced at each substep (first appearance = isNew)
+const NEW_SOUNDS_BY_SUBSTEP: Record<string, string[]> = {
+  '1.1': ['a', 'i', 'o', 'f', 'l', 'n', 's', 't', 'm', 'p', 'r', 'd'],
+  '1.2': ['u', 'e', 'sh', 'ch', 'th', 'wh', 'ck'],
+  '1.3': [], // Review/application — no new sounds
+  '1.4': ['b', 'g', 'j', 'k', 'v', 'w', 'x', 'y', 'z'],
+  '1.5': [],
+  '1.6': [],
+};
+
+function getSoundType(sound: string): 'vowel' | 'consonant' | 'digraph' | 'blend' {
+  if (VOWELS.has(sound)) return 'vowel';
+  if (DIGRAPHS.has(sound)) return 'digraph';
+  if (BLENDS.has(sound)) return 'blend';
+  return 'consonant';
+}
+
+function isSoundNew(sound: string, substep: string): boolean {
+  const newSounds = NEW_SOUNDS_BY_SUBSTEP[substep];
+  if (!newSounds) return false;
+  return newSounds.includes(sound);
+}
+
 export async function loadWilsonData(): Promise<{ success: boolean; message: string; count: number }> {
   try {
     const data = wilsonData as RawWilsonData[];
@@ -79,10 +117,10 @@ export async function loadWilsonData(): Promise<{ success: boolean; message: str
         soundCards: item.soundCards.map((s): WilsonSoundCard => ({
           id: generateElementId(),
           sound: s.sound,
-          keyword: '',
-          type: 'consonant',
-          phoneme: s.phoneme || s.sound,
-          isNew: true,
+          keyword: SOUND_KEYWORDS[s.sound] || '',
+          type: getSoundType(s.sound),
+          phoneme: s.phoneme || `/${s.sound}/`,
+          isNew: isSoundNew(s.sound, item.substep),
         })),
         realWords: item.realWords.map((w): WilsonWord => ({
           id: generateElementId(),

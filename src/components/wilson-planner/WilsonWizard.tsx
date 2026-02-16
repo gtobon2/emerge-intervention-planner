@@ -120,7 +120,7 @@ export function WilsonWizard({
             elems.push({
               id: sc.id,
               type: 'sound',
-              label: `${sc.sound} — "${sc.keyword}"`,
+              label: sc.keyword ? `${sc.sound} — "${sc.keyword}"` : sc.sound,
               sublabel: sc.type,
               isNew: sc.isNew,
               checked: true,
@@ -369,7 +369,7 @@ export function WilsonWizard({
   const canGoBack = currentStep > 0;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-foundation">
       {/* Progress Bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
         <div className="flex items-center gap-1">
@@ -379,10 +379,10 @@ export function WilsonWizard({
                 onClick={() => setCurrentStep(i)}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${
                   i === currentStep
-                    ? 'bg-primary text-white'
+                    ? 'bg-movement text-white'
                     : i < currentStep
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    : 'bg-surface text-text-muted'
+                    : 'bg-surface-elevated text-text-muted'
                 }`}
               >
                 {i < currentStep ? (
@@ -485,7 +485,7 @@ export function WilsonWizard({
       </div>
 
       {/* Bottom Navigation */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface">
+      <div className="flex items-center justify-between px-4 py-3 pr-20 border-t border-border bg-surface z-10 relative">
         <button
           onClick={() => setCurrentStep(s => s - 1)}
           disabled={!canGoBack}
@@ -498,7 +498,7 @@ export function WilsonWizard({
         {canGoNext ? (
           <button
             onClick={() => setCurrentStep(s => s + 1)}
-            className="flex items-center gap-1 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-1 px-4 py-2 text-sm bg-movement text-white rounded-lg hover:bg-movement-hover transition-colors"
           >
             Next
             <ChevronRight className="w-4 h-4" />

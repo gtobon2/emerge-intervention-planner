@@ -64,7 +64,7 @@ export function WizardSection({
   };
 
   return (
-    <div className="border border-border rounded-lg bg-background overflow-hidden">
+    <div className="border border-border rounded-lg bg-surface overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -95,8 +95,8 @@ export function WizardSection({
                 onClick={() => onDayChange(d)}
                 className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
                   dayAssignment === d
-                    ? 'bg-primary text-white'
-                    : 'bg-surface text-text-muted hover:bg-surface-hover'
+                    ? 'bg-movement text-white'
+                    : 'bg-surface-elevated text-text-muted hover:bg-border'
                 }`}
               >
                 {d}
@@ -118,7 +118,7 @@ export function WizardSection({
               max={Math.max(sectionDef.durationGroup * 2, 30)}
               value={duration}
               onChange={(e) => onDurationChange(parseInt(e.target.value))}
-              className="flex-1 h-1.5 accent-primary"
+              className="flex-1 h-1.5 accent-movement"
             />
             <span className="text-xs font-medium text-text-primary w-12 text-right">
               {duration} min
@@ -137,7 +137,7 @@ export function WizardSection({
                     type="checkbox"
                     checked={el.checked}
                     onChange={() => onToggleElement(el.id)}
-                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50"
+                    className="w-4 h-4 rounded border-border text-movement focus:ring-movement/50"
                   />
                   <span className="text-sm text-text-primary flex-1">{el.label}</span>
                   {el.sublabel && (
@@ -155,7 +155,7 @@ export function WizardSection({
           ) : (
             <p className="text-xs text-text-muted py-2">
               No data for this substep.{' '}
-              <a href="/settings/wilson-data" className="text-primary hover:underline">
+              <a href="/settings/wilson-data" className="text-movement hover:underline">
                 Add via Settings &rarr; Wilson Data
               </a>
             </p>
@@ -187,7 +187,7 @@ export function WizardSection({
               <button
                 onClick={addActivity}
                 disabled={!newActivity.trim()}
-                className="text-xs text-primary hover:text-primary/80 disabled:opacity-50"
+                className="text-xs text-movement hover:text-movement/80 disabled:opacity-50"
               >
                 Add
               </button>

@@ -115,7 +115,7 @@ export function WizardReview({
               onClick={() => setActiveDay(d)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeDay === d
-                  ? 'border-primary text-primary'
+                  ? 'border-movement text-movement'
                   : 'border-transparent text-text-muted hover:text-text-primary'
               }`}
             >
@@ -166,7 +166,7 @@ export function WizardReview({
         <button
           onClick={onSave}
           disabled={isSaving}
-          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-6 py-2.5 bg-movement text-white rounded-lg font-medium hover:bg-movement-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSaving ? 'Saving...' : 'Save Lesson Plan'}
         </button>

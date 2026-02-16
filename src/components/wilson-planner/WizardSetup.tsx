@@ -51,7 +51,7 @@ export function WizardSetup({
         <select
           value={selectedSubstep}
           onChange={(e) => onSubstepChange(e.target.value)}
-          className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+          className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-movement/50"
         >
           {substepOptions.map(step => (
             <optgroup key={step.step} label={`Step ${step.step}: ${step.name}`}>
@@ -77,8 +77,8 @@ export function WizardSetup({
               onClick={() => onNumDaysChange(d)}
               className={`flex-1 py-3 rounded-lg border-2 text-sm font-medium transition-colors ${
                 numDays === d
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-background text-text-muted hover:border-primary/50'
+                  ? 'border-movement bg-movement/10 text-movement'
+                  : 'border-border bg-foundation text-text-muted hover:border-movement/50'
               }`}
             >
               {d} Day{d > 1 ? 's' : ''}
