@@ -32,6 +32,7 @@ interface WizardBlockProps {
   onDayChange: (component: LessonComponentType, day: number) => void;
   onActivitiesChange: (component: LessonComponentType, activities: string[]) => void;
   numDays: number;
+  substep?: string;
 }
 
 export function WizardBlock({
@@ -45,6 +46,7 @@ export function WizardBlock({
   onDayChange,
   onActivitiesChange,
   numDays,
+  substep,
 }: WizardBlockProps) {
   const blockSections = WILSON_LESSON_SECTIONS.filter(s => s.block === block);
 
@@ -75,6 +77,7 @@ export function WizardBlock({
               numDays={numDays}
               activities={state.activities}
               onActivitiesChange={(a) => onActivitiesChange(sectionDef.type, a)}
+              substep={substep}
             />
           );
         })}

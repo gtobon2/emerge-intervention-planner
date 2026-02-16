@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Sparkle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sparkle, Sparkles, Loader2 } from 'lucide-react';
 import type { LessonComponentType, LessonPlanElement } from '@/lib/curriculum/wilson-lesson-elements';
 import { WILSON_LESSON_SECTIONS } from '@/lib/curriculum/wilson-lesson-elements';
 
@@ -27,6 +27,7 @@ interface WizardSectionProps {
   numDays: number;
   activities: string[];
   onActivitiesChange: (activities: string[]) => void;
+  substep?: string;
 }
 
 export function WizardSection({
@@ -42,9 +43,11 @@ export function WizardSection({
   numDays,
   activities,
   onActivitiesChange,
+  substep,
 }: WizardSectionProps) {
   const [expanded, setExpanded] = useState(true);
   const [newActivity, setNewActivity] = useState('');
+  const [isSuggesting, setIsSuggesting] = useState(false);
 
   const sectionDef = WILSON_LESSON_SECTIONS.find(s => s.type === component);
   if (!sectionDef) return null;
@@ -61,6 +64,44 @@ export function WizardSection({
 
   const removeActivity = (index: number) => {
     onActivitiesChange(activities.filter((_, i) => i !== index));
+  };
+
+  const suggestActivities = async () => {
+    if (!substep) return;
+    setIsSuggesting(true);
+    try {
+      const checkedElements: LessonPlanElement[] = elements
+        .filter(e => e.checked)
+        .map(e => ({
+          id: e.id,
+          type: e.type,
+          value: e.label,
+          sourceId: e.id,
+        }));
+
+      const res = await fetch('/api/ai/suggest-wilson-activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          substep,
+          component,
+          componentName: sectionDef.name,
+          elements: checkedElements,
+          currentActivities: activities,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.suggestions && Array.isArray(data.suggestions)) {
+          onActivitiesChange([...activities, ...data.suggestions]);
+        }
+      }
+    } catch (error) {
+      console.error('Error suggesting activities:', error);
+    } finally {
+      setIsSuggesting(false);
+    }
   };
 
   return (
@@ -163,7 +204,23 @@ export function WizardSection({
 
           {/* Activities */}
           <div>
-            <label className="text-xs text-text-muted block mb-1">Activities</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-text-muted">Activities</label>
+              {substep && (
+                <button
+                  onClick={suggestActivities}
+                  disabled={isSuggesting}
+                  className="flex items-center gap-1 text-xs text-movement hover:text-movement/80 disabled:opacity-50"
+                >
+                  {isSuggesting ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  {isSuggesting ? 'Suggesting...' : 'Suggest'}
+                </button>
+              )}
+            </div>
             {activities.map((act, i) => (
               <div key={i} className="flex items-center gap-2 mb-1">
                 <span className="text-sm text-text-primary flex-1">{act}</span>

@@ -441,6 +441,7 @@ export function WilsonWizard({
                 onDayChange={updateDay}
                 onActivitiesChange={updateActivities}
                 numDays={numDays}
+                substep={selectedSubstep}
               />
             )}
             {currentStep === 2 && (
@@ -455,6 +456,7 @@ export function WilsonWizard({
                 onDayChange={updateDay}
                 onActivitiesChange={updateActivities}
                 numDays={numDays}
+                substep={selectedSubstep}
               />
             )}
             {currentStep === 3 && (
@@ -469,6 +471,7 @@ export function WilsonWizard({
                 onDayChange={updateDay}
                 onActivitiesChange={updateActivities}
                 numDays={numDays}
+                substep={selectedSubstep}
               />
             )}
             {currentStep === 4 && (

@@ -352,6 +352,11 @@ export default function GroupDetailPage() {
 
   const recentSessions = sessions.slice(0, 5);
 
+  // Count upcoming sessions that need lesson plans
+  const unplannedSessionCount = sessions.filter(
+    s => s.status === 'planned' && !s.wilson_lesson_plan && !s.camino_lesson_plan
+  ).length;
+
   return (
     <AppLayout>
       <div className="space-y-4 md:space-y-6">
@@ -482,6 +487,17 @@ export default function GroupDetailPage() {
           </Card>
         </div>
 
+        {/* Unplanned Sessions Alert */}
+        {unplannedSessionCount > 0 && (
+          <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <ShieldAlert className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              <strong>{unplannedSessionCount}</strong> upcoming {unplannedSessionCount === 1 ? 'session needs' : 'sessions need'} a lesson plan.
+              Click on a session to create one.
+            </p>
+          </div>
+        )}
+
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Sessions */}
@@ -534,7 +550,7 @@ export default function GroupDetailPage() {
                                   day: 'numeric'
                                 })}
                               </span>
-                              <StatusBadge status={session.status} />
+                              <StatusBadge status={session.status} hasLessonPlan={!!(session.wilson_lesson_plan || session.camino_lesson_plan)} />
                             </div>
                             <p className="text-xs md:text-sm text-text-muted truncate">
                               {formatCurriculumPosition(selectedGroup.curriculum, session.curriculum_position)}

@@ -23,7 +23,6 @@ import {
   Download,
   X,
   LogOut,
-  Wand2
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui';
 import { useAuth } from '@/hooks/use-auth';
@@ -46,7 +45,6 @@ const navItems: NavItem[] = [
   { href: '/worksheets', label: 'Worksheets', icon: ClipboardList },
   { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
   { href: '/materials', label: 'Materials', icon: Package },
-  { href: '/wilson-builder', label: 'Wilson Builder', icon: Wand2 },
   { href: '/letters', label: 'Family Letters', icon: FileText },
   { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },

@@ -85,7 +85,18 @@ export const TierBadge = ({ tier }: { tier: Tier }) => {
   );
 };
 
-export const StatusBadge = ({ status }: { status: 'planned' | 'completed' | 'cancelled' }) => {
+export const StatusBadge = ({ status, hasLessonPlan }: { status: 'planned' | 'completed' | 'cancelled'; hasLessonPlan?: boolean }) => {
+  // When status is 'planned' but no lesson plan exists, show "Scheduled" in amber
+  const isScheduledOnly = status === 'planned' && hasLessonPlan === false;
+
+  if (isScheduledOnly) {
+    return (
+      <Badge className="bg-amber-500/20 text-amber-500 border border-amber-500/30">
+        Scheduled
+      </Badge>
+    );
+  }
+
   const labels = {
     planned: 'Planned',
     completed: 'Completed',

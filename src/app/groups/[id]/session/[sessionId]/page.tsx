@@ -23,6 +23,7 @@ import {
   XCircle,
   Printer,
   FileText,
+  BookOpen,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,8 @@ import {
 import { WilsonLessonTracker } from '@/components/sessions/tracking/WilsonLessonTracker';
 import { CaminoLessonTracker } from '@/components/sessions/tracking/CaminoLessonTracker';
 import { SessionMaterialsChecklist } from '@/components/materials';
+import { WilsonWizard, type MultiDayWilsonLessonPlan } from '@/components/wilson-planner';
+import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, useAIContextStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
@@ -109,6 +112,7 @@ export default function SessionPage({
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showLessonPlanEditor, setShowLessonPlanEditor] = useState(false);
 
   // Store actions
   const {
@@ -545,6 +549,23 @@ export default function SessionPage({
     });
   };
 
+  // Save or update lesson plan on the session
+  const handleLessonPlanSave = async (plan: WilsonLessonPlan | MultiDayWilsonLessonPlan) => {
+    if (!session) return;
+    // Only handle single-day plans (multi-day doesn't apply to editing an existing session)
+    const lessonPlan = 'days' in plan ? plan.plans[0] : plan;
+    try {
+      await updateSession(session.id.toString(), {
+        wilson_lesson_plan: lessonPlan,
+      });
+      // Refresh session data
+      setSession({ ...session, wilson_lesson_plan: lessonPlan });
+      setShowLessonPlanEditor(false);
+    } catch (error) {
+      console.error('Error saving lesson plan:', error);
+    }
+  };
+
   // Save error to error bank
   const handleEditSession = async (sessionId: string, updates: any) => {
     await updateSession(sessionId, updates);
@@ -686,6 +707,19 @@ export default function SessionPage({
                     <FileText className="w-4 h-4" />
                     <span className="hidden sm:inline">PDF</span>
                   </Button>
+                  {group.curriculum === 'wilson' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowLessonPlanEditor(true)}
+                      className="gap-1 min-h-[44px]"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span className="hidden sm:inline">
+                        {session.wilson_lesson_plan ? 'Edit Plan' : 'Plan Lesson'}
+                      </span>
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -806,6 +840,30 @@ export default function SessionPage({
                 </p>
               </div>
             </div>
+
+            {/* No Lesson Plan CTA (Wilson only) */}
+            {group.curriculum === 'wilson' && !session.wilson_lesson_plan && (
+              <Card className="border-amber-200 bg-amber-50/50 border-dashed">
+                <CardContent className="flex items-center justify-between py-6">
+                  <div className="flex items-center gap-3">
+                    <BookOpen className="w-6 h-6 text-amber-500" />
+                    <div>
+                      <p className="font-medium text-amber-900">No lesson plan yet</p>
+                      <p className="text-sm text-amber-700">Create a Wilson lesson plan for this session</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowLessonPlanEditor(true)}
+                    className="min-h-[44px]"
+                  >
+                    <BookOpen className="w-4 h-4 mr-1" />
+                    Plan Lesson
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Wilson Lesson Plan Preview */}
             {session.wilson_lesson_plan && (
@@ -1495,6 +1553,24 @@ export default function SessionPage({
           onClose={() => setShowRescheduleModal(false)}
           onSave={handleCreateRescheduledSession}
         />
+      )}
+
+      {/* Wilson Lesson Plan Editor */}
+      {showLessonPlanEditor && group.curriculum === 'wilson' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+            <WilsonWizard
+              initialSubstep={
+                session?.curriculum_position && 'substep' in session.curriculum_position
+                  ? (session.curriculum_position as any).substep
+                  : undefined
+              }
+              sessionId={session ? toNumericId(session.id) ?? undefined : undefined}
+              onSave={handleLessonPlanSave}
+              onClose={() => setShowLessonPlanEditor(false)}
+            />
+          </div>
+        </div>
       )}
 
       {/* Print styles */}
