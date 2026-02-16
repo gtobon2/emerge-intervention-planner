@@ -5,7 +5,7 @@ import { X, Calendar, Target, AlertTriangle, Plus, Trash2, CalendarDays, Repeat,
 import { Button } from '@/components/ui/button';
 import type { Group, Curriculum, AnticipatedError, CurriculumPosition } from '@/lib/supabase/types';
 import { getCurriculumLabel, isWilsonPosition, isCaminoPosition, isDespegandoPosition, formatCurriculumPosition } from '@/lib/supabase/types';
-import { WilsonLessonBuilder, MultiDayWilsonLessonPlan } from '@/components/wilson-planner';
+import { WilsonWizard, MultiDayWilsonLessonPlan } from '@/components/wilson-planner';
 import { CaminoLessonBuilder } from '@/components/camino-planner';
 import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
 import type { CaminoLessonPlan } from '@/lib/curriculum/camino/camino-lesson-elements';
@@ -464,7 +464,7 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
               {/* Embedded Lesson Builder - Takes remaining space */}
               <div className="flex-1 overflow-hidden">
                 {isWilsonCurriculum && (
-                  <WilsonLessonBuilder
+                  <WilsonWizard
                     initialSubstep={isWilsonPosition(group.current_position) ? group.current_position.substep : '1.1'}
                     onSave={handleLessonPlanSave}
                   />
