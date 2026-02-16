@@ -52,35 +52,112 @@ function getSyllableType(substep: string): 'closed' | 'vce' | 'open' | 'r-contro
   return 'closed';
 }
 
-// Wilson sound card defaults: keyword and type
+// Wilson sound card classification sets
 const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
-const DIGRAPHS = new Set(['sh', 'ch', 'th', 'wh', 'ck', 'ph', 'kn', 'wr', 'gn', 'mb', 'ng']);
-const BLENDS = new Set(['bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'br', 'cr', 'dr', 'fr', 'gr', 'pr', 'tr', 'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw', 'tw', 'scr', 'spr', 'str', 'squ']);
+const DIGRAPHS = new Set(['sh', 'ch', 'th', 'wh', 'ck', 'ph', 'kn', 'wr', 'gn', 'mb', 'ng', 'qu']);
+const BLENDS = new Set([
+  'bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'br', 'cr', 'dr', 'fr', 'gr', 'pr', 'tr',
+  'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw', 'tw', 'ct',
+  'scr', 'spr', 'str', 'squ', 'thr', 'shr',
+]);
+const WELDED_SOUNDS = new Set([
+  'all', 'am', 'an',
+  'ang', 'ing', 'ong', 'ung', 'ank', 'ink', 'onk', 'unk',
+]);
+const FLOSS = new Set(['ff', 'll', 'ss']);
+const VCE_PATTERNS = new Set(['a-e', 'i-e', 'o-e', 'u-e', 'e-e']);
+const EXCEPTION_PATTERNS = new Set(['ild', 'ind', 'old', 'ost', 'olt']);
+const SUFFIXES = new Set([
+  '-s', '-es', '-ed', '-ing', '-ive', '-ve',
+  '-able', '-en', '-er', '-est', '-ish', '-or', '-y',
+  '-ful', '-less', '-ly', '-ment', '-ness', '-ty',
+]);
+const CONSONANT_LE = new Set([
+  '-ble', '-cle', '-dle', '-fle', '-gle', '-kle', '-ple', '-tle', '-zle', '-stle',
+]);
 
 const SOUND_KEYWORDS: Record<string, string> = {
+  // Single letters
   a: 'apple', b: 'bat', c: 'cat', d: 'dog', e: 'echo',
   f: 'fish', g: 'gate', h: 'hat', i: 'itch', j: 'jug',
   k: 'kite', l: 'lamp', m: 'map', n: 'net', o: 'octopus',
   p: 'pig', q: 'queen', r: 'rat', s: 'sun', t: 'top',
   u: 'up', v: 'van', w: 'web', x: 'fox', y: 'yak', z: 'zip',
+  // Digraphs
   sh: 'ship', ch: 'cherry', th: 'thumb', wh: 'whale', ck: 'duck',
   ph: 'phone', ng: 'ring', qu: 'queen',
+  // FLoSS
+  ff: 'off', ll: 'bill', ss: 'miss',
+  // Welded sounds
+  all: 'call', am: 'ham', an: 'fan',
+  ang: 'bang', ing: 'king', ong: 'song', ung: 'lung',
+  ank: 'bank', ink: 'pink', onk: 'honk', unk: 'junk',
+  // Blends
+  bl: 'black', cl: 'clap', fl: 'flag', gl: 'glad', pl: 'plan', sl: 'sled',
+  br: 'bring', cr: 'crab', dr: 'drop', fr: 'frog', gr: 'grab', pr: 'press', tr: 'trip',
+  sc: 'scan', sk: 'skip', sm: 'smog', sn: 'snap', sp: 'spot', st: 'stop', sw: 'swim',
+  ct: 'act',
+  scr: 'scrap', spr: 'spring', str: 'string', squ: 'squid', thr: 'throb', shr: 'shrimp',
+  // Exception patterns
+  ild: 'child', ind: 'find', old: 'cold', ost: 'most', olt: 'bolt',
+  // VCe patterns
+  'a-e': 'cake', 'i-e': 'kite', 'o-e': 'hope', 'u-e': 'cute', 'e-e': 'Pete',
+  // Suffixes
+  '-s': 'bugs', '-es': 'wishes', '-ed': 'shifted', '-ing': 'running',
+  '-ive': 'olive', '-ve': 'twelve',
+  '-able': 'comfortable', '-en': 'golden', '-er': 'smaller', '-est': 'biggest',
+  '-ish': 'selfish', '-or': 'actor', '-y': 'sunny',
+  '-ful': 'helpful', '-less': 'helpless', '-ly': 'suddenly', '-ment': 'moment',
+  '-ness': 'sadness', '-ty': 'safety',
+  // Consonant-le
+  '-ble': 'table', '-cle': 'circle', '-dle': 'middle', '-fle': 'raffle',
+  '-gle': 'single', '-kle': 'sparkle', '-ple': 'simple', '-tle': 'little',
+  '-zle': 'puzzle', '-stle': 'whistle',
 };
 
 // Sounds introduced at each substep (first appearance = isNew)
 const NEW_SOUNDS_BY_SUBSTEP: Record<string, string[]> = {
-  '1.1': ['a', 'i', 'o', 'f', 'l', 'n', 's', 't', 'm', 'p', 'r', 'd'],
-  '1.2': ['u', 'e', 'sh', 'ch', 'th', 'wh', 'ck'],
-  '1.3': [], // Review/application — no new sounds
-  '1.4': ['b', 'g', 'j', 'k', 'v', 'w', 'x', 'y', 'z'],
-  '1.5': [],
-  '1.6': [],
+  '1.1': ['a', 'i', 'o', 'f', 'l', 'm', 'n', 'r', 's', 'd', 'g', 'p', 't'],
+  '1.2': ['u', 'e', 'b', 'h', 'j', 'c', 'k', 'v', 'w', 'x', 'y', 'z', 'sh', 'ck', 'ch', 'th', 'wh', 'qu'],
+  '1.3': [],
+  '1.4': ['ff', 'll', 'ss', 'all'],
+  '1.5': ['am', 'an'],
+  '1.6': ['-s', '-es'],
+  '2.1': ['ang', 'ing', 'ong', 'ung', 'ank', 'ink', 'onk', 'unk'],
+  '2.2': ['bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'br', 'cr', 'dr', 'fr', 'gr', 'pr', 'tr', 'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw'],
+  '2.3': ['ild', 'ind', 'old', 'ost', 'olt'],
+  '2.4': [],
+  '2.5': ['scr', 'spr', 'str', 'squ', 'thr', 'shr'],
+  '3.1': [],
+  '3.2': [],
+  '3.3': ['ct'],
+  '3.4': [],
+  '3.5': ['-ed', '-ing'],
+  '4.1': ['a-e', 'i-e', 'o-e', 'u-e', 'e-e'],
+  '4.2': [],
+  '4.3': [],
+  '4.4': ['-ive', '-ve'],
+  '5.1': ['y'],
+  '5.2': [],
+  '5.3': [],
+  '5.4': [],
+  '5.5': [],
+  '6.1': ['-able', '-en', '-er', '-est', '-ish', '-or', '-y', '-ful', '-less', '-ly', '-ment', '-ness', '-ty'],
+  '6.2': ['-ed'],
+  '6.3': [],
+  '6.4': ['-ble', '-cle', '-dle', '-fle', '-gle', '-kle', '-ple', '-tle', '-zle', '-stle'],
 };
 
 function getSoundType(sound: string): 'vowel' | 'consonant' | 'digraph' | 'blend' {
   if (VOWELS.has(sound)) return 'vowel';
+  if (VCE_PATTERNS.has(sound)) return 'vowel';
   if (DIGRAPHS.has(sound)) return 'digraph';
+  if (FLOSS.has(sound)) return 'digraph';
+  if (WELDED_SOUNDS.has(sound)) return 'digraph';
   if (BLENDS.has(sound)) return 'blend';
+  if (EXCEPTION_PATTERNS.has(sound)) return 'blend';
+  if (SUFFIXES.has(sound)) return 'consonant';
+  if (CONSONANT_LE.has(sound)) return 'consonant';
   return 'consonant';
 }
 

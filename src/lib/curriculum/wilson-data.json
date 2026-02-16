@@ -483,7 +483,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "La\n\nfit fig\n\nsit sip\nlip \u2018lid\nsip it\nmap fit\nrag lap\nMatt had a sip.",
+        "text": "La\n\nfit fig\n\nsit sip\nlip ‘lid\nsip it\nmap fit\nrag lap\nMatt had a sip.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -541,18 +541,68 @@
     "wordElements": [],
     "soundCards": [
       {
+        "sound": "f",
+        "phoneme": "/f/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "l",
+        "phoneme": "/l/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "m",
+        "phoneme": "/m/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "n",
+        "phoneme": "/n/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "r",
+        "phoneme": "/r/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "s",
+        "phoneme": "/s/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "d",
+        "phoneme": "/d/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "g",
+        "phoneme": "/g/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "p",
+        "phoneme": "/p/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
+        "sound": "t",
+        "phoneme": "/t/",
+        "concept": "Short vowels a, i, o"
+      },
+      {
         "sound": "a",
-        "phoneme": null,
+        "phoneme": "/ă/",
         "concept": "Short vowels a, i, o"
       },
       {
         "sound": "i",
-        "phoneme": null,
+        "phoneme": "/ĭ/",
         "concept": "Short vowels a, i, o"
       },
       {
         "sound": "o",
-        "phoneme": null,
+        "phoneme": "/ŏ/",
         "concept": "Short vowels a, i, o"
       }
     ],
@@ -2998,7 +3048,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Nick \u2014 luck\nsick rock puck\nRick sock tack\nrack Jack tick\npick lick sack\nRick sat on the big rock.",
+        "text": "Nick — luck\nsick rock puck\nRick sock tack\nrack Jack tick\npick lick sack\nRick sat on the big rock.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -3152,43 +3202,93 @@
     "wordElements": [],
     "soundCards": [
       {
+        "sound": "b",
+        "phoneme": "/b/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "h",
+        "phoneme": "/h/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "j",
+        "phoneme": "/j/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "c",
+        "phoneme": "/k/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "k",
+        "phoneme": "/k/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "v",
+        "phoneme": "/v/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "w",
+        "phoneme": "/w/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "x",
+        "phoneme": "/ks/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "y",
+        "phoneme": "/y/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
+        "sound": "z",
+        "phoneme": "/z/",
+        "concept": "Short vowels u, e; Digraphs"
+      },
+      {
         "sound": "u",
-        "phoneme": null,
+        "phoneme": "/ŭ/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "e",
-        "phoneme": null,
+        "phoneme": "/ĕ/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "sh",
-        "phoneme": null,
+        "phoneme": "/sh/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "ck",
-        "phoneme": null,
+        "phoneme": "/k/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "ch",
-        "phoneme": null,
+        "phoneme": "/ch/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "th",
-        "phoneme": null,
+        "phoneme": "/th/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "wh",
-        "phoneme": null,
+        "phoneme": "/wh/",
         "concept": "Short vowels u, e; Digraphs"
       },
       {
         "sound": "qu",
-        "phoneme": null,
+        "phoneme": "/kw/",
         "concept": "Short vowels u, e; Digraphs"
       }
     ],
@@ -8975,7 +9075,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "I and was my to\n\nee tC\u201c\n1 Is that mud on his hat?",
+        "text": "I and was my to\n\nee tC“\n1 Is that mud on his hat?",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -9593,7 +9693,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "A pup sat on Beth\u2019s lap.",
+        "text": "A pup sat on Beth’s lap.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -9719,7 +9819,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Jack said, \u201cYes,\n\nI have the top pet cat and the top pet dog!",
+        "text": "Jack said, “Yes,\n\nI have the top pet cat and the top pet dog!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -9851,7 +9951,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "FO\n\n-\u2014\u2014o\n\na the his was and of way from to for\n\nThe Not So Fun Jog\n\nJim had a jog on the path with his pal,\nCal.",
+        "text": "FO\n\n-——o\n\na the his was and of way from to for\n\nThe Not So Fun Jog\n\nJim had a jog on the path with his pal,\nCal.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -9881,7 +9981,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "The\n\ncut on Cal\u2019s leg did vex him.",
+        "text": "The\n\ncut on Cal’s leg did vex him.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -9982,27 +10082,27 @@
     "soundCards": [
       {
         "sound": "sh",
-        "phoneme": null,
+        "phoneme": "/sh/",
         "concept": "Digraph application"
       },
       {
         "sound": "ch",
-        "phoneme": null,
+        "phoneme": "/ch/",
         "concept": "Digraph application"
       },
       {
         "sound": "th",
-        "phoneme": null,
+        "phoneme": "/th/",
         "concept": "Digraph application"
       },
       {
         "sound": "wh",
-        "phoneme": null,
+        "phoneme": "/wh/",
         "concept": "Digraph application"
       },
       {
         "sound": "ck",
-        "phoneme": null,
+        "phoneme": "/k/",
         "concept": "Digraph application"
       }
     ],
@@ -13010,7 +13110,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Dad did ask, \u201cBill, did you cut your lip?",
+        "text": "Dad did ask, “Bill, did you cut your lip?",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13070,7 +13170,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Dad fed them\n\ni i ee \u2014CiSsiC iC\n\nand then set them off to get into the tub for\na bath.",
+        "text": "Dad fed them\n\ni i ee —CiSsiC iC\n\nand then set them off to get into the tub for\na bath.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13100,7 +13200,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Bill and Jess\ngot mad at all of this, \u201cWhen did this box\nfall?",
+        "text": "Bill and Jess\ngot mad at all of this, “When did this box\nfall?",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13112,13 +13212,13 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Bill said, \u201cIt was a fox!",
+        "text": "Bill said, “It was a fox!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
       },
       {
-        "text": "Jess said,\n\u2018\n\nb\n\n\u201cIt was the cat!",
+        "text": "Jess said,\n‘\n\nb\n\n“It was the cat!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13136,7 +13236,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Jess said,\n\ni \u201cWe shall check this box when we get up and\nwith luck, it will be on the deck!",
+        "text": "Jess said,\n\ni “We shall check this box when we get up and\nwith luck, it will be on the deck!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13268,7 +13368,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "With the\nlack of a big pass, Jill had to quell a sob,\nbut Rich did yell, \u201cYes!",
+        "text": "With the\nlack of a big pass, Jill had to quell a sob,\nbut Rich did yell, “Yes!",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13316,7 +13416,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Jill said, \u201cShall we go?",
+        "text": "Jill said, “Shall we go?",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13358,7 +13458,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Beth said to the\npup, \u201cI will call you Zip.",
+        "text": "Beth said to the\npup, “I will call you Zip.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -13393,22 +13493,22 @@
     "soundCards": [
       {
         "sound": "ff",
-        "phoneme": null,
+        "phoneme": "/f/",
         "concept": "FLoSS rule; -all"
       },
       {
         "sound": "ll",
-        "phoneme": null,
+        "phoneme": "/l/",
         "concept": "FLoSS rule; -all"
       },
       {
         "sound": "ss",
-        "phoneme": null,
+        "phoneme": "/s/",
         "concept": "FLoSS rule; -all"
       },
       {
         "sound": "all",
-        "phoneme": null,
+        "phoneme": "/awl/",
         "concept": "FLoSS rule; -all"
       }
     ],
@@ -14901,7 +15001,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Tom\nJan \u2018chill hum\nham pal mam\nzip mug chop\njog sip Nell\ntan Zack Pam\nshed mat tack\n\nSUBSTEP 1.",
+        "text": "Tom\nJan ‘chill hum\nham pal mam\nzip mug chop\njog sip Nell\ntan Zack Pam\nshed mat tack\n\nSUBSTEP 1.",
         "level": "A",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15087,7 +15187,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Pam said, \u201cI will\nget some jam for you.",
+        "text": "Pam said, “I will\nget some jam for you.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15099,7 +15199,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Then Pam ran to tell Liz, \u201cI am in a fix\nand need jam for Dad.",
+        "text": "Then Pam ran to tell Liz, “I am in a fix\nand need jam for Dad.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15111,7 +15211,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "She said, \u201cPam, can you sit and chat\nfor a bit?",
+        "text": "She said, “Pam, can you sit and chat\nfor a bit?",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15129,7 +15229,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "When Dad had the jam with his ham, he\nsaid \u201cYum!",
+        "text": "When Dad had the jam with his ham, he\nsaid “Yum!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15249,7 +15349,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "He does tell Pam, \u201cYou are not the boss of me\n\nand I am set to quit if you yell or pick on me!",
+        "text": "He does tell Pam, “You are not the boss of me\n\nand I am set to quit if you yell or pick on me!",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15273,7 +15373,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "The doc said he did not want Dan to\nget a tan, \u201cIt is bad for you when you are red\nand then get tan.",
+        "text": "The doc said he did not want Dan to\nget a tan, “It is bad for you when you are red\nand then get tan.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15291,7 +15391,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "The doc did tell Dan, \u201cGet a big hat to put\non when you are in the sun.",
+        "text": "The doc did tell Dan, “Get a big hat to put\non when you are in the sun.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15303,13 +15403,13 @@
         "purpose": "Decoding"
       },
       {
-        "text": "It has to be a thick hat to shun the\n\n\u201d\n\nsun.",
+        "text": "It has to be a thick hat to shun the\n\n”\n\nsun.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
       },
       {
-        "text": "The doc then said, \u201cDo not sit on a deck\n\nin the sun at one p.",
+        "text": "The doc then said, “Do not sit on a deck\n\nin the sun at one p.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -15332,12 +15432,12 @@
     "soundCards": [
       {
         "sound": "am",
-        "phoneme": null,
+        "phoneme": "/am/",
         "concept": "Nasalized vowels"
       },
       {
         "sound": "an",
-        "phoneme": null,
+        "phoneme": "/an/",
         "concept": "Nasalized vowels"
       }
     ],
@@ -20498,7 +20598,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "IER IEEE EEE EEE LEE\n\nboth have one they teams game next way add go\n\nA Win for Nick\u2019s Fans\n\nThe fans yell for Nick when he gets up to\n\nbat, \u201cWe want a run!",
+        "text": "IER IEEE EEE EEE LEE\n\nboth have one they teams game next way add go\n\nA Win for Nick’s Fans\n\nThe fans yell for Nick when he gets up to\n\nbat, “We want a run!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -20534,7 +20634,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "His fans go mad and they\ndo yell, \u201cNick, Nick!",
+        "text": "His fans go mad and they\ndo yell, “Nick, Nick!",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -20582,7 +20682,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "When Max gets into\nthe cat\u2019s dish, Dan does tell him, \u201cThat is\n\nbad for you.",
+        "text": "When Max gets into\nthe cat’s dish, Dan does tell him, “That is\n\nbad for you.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -20612,7 +20712,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "As Dad does not want a new pet, he\ntells Dan, \u201cJed and Max are your pets.",
+        "text": "As Dad does not want a new pet, he\ntells Dan, “Jed and Max are your pets.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -20666,7 +20766,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "Nick\u2019s dad gets his kit from the hall and\nsets off to do the job to fill the gaps in the\nwalls of the shack.",
+        "text": "Nick’s dad gets his kit from the hall and\nsets off to do the job to fill the gaps in the\nwalls of the shack.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -20786,7 +20886,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "So, if Max lacks cash,\nI ask you this, \u201cHow shall Max have fun with\nhis pals at the mall?",
+        "text": "So, if Max lacks cash,\nI ask you this, “How shall Max have fun with\nhis pals at the mall?",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -20810,7 +20910,7 @@
         "purpose": "Decoding"
       },
       {
-        "text": "The man at the\nshop lugs both beds into Dan\u2019s van.",
+        "text": "The man at the\nshop lugs both beds into Dan’s van.",
         "level": "B",
         "source": "Student Reader",
         "purpose": "Decoding"
@@ -21047,12 +21147,12 @@
     "soundCards": [
       {
         "sound": "-s",
-        "phoneme": null,
+        "phoneme": "/s/, /z/",
         "concept": "Suffixes -s, -es"
       },
       {
         "sound": "-es",
-        "phoneme": null,
+        "phoneme": "/ĕz/",
         "concept": "Suffixes -s, -es"
       }
     ],
@@ -22893,42 +22993,42 @@
     "soundCards": [
       {
         "sound": "ang",
-        "phoneme": null,
+        "phoneme": "/ang/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "ing",
-        "phoneme": null,
+        "phoneme": "/ing/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "ong",
-        "phoneme": null,
+        "phoneme": "/ong/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "ung",
-        "phoneme": null,
+        "phoneme": "/ung/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "ank",
-        "phoneme": null,
+        "phoneme": "/ank/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "ink",
-        "phoneme": null,
+        "phoneme": "/ink/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "onk",
-        "phoneme": null,
+        "phoneme": "/onk/",
         "concept": "Welded sounds ng, nk"
       },
       {
         "sound": "unk",
-        "phoneme": null,
+        "phoneme": "/unk/",
         "concept": "Welded sounds ng, nk"
       }
     ],
@@ -23090,102 +23190,102 @@
     "soundCards": [
       {
         "sound": "bl",
-        "phoneme": null,
+        "phoneme": "/bl/",
         "concept": "Consonant blends"
       },
       {
         "sound": "cl",
-        "phoneme": null,
+        "phoneme": "/kl/",
         "concept": "Consonant blends"
       },
       {
         "sound": "fl",
-        "phoneme": null,
+        "phoneme": "/fl/",
         "concept": "Consonant blends"
       },
       {
         "sound": "gl",
-        "phoneme": null,
+        "phoneme": "/gl/",
         "concept": "Consonant blends"
       },
       {
         "sound": "pl",
-        "phoneme": null,
+        "phoneme": "/pl/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sl",
-        "phoneme": null,
+        "phoneme": "/sl/",
         "concept": "Consonant blends"
       },
       {
         "sound": "br",
-        "phoneme": null,
+        "phoneme": "/br/",
         "concept": "Consonant blends"
       },
       {
         "sound": "cr",
-        "phoneme": null,
+        "phoneme": "/kr/",
         "concept": "Consonant blends"
       },
       {
         "sound": "dr",
-        "phoneme": null,
+        "phoneme": "/dr/",
         "concept": "Consonant blends"
       },
       {
         "sound": "fr",
-        "phoneme": null,
+        "phoneme": "/fr/",
         "concept": "Consonant blends"
       },
       {
         "sound": "gr",
-        "phoneme": null,
+        "phoneme": "/gr/",
         "concept": "Consonant blends"
       },
       {
         "sound": "pr",
-        "phoneme": null,
+        "phoneme": "/pr/",
         "concept": "Consonant blends"
       },
       {
         "sound": "tr",
-        "phoneme": null,
+        "phoneme": "/tr/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sc",
-        "phoneme": null,
+        "phoneme": "/sk/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sk",
-        "phoneme": null,
+        "phoneme": "/sk/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sm",
-        "phoneme": null,
+        "phoneme": "/sm/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sn",
-        "phoneme": null,
+        "phoneme": "/sn/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sp",
-        "phoneme": null,
+        "phoneme": "/sp/",
         "concept": "Consonant blends"
       },
       {
         "sound": "st",
-        "phoneme": null,
+        "phoneme": "/st/",
         "concept": "Consonant blends"
       },
       {
         "sound": "sw",
-        "phoneme": null,
+        "phoneme": "/sw/",
         "concept": "Consonant blends"
       }
     ],
@@ -23504,27 +23604,27 @@
     "soundCards": [
       {
         "sound": "ild",
-        "phoneme": null,
+        "phoneme": "/īld/",
         "concept": "Closed syllable exceptions"
       },
       {
         "sound": "ind",
-        "phoneme": null,
+        "phoneme": "/īnd/",
         "concept": "Closed syllable exceptions"
       },
       {
         "sound": "old",
-        "phoneme": null,
+        "phoneme": "/ōld/",
         "concept": "Closed syllable exceptions"
       },
       {
         "sound": "ost",
-        "phoneme": null,
+        "phoneme": "/ōst/",
         "concept": "Closed syllable exceptions"
       },
       {
         "sound": "olt",
-        "phoneme": null,
+        "phoneme": "/ōlt/",
         "concept": "Closed syllable exceptions"
       }
     ],
@@ -23884,18 +23984,7 @@
       }
     ],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "CCVCC",
-        "phoneme": null,
-        "concept": "Five-sound syllables"
-      },
-      {
-        "sound": "CCCVC patterns",
-        "phoneme": null,
-        "concept": "Five-sound syllables"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "When the Kids are Out",
@@ -24378,7 +24467,7 @@
         "purpose": "Spelling/Dictation"
       },
       {
-        "text": "I \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 \u2022 3.",
+        "text": "I • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • • 3.",
         "level": "AB",
         "source": "Dictation Book",
         "purpose": "Spelling/Dictation"
@@ -24389,32 +24478,32 @@
     "soundCards": [
       {
         "sound": "scr",
-        "phoneme": null,
+        "phoneme": "/skr/",
         "concept": "Three-letter blends"
       },
       {
         "sound": "spr",
-        "phoneme": null,
+        "phoneme": "/spr/",
         "concept": "Three-letter blends"
       },
       {
         "sound": "str",
-        "phoneme": null,
+        "phoneme": "/str/",
         "concept": "Three-letter blends"
       },
       {
         "sound": "squ",
-        "phoneme": null,
+        "phoneme": "/skw/",
         "concept": "Three-letter blends"
       },
       {
         "sound": "thr",
-        "phoneme": null,
+        "phoneme": "/thr/",
         "concept": "Three-letter blends"
       },
       {
         "sound": "shr",
-        "phoneme": null,
+        "phoneme": "/shr/",
         "concept": "Three-letter blends"
       }
     ],
@@ -26170,13 +26259,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "Schwa in unstressed syllables",
-        "phoneme": null,
-        "concept": "Schwa; Compound words"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "Montel's Job at the Kennel",
@@ -27989,13 +28072,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "VCCV division pattern",
-        "phoneme": null,
-        "concept": "Multisyllabic with blends"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "Alfred and the Dentist",
@@ -28473,7 +28550,7 @@
     "soundCards": [
       {
         "sound": "ct",
-        "phoneme": null,
+        "phoneme": "/kt/",
         "concept": "Final ct blend"
       }
     ],
@@ -29639,13 +29716,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "Multiple syllable patterns",
-        "phoneme": null,
-        "concept": "Three+ syllables"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "Basketball Camp",
@@ -32083,13 +32154,13 @@
         "purpose": "Spelling/Dictation"
       },
       {
-        "text": "Y:a \u00b7' i~~':::1l \",;l:?",
+        "text": "Y:a ·' i~~':::1l \",;l:?",
         "level": "AB",
         "source": "Dictation Book",
         "purpose": "Spelling/Dictation"
       },
       {
-        "text": "I, \",' , \" \u00b7 ;\u2022\u00b7 \" \u00b7x \u00b7 ,.",
+        "text": "I, \",' , \" · ;•· \" ·x · ,.",
         "level": "AB",
         "source": "Dictation Book",
         "purpose": "Spelling/Dictation"
@@ -32106,12 +32177,12 @@
     "soundCards": [
       {
         "sound": "-ed",
-        "phoneme": null,
+        "phoneme": "/ĕd/, /d/, /t/",
         "concept": "Suffixes -ed, -ing"
       },
       {
         "sound": "-ing",
-        "phoneme": null,
+        "phoneme": "/ing/",
         "concept": "Suffixes -ed, -ing"
       }
     ],
@@ -35336,27 +35407,27 @@
     "soundCards": [
       {
         "sound": "a-e",
-        "phoneme": null,
+        "phoneme": "/ā/",
         "concept": "Vowel-Consonant-e"
       },
       {
         "sound": "i-e",
-        "phoneme": null,
+        "phoneme": "/ī/",
         "concept": "Vowel-Consonant-e"
       },
       {
         "sound": "o-e",
-        "phoneme": null,
+        "phoneme": "/ō/",
         "concept": "Vowel-Consonant-e"
       },
       {
         "sound": "u-e",
-        "phoneme": null,
+        "phoneme": "/ū/",
         "concept": "Vowel-Consonant-e"
       },
       {
         "sound": "e-e",
-        "phoneme": null,
+        "phoneme": "/ē/",
         "concept": "Vowel-Consonant-e"
       }
     ],
@@ -37746,13 +37817,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "V-C-e combined patterns",
-        "phoneme": null,
-        "concept": "V-C-e + closed syllables"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "The Costume Ball",
@@ -38223,13 +38288,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "Mixed closed and V-C-e",
-        "phoneme": null,
-        "concept": "Multisyllabic V-C-e"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "A Japanese Lunch",
@@ -38720,13 +38779,13 @@
     "wordElements": [],
     "soundCards": [
       {
-        "sound": "ive (short i)",
-        "phoneme": null,
+        "sound": "-ive",
+        "phoneme": "/ĭv/",
         "concept": "V-C-e exceptions"
       },
       {
-        "sound": "final -ve",
-        "phoneme": null,
+        "sound": "-ve",
+        "phoneme": "/v/",
         "concept": "V-C-e exceptions"
       }
     ],
@@ -39528,8 +39587,8 @@
     "wordElements": [],
     "soundCards": [
       {
-        "sound": "Open syllable vowels; y as /i/",
-        "phoneme": null,
+        "sound": "y",
+        "phoneme": "/ī/",
         "concept": "Open syllables"
       }
     ],
@@ -42826,7 +42885,7 @@
         "purpose": "Spelling/Dictation"
       },
       {
-        "text": "\u2022 \u2022 billed called",
+        "text": "• • billed called",
         "source": "Dictation Book",
         "purpose": "Spelling/Dictation"
       },
@@ -43372,13 +43431,7 @@
       }
     ],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "V/CV division",
-        "phoneme": null,
-        "concept": "Open + other syllables"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "Mom's Big Day",
@@ -44181,8 +44234,8 @@
     "wordElements": [],
     "soundCards": [
       {
-        "sound": "y at end of multisyllable words",
-        "phoneme": null,
+        "sound": "y",
+        "phoneme": "/ē/",
         "concept": "Y as long e"
       }
     ],
@@ -46324,23 +46377,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "Open",
-        "phoneme": null,
-        "concept": "Three syllable types"
-      },
-      {
-        "sound": "closed",
-        "phoneme": null,
-        "concept": "Three syllable types"
-      },
-      {
-        "sound": "V-C-e combined",
-        "phoneme": null,
-        "concept": "Three syllable types"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "A Code to Be Safe",
@@ -55995,12 +56032,12 @@
     "soundCards": [
       {
         "sound": "a",
-        "phoneme": null,
+        "phoneme": "/ə/",
         "concept": "Unaccented open syllables"
       },
       {
-        "sound": "i in unstressed position; prefix a-",
-        "phoneme": null,
+        "sound": "i",
+        "phoneme": "/ə/",
         "concept": "Unaccented open syllables"
       }
     ],
@@ -58819,67 +58856,67 @@
     "soundCards": [
       {
         "sound": "-able",
-        "phoneme": null,
+        "phoneme": "/əbəl/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-en",
-        "phoneme": null,
+        "phoneme": "/ən/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-er",
-        "phoneme": null,
+        "phoneme": "/ər/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-est",
-        "phoneme": null,
+        "phoneme": "/əst/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-ish",
-        "phoneme": null,
+        "phoneme": "/ĭsh/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-or",
-        "phoneme": null,
+        "phoneme": "/ər/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-y",
-        "phoneme": null,
+        "phoneme": "/ē/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-ful",
-        "phoneme": null,
+        "phoneme": "/fəl/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-less",
-        "phoneme": null,
+        "phoneme": "/lĕs/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-ly",
-        "phoneme": null,
+        "phoneme": "/lē/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-ment",
-        "phoneme": null,
+        "phoneme": "/mənt/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-ness",
-        "phoneme": null,
+        "phoneme": "/nĕs/",
         "concept": "Common suffixes"
       },
       {
         "sound": "-ty",
-        "phoneme": null,
+        "phoneme": "/tē/",
         "concept": "Common suffixes"
       }
     ],
@@ -61001,7 +61038,7 @@
     "soundCards": [
       {
         "sound": "-ed",
-        "phoneme": null,
+        "phoneme": "/d/, /t/",
         "concept": "Suffix -ed variations"
       }
     ],
@@ -62493,13 +62530,7 @@
     ],
     "phrases": [],
     "wordElements": [],
-    "soundCards": [
-      {
-        "sound": "Two suffixes combined",
-        "phoneme": null,
-        "concept": "Multiple suffixes"
-      }
-    ],
+    "soundCards": [],
     "stories": [
       {
         "title": "The Golf Lesson",
@@ -70708,52 +70739,52 @@
     "soundCards": [
       {
         "sound": "-ble",
-        "phoneme": null,
+        "phoneme": "/bəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-cle",
-        "phoneme": null,
+        "phoneme": "/kəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-dle",
-        "phoneme": null,
+        "phoneme": "/dəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-fle",
-        "phoneme": null,
+        "phoneme": "/fəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-gle",
-        "phoneme": null,
+        "phoneme": "/gəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-kle",
-        "phoneme": null,
+        "phoneme": "/kəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-ple",
-        "phoneme": null,
+        "phoneme": "/pəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-tle",
-        "phoneme": null,
+        "phoneme": "/təl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-zle",
-        "phoneme": null,
+        "phoneme": "/zəl/",
         "concept": "Consonant-le syllable"
       },
       {
         "sound": "-stle",
-        "phoneme": null,
+        "phoneme": "/səl/",
         "concept": "Consonant-le syllable"
       }
     ],
@@ -70943,7 +70974,7 @@
     "highFrequencyWords": [],
     "sentences": [
       {
-        "text": "Rob mob nab\nsob rib fib\nlab rob lob\nfish lash rash\nshot shop mash\nship nosh \u00b0 Nash\n\nRob had a rash.",
+        "text": "Rob mob nab\nsob rib fib\nlab rob lob\nfish lash rash\nshot shop mash\nship nosh ° Nash\n\nRob had a rash.",
         "level": "AB",
         "source": "Student Reader",
         "purpose": "Decoding"
