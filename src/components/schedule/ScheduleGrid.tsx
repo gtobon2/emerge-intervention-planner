@@ -331,27 +331,27 @@ export function ScheduleGrid({
   };
 
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[600px]">
+    <div className="overflow-x-auto -mx-2 px-2 sm:mx-0 sm:px-0">
+      <div className="min-w-[480px] sm:min-w-[600px]">
         {/* Header row with days */}
-        <div className="grid grid-cols-[60px_repeat(5,1fr)] gap-1 mb-1">
-          <div className="flex items-center justify-center p-2 text-sm font-medium text-text-muted">
-            <Clock className="w-4 h-4" />
+        <div className="grid grid-cols-[40px_repeat(5,1fr)] sm:grid-cols-[60px_repeat(5,1fr)] gap-0.5 sm:gap-1 mb-1">
+          <div className="flex items-center justify-center p-1 sm:p-2 text-sm font-medium text-text-muted">
+            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
           </div>
           {WEEKDAYS.map(day => (
             <div
               key={day}
               className={`
-                text-center p-2 rounded-lg transition-colors
+                text-center p-1 sm:p-2 rounded-lg transition-colors
                 ${isDragging && draggingDay === day
                   ? 'bg-movement/20 ring-2 ring-movement'
                   : 'bg-surface'}
               `}
             >
-              <div className={`font-semibold text-sm ${isDragging && draggingDay === day ? 'text-movement' : 'text-text-primary'}`}>
+              <div className={`font-semibold text-xs sm:text-sm ${isDragging && draggingDay === day ? 'text-movement' : 'text-text-primary'}`}>
                 {getDayShortName(day)}
               </div>
-              <div className="text-xs text-text-muted">
+              <div className="text-[10px] sm:text-xs text-text-muted">
                 {formatDateShort(weekDates.get(day)!)}
               </div>
             </div>
@@ -363,10 +363,10 @@ export function ScheduleGrid({
           {TIME_SLOTS.map(timeStr => (
             <div
               key={timeStr}
-              className={`grid grid-cols-[60px_repeat(5,1fr)] gap-1 ${isHourStart(timeStr) ? 'mt-1' : ''}`}
+              className={`grid grid-cols-[40px_repeat(5,1fr)] sm:grid-cols-[60px_repeat(5,1fr)] gap-0.5 sm:gap-1 ${isHourStart(timeStr) ? 'mt-1' : ''}`}
             >
               {/* Time label - only show on hour marks */}
-              <div className="flex items-start justify-end pr-2 text-xs text-text-muted pt-0.5">
+              <div className="flex items-start justify-end pr-1 sm:pr-2 text-[10px] sm:text-xs text-text-muted pt-0.5">
                 {isHourStart(timeStr) ? formatTimeDisplay(timeStr) : ''}
               </div>
 
@@ -569,25 +569,25 @@ export function ScheduleGrid({
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-border">
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <div className="w-4 h-4 rounded bg-blue-500" />
+        <div className="flex flex-wrap gap-2 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-border">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-text-muted">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-blue-500" />
             <span>Wilson</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <div className="w-4 h-4 rounded bg-green-500" />
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-text-muted">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-green-500" />
             <span>Delta Math</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <div className="w-4 h-4 rounded bg-orange-500" />
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-text-muted">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-orange-500" />
             <span>Camino</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <div className="w-4 h-4 rounded bg-green-50 border border-green-200" />
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-text-muted">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-green-50 border border-green-200" />
             <span>Available</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <div className="w-4 h-4 rounded bg-red-50 border border-red-200" />
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-text-muted">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-red-50 border border-red-200" />
             <span>Blocked</span>
           </div>
         </div>

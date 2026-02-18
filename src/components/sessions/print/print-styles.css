@@ -1,0 +1,227 @@
+/* ============================================
+ * EMERGE Intervention Planner - Print Styles
+ *
+ * Applied when printing session lesson plans.
+ * Ensures clean, readable output on paper.
+ * ============================================ */
+
+@media print {
+  /* ---- Global Reset ---- */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ---- Hide non-print elements ---- */
+  .no-print {
+    display: none !important;
+  }
+
+  /* ---- Page Margins ---- */
+  @page {
+    margin: 0.65in 0.6in;
+    size: letter portrait;
+  }
+
+  /* ---- Page Break Controls ---- */
+  .print-break-before {
+    page-break-before: always;
+  }
+
+  .print-break-after {
+    page-break-after: always;
+  }
+
+  .print-break-avoid {
+    page-break-inside: avoid;
+  }
+
+  /* ---- Typography ---- */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+  }
+
+  table, figure, .print-block-section {
+    page-break-inside: avoid;
+  }
+
+  /* ---- Print Container ---- */
+  .print-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* ---- Header Area ---- */
+  .print-header {
+    border-bottom: 2px solid #222 !important;
+    padding-bottom: 8pt !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .print-header-title {
+    font-size: 16pt !important;
+    font-weight: 700 !important;
+    color: black !important;
+  }
+
+  .print-header-subtitle {
+    font-size: 10pt !important;
+    color: #444 !important;
+  }
+
+  .print-header-meta {
+    font-size: 9pt !important;
+    color: #666 !important;
+  }
+
+  /* ---- Student Roster ---- */
+  .print-roster {
+    border: 1px solid #ccc !important;
+    border-radius: 0 !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .print-roster-item {
+    border-bottom: 1px solid #eee !important;
+    padding: 3pt 6pt !important;
+    font-size: 10pt !important;
+  }
+
+  /* ---- Block Sections ---- */
+  .print-block-header {
+    background: #f0f0f0 !important;
+    border: 1px solid #ccc !important;
+    padding: 4pt 8pt !important;
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    margin-top: 10pt !important;
+  }
+
+  .print-section {
+    border: 1px solid #ddd !important;
+    border-top: none !important;
+    padding: 6pt 8pt !important;
+  }
+
+  .print-section-title {
+    font-size: 10pt !important;
+    font-weight: 600 !important;
+  }
+
+  .print-section-duration {
+    font-size: 9pt !important;
+    color: #666 !important;
+  }
+
+  .print-section-elements {
+    font-size: 9pt !important;
+    color: #333 !important;
+    margin-top: 3pt !important;
+  }
+
+  .print-section-activities {
+    font-size: 9pt !important;
+    color: #333 !important;
+    margin-top: 3pt !important;
+    padding-left: 12pt !important;
+  }
+
+  .print-section-notes {
+    font-size: 9pt !important;
+    color: #555 !important;
+    font-style: italic !important;
+    margin-top: 3pt !important;
+    padding: 3pt 6pt !important;
+    border-left: 2px solid #ccc !important;
+  }
+
+  /* ---- Day Assignment Badges ---- */
+  .print-day-badge {
+    border: 1px solid #999 !important;
+    padding: 1pt 4pt !important;
+    font-size: 8pt !important;
+    font-weight: 600 !important;
+  }
+
+  /* ---- Footer ---- */
+  .print-footer {
+    border-top: 1px solid #ccc !important;
+    padding-top: 6pt !important;
+    margin-top: 12pt !important;
+    font-size: 8pt !important;
+    color: #888 !important;
+  }
+
+  /* ---- Notes Lines (blank writing space) ---- */
+  .print-notes-line {
+    border-bottom: 1px solid #ddd !important;
+    height: 20pt !important;
+    margin-bottom: 4pt !important;
+  }
+
+  /* ---- Element Tags ---- */
+  .print-element-tag {
+    display: inline-block !important;
+    border: 1px solid #bbb !important;
+    padding: 1pt 5pt !important;
+    margin: 1pt 2pt !important;
+    font-size: 9pt !important;
+    border-radius: 2pt !important;
+  }
+
+  /* ---- Camino Block Colors (print-safe) ---- */
+  .print-camino-warmup {
+    border-left: 3pt solid #d97706 !important;
+  }
+
+  .print-camino-phonics {
+    border-left: 3pt solid #7c3aed !important;
+  }
+
+  .print-camino-reading {
+    border-left: 3pt solid #2563eb !important;
+  }
+
+  .print-camino-writing {
+    border-left: 3pt solid #16a34a !important;
+  }
+
+  /* ---- Wilson Block Colors (print-safe) ---- */
+  .print-wilson-word-study {
+    border-left: 3pt solid #2563eb !important;
+  }
+
+  .print-wilson-spelling {
+    border-left: 3pt solid #7c3aed !important;
+  }
+
+  .print-wilson-fluency {
+    border-left: 3pt solid #16a34a !important;
+  }
+}
+
+/* ============================================
+ * Screen-only styles for the print preview
+ * These apply BEFORE printing, for the on-screen view
+ * ============================================ */
+
+.print-preview-screen {
+  background: white;
+  color: #1a1a1a;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  max-width: 8.5in;
+  margin: 0 auto;
+  padding: 0.75in;
+  min-height: 100vh;
+}
+
+.print-preview-screen .section-divider {
+  border-top: 1px solid #e5e5e5;
+  margin: 12px 0;
+}

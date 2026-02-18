@@ -2,21 +2,37 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { TrendingUp, Plus, Filter, Calendar, BarChart3, Target } from 'lucide-react';
+import {
+  TrendingUp,
+  Plus,
+  Filter,
+  Calendar,
+  BarChart3,
+  Target,
+  Users,
+  Layers,
+  User,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { AppLayout } from '@/components/layout';
-import { Button, Card, CardHeader, CardTitle, CardContent, Select } from '@/components/ui';
+import { Button, Card, CardHeader, CardTitle, CardContent, Select, ConfirmModal } from '@/components/ui';
 import {
   ProgressChart,
   TrendIndicator,
   DecisionRuleAlert,
   AddDataPointModal,
+  IndividualPMEntry,
 } from '@/components/progress';
 import { useProgress } from '@/hooks/use-progress';
 import { useGroupsStore } from '@/stores/groups';
 import { useGoalsStore } from '@/stores/goals';
 import { GoalSettingModal } from '@/components/goals/GoalSettingModal';
+import type { ProgressMonitoring, ProgressMonitoringInsert } from '@/lib/supabase/types';
 
 const PROGRESS_GROUP_KEY = 'emerge-progress-selected-group';
+
+type EntryMode = 'batch' | 'individual';
 
 export default function ProgressPage() {
   const searchParams = useSearchParams();
@@ -28,6 +44,15 @@ export default function ProgressPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
 
+  // Entry mode toggle
+  const [entryMode, setEntryMode] = useState<EntryMode>('batch');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+
+  // Edit/Delete state
+  const [editingDataPoint, setEditingDataPoint] = useState<ProgressMonitoring | null>(null);
+  const [deletingDataPoint, setDeletingDataPoint] = useState<ProgressMonitoring | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Use individual selectors to avoid re-rendering on unrelated store changes
   const groups = useGroupsStore(s => s.groups);
   const fetchGroups = useGroupsStore(s => s.fetchGroups);
@@ -38,7 +63,7 @@ export default function ProgressPage() {
   const fetchGoalsForGroup = useGoalsStore(s => s.fetchGoalsForGroup);
 
   // Fetch progress data
-  const { data, isLoading, addDataPoint, trendLine, refetch } = useProgress(
+  const { data, isLoading, addDataPoint, deleteDataPoint, trendLine, refetch } = useProgress(
     selectedGroupId || undefined
   );
 
@@ -66,6 +91,8 @@ export default function ProgressPage() {
   // Persist group selection to URL and localStorage on change
   const handleGroupChange = useCallback((groupId: string) => {
     setSelectedGroupId(groupId);
+    setSelectedStudentId('');
+    setEditingDataPoint(null);
     if (groupId) {
       localStorage.setItem(PROGRESS_GROUP_KEY, groupId);
       router.replace(`?group=${groupId}`, { scroll: false });
@@ -225,6 +252,91 @@ export default function ProgressPage() {
     return activeGoal?.measure_type || null;
   }, [goals]);
 
+  // Get recent scores for a specific student (last 5, ascending order)
+  const getRecentScoresForStudent = useCallback((studentId: string): number[] => {
+    return data
+      .filter(d => d.student_id === studentId)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(-5)
+      .map(d => d.score);
+  }, [data]);
+
+  // Get goal line for a specific student
+  const getGoalLineForStudent = useCallback((studentId: string): number | undefined => {
+    const goal = goals.find(g => g.student_id === studentId);
+    return goal?.goal_score;
+  }, [goals]);
+
+  // Individual entry: save handler
+  const handleIndividualSave = useCallback(async (saveData: { score: number; date: string; measure_type: string; notes?: string }) => {
+    if (!selectedStudentId || !selectedGroupId) return;
+
+    const dataPoint: ProgressMonitoringInsert = {
+      group_id: selectedGroupId,
+      student_id: selectedStudentId,
+      date: saveData.date,
+      measure_type: saveData.measure_type,
+      score: saveData.score,
+      benchmark: null,
+      goal: null,
+      notes: saveData.notes || null,
+    };
+
+    await addDataPoint(dataPoint);
+    refetch();
+    setSelectedStudentId('');
+  }, [selectedStudentId, selectedGroupId, addDataPoint, refetch]);
+
+  // Edit handler: delete old point, save new values
+  const handleEditSave = useCallback(async (saveData: { score: number; date: string; measure_type: string; notes?: string }) => {
+    if (!editingDataPoint) return;
+
+    // Delete the old data point
+    await deleteDataPoint(editingDataPoint.id);
+
+    // Create a new one with updated values
+    const dataPoint: ProgressMonitoringInsert = {
+      group_id: editingDataPoint.group_id,
+      student_id: editingDataPoint.student_id || '',
+      date: saveData.date,
+      measure_type: saveData.measure_type,
+      score: saveData.score,
+      benchmark: editingDataPoint.benchmark,
+      goal: editingDataPoint.goal,
+      notes: saveData.notes || null,
+    };
+
+    await addDataPoint(dataPoint);
+    refetch();
+    setEditingDataPoint(null);
+  }, [editingDataPoint, deleteDataPoint, addDataPoint, refetch]);
+
+  // Delete handler
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deletingDataPoint) return;
+    setIsDeleting(true);
+    try {
+      await deleteDataPoint(deletingDataPoint.id);
+      refetch();
+    } finally {
+      setIsDeleting(false);
+      setDeletingDataPoint(null);
+    }
+  }, [deletingDataPoint, deleteDataPoint, refetch]);
+
+  // Data table: sorted by date descending, grouped by student
+  const dataTableRows = useMemo(() => {
+    return [...filteredData]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 50); // Show last 50 points for performance
+  }, [filteredData]);
+
+  // Find student name helper
+  const getStudentName = useCallback((studentId: string | null) => {
+    if (!studentId) return 'Unknown';
+    return students.find(s => s.id === studentId)?.name || 'Unknown';
+  }, [students]);
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -248,7 +360,16 @@ export default function ProgressPage() {
             </Button>
             <Button
               className="gap-2"
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                if (entryMode === 'batch') {
+                  setIsModalOpen(true);
+                } else {
+                  // For individual mode, just ensure a student is picked
+                  if (!selectedStudentId && students.length > 0) {
+                    setSelectedStudentId(students[0].id);
+                  }
+                }
+              }}
               disabled={!selectedGroupId}
             >
               <Plus className="w-4 h-4" />
@@ -289,12 +410,114 @@ export default function ProgressPage() {
                   className="w-40"
                 />
               </div>
+
+              {/* Entry Mode Toggle */}
+              <div className="flex items-center ml-auto">
+                <div className="flex rounded-lg border border-border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => { setEntryMode('batch'); setEditingDataPoint(null); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] ${
+                      entryMode === 'batch'
+                        ? 'bg-movement text-white'
+                        : 'bg-surface text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    Batch
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEntryMode('individual'); setEditingDataPoint(null); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] ${
+                      entryMode === 'individual'
+                        ? 'bg-movement text-white'
+                        : 'bg-surface text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    Individual
+                  </button>
+                </div>
+              </div>
             </>
           )}
         </div>
 
         {selectedGroupId ? (
           <>
+            {/* Individual Entry Panel (shown when in individual mode or editing) */}
+            {(entryMode === 'individual' || editingDataPoint) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="w-5 h-5 text-movement" />
+                    {editingDataPoint ? 'Edit Data Point' : 'Individual Entry'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {editingDataPoint ? (
+                    /* Editing an existing data point */
+                    <IndividualPMEntry
+                      studentId={editingDataPoint.student_id || ''}
+                      studentName={getStudentName(editingDataPoint.student_id)}
+                      groupId={selectedGroupId}
+                      measureType={lockedMeasureType || undefined}
+                      onSave={handleEditSave}
+                      onCancel={() => setEditingDataPoint(null)}
+                      recentScores={editingDataPoint.student_id ? getRecentScoresForStudent(editingDataPoint.student_id) : []}
+                      goalLine={editingDataPoint.student_id ? getGoalLineForStudent(editingDataPoint.student_id) : undefined}
+                      initialValues={{
+                        score: editingDataPoint.score,
+                        date: editingDataPoint.date,
+                        measure_type: editingDataPoint.measure_type,
+                        notes: editingDataPoint.notes || undefined,
+                      }}
+                    />
+                  ) : (
+                    /* New individual entry */
+                    <>
+                      {/* Student picker */}
+                      <div className="mb-4">
+                        <Select
+                          label="Select Student"
+                          options={[
+                            { value: '', label: 'Choose a student...' },
+                            ...students.map((s) => ({
+                              value: s.id,
+                              label: s.name,
+                            })),
+                          ]}
+                          value={selectedStudentId}
+                          onChange={(e) => setSelectedStudentId(e.target.value)}
+                        />
+                      </div>
+
+                      {selectedStudentId ? (
+                        <IndividualPMEntry
+                          studentId={selectedStudentId}
+                          studentName={
+                            students.find(s => s.id === selectedStudentId)?.name || ''
+                          }
+                          groupId={selectedGroupId}
+                          measureType={lockedMeasureType || undefined}
+                          onSave={handleIndividualSave}
+                          onCancel={() => setSelectedStudentId('')}
+                          recentScores={getRecentScoresForStudent(selectedStudentId)}
+                          goalLine={getGoalLineForStudent(selectedStudentId)}
+                        />
+                      ) : (
+                        <div className="text-center py-6 text-text-muted">
+                          <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Select a student above to enter a score</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Summary Stats */}
             {summaryStats.currentScore !== null && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -407,6 +630,75 @@ export default function ProgressPage() {
                 {trendLine && filteredData.length > 0 && (
                   <TrendIndicator trend={summaryStats.trend} slope={trendLine.slope} />
                 )}
+
+                {/* Data Points Table with Edit/Delete */}
+                {dataTableRows.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-movement" />
+                        Data Points
+                        <span className="text-xs font-normal text-text-muted ml-auto">
+                          Showing {dataTableRows.length} of {filteredData.length}
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="border border-border rounded-lg overflow-hidden">
+                        {/* Table header */}
+                        <div className="grid grid-cols-[1fr_100px_80px_60px] gap-2 px-4 py-2 bg-surface text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                          <div>Student</div>
+                          <div>Date</div>
+                          <div className="text-right">Score</div>
+                          <div className="text-right">Actions</div>
+                        </div>
+                        {/* Rows */}
+                        <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
+                          {dataTableRows.map((dp) => (
+                            <div
+                              key={dp.id}
+                              className="grid grid-cols-[1fr_100px_80px_60px] gap-2 px-4 py-2 items-center hover:bg-surface/50 group"
+                            >
+                              <div className="text-sm text-text-primary truncate">
+                                {getStudentName(dp.student_id)}
+                              </div>
+                              <div className="text-xs text-text-muted">
+                                {new Date(dp.date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </div>
+                              <div className="text-sm font-semibold text-text-primary text-right">
+                                {dp.score}
+                              </div>
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingDataPoint(dp);
+                                    setEntryMode('individual');
+                                  }}
+                                  className="p-1 rounded hover:bg-surface text-text-muted hover:text-text-primary transition-colors min-h-[28px] min-w-[28px] flex items-center justify-center"
+                                  title="Edit data point"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingDataPoint(dp)}
+                                  className="p-1 rounded hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors min-h-[28px] min-w-[28px] flex items-center justify-center"
+                                  title="Delete data point"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Sidebar */}
@@ -472,7 +764,7 @@ export default function ProgressPage() {
         )}
       </div>
 
-      {/* Add Data Point Modal */}
+      {/* Add Data Point Modal (Batch) */}
       <AddDataPointModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -480,6 +772,22 @@ export default function ProgressPage() {
         groupId={selectedGroupId}
         students={students}
         lockedMeasureType={lockedMeasureType}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deletingDataPoint}
+        onClose={() => setDeletingDataPoint(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Data Point"
+        message={
+          deletingDataPoint
+            ? `Delete the score of ${deletingDataPoint.score} for ${getStudentName(deletingDataPoint.student_id)} on ${new Date(deletingDataPoint.date).toLocaleDateString()}? This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        variant="danger"
+        isLoading={isDeleting}
       />
 
       {/* Goal Setting Modal — only mount when open to avoid store subscription cascade */}

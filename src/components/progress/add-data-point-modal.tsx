@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Users, Lock } from 'lucide-react';
 import type { Student, ProgressMonitoringInsert } from '@/lib/supabase/types';
+import { validatePMDataPoint } from '@/lib/supabase/validation';
 
 export interface AddDataPointModalProps {
   isOpen: boolean;
@@ -42,6 +43,8 @@ export function AddDataPointModal({
 
   // Per-student score rows
   const [rows, setRows] = useState<StudentScoreRow[]>([]);
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Auto-fill measure type from locked goal when modal opens
   useEffect(() => {
@@ -60,14 +63,37 @@ export function AddDataPointModal({
 
   const updateRow = (index: number, field: keyof StudentScoreRow, value: string) => {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+    // Clear row error on change
+    if (rowErrors[index]) {
+      setRowErrors((prev) => {
+        const updated = { ...prev };
+        delete updated[index];
+        return updated;
+      });
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setRowErrors({});
+    setFieldErrors({});
+
+    const newFieldErrors: Record<string, string> = {};
+
+    // Validate date and measure type at the top level
+    if (!date) {
+      newFieldErrors.date = 'Date is required';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      newFieldErrors.date = 'Invalid date format';
+    }
 
     if (!measureType.trim()) {
-      setError('Measure type is required');
+      newFieldErrors.measure_type = 'Measure type is required';
+    }
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
       return;
     }
 
@@ -78,13 +104,37 @@ export function AddDataPointModal({
       return;
     }
 
-    // Validate all scores
+    // Validate each row using validatePMDataPoint
+    const newRowErrors: Record<number, string> = {};
+    let hasRowErrors = false;
+
     for (const row of rowsWithScores) {
+      const index = rows.indexOf(row);
       const scoreNum = parseFloat(row.score);
+      const validation = validatePMDataPoint({
+        score: isNaN(scoreNum) ? undefined : scoreNum,
+        date,
+        measure_type: measureType,
+      });
+
       if (isNaN(scoreNum)) {
-        setError(`Invalid score for ${row.studentName}`);
-        return;
+        newRowErrors[index] = `Invalid score`;
+        hasRowErrors = true;
+      } else if (!validation.isValid) {
+        // Filter to score-specific errors only (date/measure validated above)
+        const scoreErrors = validation.errors.filter(
+          (err) => err.includes('Score') || err.includes('score')
+        );
+        if (scoreErrors.length > 0) {
+          newRowErrors[index] = scoreErrors[0];
+          hasRowErrors = true;
+        }
       }
+    }
+
+    if (hasRowErrors) {
+      setRowErrors(newRowErrors);
+      return;
     }
 
     setIsLoading(true);
@@ -151,7 +201,17 @@ export function AddDataPointModal({
             label="Date"
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => {
+              setDate(e.target.value);
+              if (fieldErrors.date) {
+                setFieldErrors((prev) => {
+                  const updated = { ...prev };
+                  delete updated.date;
+                  return updated;
+                });
+              }
+            }}
+            error={fieldErrors.date}
             required
           />
           <div className="w-full">
@@ -176,10 +236,20 @@ export function AddDataPointModal({
                 { value: 'Custom', label: 'Custom Measure' },
               ]}
               value={measureType}
-              onChange={(e) => setMeasureType(e.target.value)}
+              onChange={(e) => {
+                setMeasureType(e.target.value);
+                if (fieldErrors.measure_type) {
+                  setFieldErrors((prev) => {
+                    const updated = { ...prev };
+                    delete updated.measure_type;
+                    return updated;
+                  });
+                }
+              }}
               required
               disabled={!!lockedMeasureType}
             />
+            {fieldErrors.measure_type && <p className="mt-1 text-sm text-red-400">{fieldErrors.measure_type}</p>}
           </div>
         </div>
 
@@ -201,14 +271,17 @@ export function AddDataPointModal({
                   <div className="text-sm font-medium text-text-primary truncate">
                     {row.studentName}
                   </div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.score}
-                    onChange={(e) => updateRow(index, 'score', e.target.value)}
-                    placeholder="—"
-                    className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-md text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
+                  <div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.score}
+                      onChange={(e) => updateRow(index, 'score', e.target.value)}
+                      placeholder="—"
+                      className={`w-full px-2 py-1.5 text-sm bg-background border rounded-md text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50 ${rowErrors[index] ? 'border-red-500' : 'border-border'}`}
+                    />
+                    {rowErrors[index] && <p className="mt-1 text-xs text-red-400">{rowErrors[index]}</p>}
+                  </div>
                 </div>
               ))}
             </div>

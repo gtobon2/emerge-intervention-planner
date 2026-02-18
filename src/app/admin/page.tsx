@@ -555,13 +555,13 @@ export default function AdminPage() {
 
   const renderTabs = () => (
     <div className="border-b border-border mb-6">
-      <nav className="-mb-px flex space-x-8 overflow-x-auto">
+      <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-none">
         {[
           { id: 'overview', label: 'Overview', icon: Activity },
           { id: 'users', label: 'Users', icon: Users },
           { id: 'students', label: 'Students', icon: GraduationCap },
           { id: 'assignments', label: 'Assignments', icon: Link2 },
-          { id: 'groups', label: 'Manage Groups', icon: Layers },
+          { id: 'groups', label: 'Groups', icon: Layers },
           { id: 'data', label: 'Data', icon: Download },
           { id: 'settings', label: 'Settings', icon: SettingsIcon },
         ].map(tab => (
@@ -569,7 +569,7 @@ export default function AdminPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id as AdminTab)}
             className={`
-              flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors
+              flex items-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap min-h-[44px]
               ${
                 activeTab === tab.id
                   ? 'border-movement text-movement'
@@ -578,7 +578,8 @@ export default function AdminPage() {
             `}
           >
             <tab.icon className="w-4 h-4" />
-            {tab.label}
+            <span className="hidden sm:inline">{tab.label}</span>
+            <span className="sm:hidden">{tab.label}</span>
           </button>
         ))}
       </nav>
@@ -719,7 +720,7 @@ export default function AdminPage() {
 
   const renderUsers = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 max-w-md">
           <Input
             placeholder="Search users..."
@@ -729,12 +730,13 @@ export default function AdminPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => fetchUsers()} variant="ghost" size="sm" disabled={usersLoading}>
+          <Button onClick={() => fetchUsers()} variant="ghost" size="sm" disabled={usersLoading} className="min-h-[44px] min-w-[44px]">
             <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button onClick={handleAddUser} className="gap-2">
+          <Button onClick={handleAddUser} className="gap-2 min-h-[44px]">
             <UserPlus className="w-4 h-4" />
-            Add User
+            <span className="hidden sm:inline">Add User</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </div>
       </div>
@@ -749,69 +751,123 @@ export default function AdminPage() {
           ) : filteredUsers.length === 0 ? (
             <p className="text-text-muted text-center py-8">No users found</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Name</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Email</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Role</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Grade Level</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Created</th>
-                    <th className="text-right py-3 px-4 font-medium text-text-muted">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map(user => (
-                    <tr key={user.id} className="border-b border-border/50 hover:bg-foundation">
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-text-primary">{user.name}</span>
-                      </td>
-                      <td className="py-3 px-4 text-text-muted">{user.email}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            user.role === 'admin'
-                              ? 'bg-purple-100 text-purple-800'
-                              : user.role === 'interventionist'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-green-100 text-green-800'
-                          }`}
+            <>
+              {/* Mobile: Card layout */}
+              <div className="space-y-3 sm:hidden">
+                {filteredUsers.map(user => (
+                  <div key={user.id} className="p-3 bg-foundation rounded-lg border border-border/50">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <span className="font-medium text-text-primary text-sm">{user.name}</span>
+                        <p className="text-xs text-text-muted truncate">{user.email}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditUser(user)}
+                          className="min-h-[44px] min-w-[44px]"
                         >
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-text-muted text-sm">
-                        {user.role === 'teacher' && user.gradeLevel
-                          ? `Grade ${user.gradeLevel}`
-                          : '-'}
-                      </td>
-                      <td className="py-3 px-4 text-text-muted text-sm">
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteUser(user)}
+                          className="min-h-[44px] min-w-[44px]"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          user.role === 'admin'
+                            ? 'bg-purple-100 text-purple-800'
+                            : user.role === 'interventionist'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}
+                      >
+                        {user.role}
+                      </span>
+                      {user.role === 'teacher' && user.gradeLevel && (
+                        <span className="text-xs text-text-muted">Grade {user.gradeLevel}</span>
+                      )}
+                      <span className="text-xs text-text-muted ml-auto">
                         {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditUser(user)}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteUser(user)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </td>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: Table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 font-medium text-text-muted">Name</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted">Email</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted">Role</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell">Grade Level</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell">Created</th>
+                      <th className="text-right py-3 px-4 font-medium text-text-muted">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map(user => (
+                      <tr key={user.id} className="border-b border-border/50 hover:bg-foundation">
+                        <td className="py-3 px-4">
+                          <span className="font-medium text-text-primary">{user.name}</span>
+                        </td>
+                        <td className="py-3 px-4 text-text-muted">{user.email}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              user.role === 'admin'
+                                ? 'bg-purple-100 text-purple-800'
+                                : user.role === 'interventionist'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-text-muted text-sm hidden md:table-cell">
+                          {user.role === 'teacher' && user.gradeLevel
+                            ? `Grade ${user.gradeLevel}`
+                            : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-text-muted text-sm hidden lg:table-cell">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditUser(user)}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteUser(user)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -820,7 +876,7 @@ export default function AdminPage() {
 
   const renderStudents = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 max-w-md">
           <Input
             placeholder="Search students..."
@@ -829,7 +885,7 @@ export default function AdminPage() {
             leftIcon={<Search className="w-4 h-4" />}
           />
         </div>
-        <Button onClick={handleAddStudent} className="gap-2">
+        <Button onClick={handleAddStudent} className="gap-2 min-h-[44px]">
           <Plus className="w-4 h-4" />
           Add Student
         </Button>
@@ -840,59 +896,100 @@ export default function AdminPage() {
           {filteredStudents.length === 0 ? (
             <p className="text-text-muted text-center py-8">No students found</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Name</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Group</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Notes</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-muted">Created</th>
-                    <th className="text-right py-3 px-4 font-medium text-text-muted">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredStudents.map(student => {
-                    const group = groups.find(g => g.id === student.group_id);
-                    return (
-                      <tr
-                        key={student.id}
-                        className="border-b border-border/50 hover:bg-foundation"
-                      >
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-text-primary">{student.name}</span>
-                        </td>
-                        <td className="py-3 px-4 text-text-muted">{group?.name || 'Unassigned'}</td>
-                        <td className="py-3 px-4 text-text-muted text-sm max-w-xs truncate">
-                          {student.notes || '-'}
-                        </td>
-                        <td className="py-3 px-4 text-text-muted text-sm">
-                          {new Date(student.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditStudent(student)}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteStudentClick(student)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Mobile: Card layout */}
+              <div className="space-y-3 sm:hidden">
+                {filteredStudents.map(student => {
+                  const group = groups.find(g => g.id === student.group_id);
+                  return (
+                    <div key={student.id} className="p-3 bg-foundation rounded-lg border border-border/50">
+                      <div className="flex items-start justify-between mb-1">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-text-primary text-sm">{student.name}</span>
+                          <p className="text-xs text-text-muted">{group?.name || 'Unassigned'}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditStudent(student)}
+                            className="min-h-[44px] min-w-[44px]"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteStudentClick(student)}
+                            className="min-h-[44px] min-w-[44px]"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                      {student.notes && (
+                        <p className="text-xs text-text-muted truncate">{student.notes}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop: Table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 font-medium text-text-muted">Name</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted">Group</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell">Notes</th>
+                      <th className="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell">Created</th>
+                      <th className="text-right py-3 px-4 font-medium text-text-muted">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map(student => {
+                      const group = groups.find(g => g.id === student.group_id);
+                      return (
+                        <tr
+                          key={student.id}
+                          className="border-b border-border/50 hover:bg-foundation"
+                        >
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-text-primary">{student.name}</span>
+                          </td>
+                          <td className="py-3 px-4 text-text-muted">{group?.name || 'Unassigned'}</td>
+                          <td className="py-3 px-4 text-text-muted text-sm max-w-xs truncate hidden md:table-cell">
+                            {student.notes || '-'}
+                          </td>
+                          <td className="py-3 px-4 text-text-muted text-sm hidden lg:table-cell">
+                            {new Date(student.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditStudent(student)}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteStudentClick(student)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -1047,11 +1144,11 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-              <Shield className="w-7 h-7 text-movement" />
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary flex items-center gap-2">
+              <Shield className="w-6 h-6 sm:w-7 sm:h-7 text-movement" />
               Admin Dashboard
             </h1>
-            <p className="text-text-muted mt-1">
+            <p className="text-text-muted mt-1 text-sm sm:text-base">
               Manage users, students, and system settings
             </p>
           </div>

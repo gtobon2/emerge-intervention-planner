@@ -203,18 +203,18 @@ export default function CyclesPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <Link
                 href="/admin"
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Link>
-              <div>
-                <h1 className="font-semibold text-lg">Intervention Cycles</h1>
-                <p className="text-sm text-gray-500">
+              <div className="min-w-0">
+                <h1 className="font-semibold text-base sm:text-lg">Intervention Cycles</h1>
+                <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">
                   Manage intervention cycle periods
                 </p>
               </div>
@@ -228,41 +228,42 @@ export default function CyclesPage() {
                 });
                 setShowAddModal(true);
               }}
-              className="gap-2"
+              className="gap-2 min-h-[44px] shrink-0"
             >
               <Plus className="w-4 h-4" />
-              New Cycle
+              <span className="hidden sm:inline">New Cycle</span>
+              <span className="sm:hidden">New</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Current Cycle Banner */}
         {currentCycle && (
-          <Card className="mb-6 border-movement/30 bg-movement/5">
-            <CardContent className="py-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-movement/20">
-                    <Calendar className="w-5 h-5 text-movement" />
+          <Card className="mb-4 sm:mb-6 border-movement/30 bg-movement/5">
+            <CardContent className="py-3 sm:py-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 rounded-full bg-movement/20">
+                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-movement" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{currentCycle.name}</h3>
-                    <p className="text-sm text-gray-600">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-base sm:text-lg">{currentCycle.name}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">
                       {formatCycleDateRange(currentCycle)} ({currentCycle.weeks_count} weeks)
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 ml-8 sm:ml-0">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-movement">
+                    <div className="text-xl sm:text-2xl font-bold text-movement">
                       Week {getWeekOfCycle(currentCycle, today)}
                     </div>
-                    <div className="text-xs text-gray-500">of {currentCycle.weeks_count}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-500">of {currentCycle.weeks_count}</div>
                   </div>
-                  <div className="w-32">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <div className="w-24 sm:w-32">
+                    <div className="flex justify-between text-[10px] sm:text-xs text-gray-500 mb-1">
                       <span>Progress</span>
                       <span>{getCycleProgress(currentCycle)}%</span>
                     </div>
@@ -324,11 +325,11 @@ export default function CyclesPage() {
                     ${isCurrent ? 'ring-2 ring-movement ring-offset-2' : ''}
                   `}
                 >
-                  <CardContent className="py-4">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-semibold text-lg">{cycle.name}</h3>
+                  <CardContent className="py-3 sm:py-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
+                          <h3 className="font-semibold text-base sm:text-lg">{cycle.name}</h3>
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${getCycleStatusColorClass(cycle.status)}`}>
                             {getCycleStatusLabel(cycle.status)}
                           </span>
@@ -341,37 +342,37 @@ export default function CyclesPage() {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 flex-wrap">
                           <span className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
+                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             {formatCycleDateRange(cycle)}
                           </span>
                           <span className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
+                            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             {cycle.weeks_count} weeks
                           </span>
                           {isActive && (
                             <span className="flex items-center gap-1">
-                              <BarChart3 className="w-4 h-4" />
+                              <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               Week {getWeekOfCycle(cycle, today)} of {cycle.weeks_count}
                             </span>
                           )}
                         </div>
                         {cycle.notes && (
-                          <p className="text-sm text-gray-500 mt-2">{cycle.notes}</p>
+                          <p className="text-xs sm:text-sm text-gray-500 mt-2">{cycle.notes}</p>
                         )}
                       </div>
 
                       <div className="flex items-center gap-3">
                         {isActive && (
-                          <div className="w-24">
+                          <div className="w-20 sm:w-24">
                             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-movement rounded-full"
                                 style={{ width: `${progress}%` }}
                               />
                             </div>
-                            <div className="text-xs text-gray-500 text-center mt-1">
+                            <div className="text-[10px] sm:text-xs text-gray-500 text-center mt-1">
                               {progress}%
                             </div>
                           </div>
@@ -380,6 +381,7 @@ export default function CyclesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEditCycle(cycle)}
+                          className="min-h-[44px] min-w-[44px]"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -409,7 +411,7 @@ export default function CyclesPage() {
             required
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Start Date"
               type="date"
@@ -426,7 +428,7 @@ export default function CyclesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Number of Weeks"
               type="number"
@@ -494,7 +496,7 @@ export default function CyclesPage() {
             required
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Start Date"
               type="date"
@@ -511,7 +513,7 @@ export default function CyclesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Number of Weeks"
               type="number"
@@ -541,17 +543,17 @@ export default function CyclesPage() {
             onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
           />
 
-          <div className="flex gap-3 justify-between pt-4 border-t">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-between pt-4 border-t">
             <Button
               variant="ghost"
               onClick={() => editingCycle && handleDeleteCycle(editingCycle.id)}
               disabled={isSubmitting}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 min-h-[44px]"
             >
               <Trash2 className="w-4 h-4 mr-1" />
               Delete
             </Button>
-            <div className="flex gap-3">
+            <div className="flex gap-3 justify-end">
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -559,6 +561,7 @@ export default function CyclesPage() {
                   setEditingCycle(null);
                 }}
                 disabled={isSubmitting}
+                className="min-h-[44px]"
               >
                 Cancel
               </Button>
@@ -566,6 +569,7 @@ export default function CyclesPage() {
                 variant="primary"
                 onClick={handleUpdateCycle}
                 disabled={isSubmitting || !formData.name.trim()}
+                className="min-h-[44px]"
               >
                 {isSubmitting ? 'Saving...' : 'Save Changes'}
               </Button>

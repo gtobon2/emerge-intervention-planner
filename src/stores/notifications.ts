@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionWithGroup } from '@/lib/supabase/types';
 
-export type NotificationType = 'session_reminder' | 'pm_due' | 'session_completed' | 'info' | 'pm_reminder' | 'decision_rule_alert' | 'attendance_flag' | 'goal_not_set';
+export type NotificationType = 'session_reminder' | 'pm_due' | 'session_completed' | 'info' | 'pm_reminder' | 'decision_rule_alert' | 'attendance_flag' | 'goal_not_set' | 'error' | 'success' | 'warning';
 
 export interface Notification {
   id: string;

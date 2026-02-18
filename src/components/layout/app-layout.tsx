@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useNotificationGenerator } from '@/hooks/use-notifications';
 import { OnboardingTour, HelpPanel } from '@/components/help';
 import { useHelpStore } from '@/stores/help';
+import { ToastContainer } from '@/components/ui/toast-container';
 
 // Isolated component so notification store subscriptions don't re-render AppLayout's children
 const NotificationGeneratorProvider = memo(function NotificationGeneratorProvider() {
@@ -246,6 +247,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         recentSessions={aiRecentSessions}
         additionalContext={aiAdditionalContext}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer />
     </div>
   );
 }

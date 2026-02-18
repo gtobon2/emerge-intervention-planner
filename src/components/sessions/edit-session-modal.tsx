@@ -5,6 +5,7 @@ import { X, Calendar, Target, AlertTriangle, Plus, Trash2, Save } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { Session, Group, AnticipatedError, CurriculumPosition, PracticeItem } from '@/lib/supabase/types';
+import { validateSession } from '@/lib/supabase/validation';
 
 interface EditSessionModalProps {
   session: Session;
@@ -48,6 +49,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
   const [newErrorPattern, setNewErrorPattern] = useState('');
   const [newErrorCorrection, setNewErrorCorrection] = useState('');
   const [notes, setNotes] = useState(session.notes || '');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Reset form when session changes
   useEffect(() => {
@@ -59,6 +61,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
       setPracticeItems(session.planned_practice_items || [{ item: '', type: 'review' }]);
       setAnticipatedErrors(session.anticipated_errors || []);
       setNotes(session.notes || '');
+      setFieldErrors({});
     }
   }, [session, isOpen]);
 
@@ -128,6 +131,31 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
   };
 
   const handleSave = () => {
+    setFieldErrors({});
+    const newFieldErrors: Record<string, string> = {};
+
+    // Validate date
+    if (!date || date.trim() === '') {
+      newFieldErrors.date = 'Session date is required';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      newFieldErrors.date = 'Date must be in YYYY-MM-DD format';
+    }
+
+    // Validate time format if provided
+    if (time && !/^\d{2}:\d{2}$/.test(time)) {
+      newFieldErrors.time = 'Time must be in HH:MM format';
+    }
+
+    // Validate OTR range
+    if (otrTarget < 10 || otrTarget > 100) {
+      newFieldErrors.otrTarget = 'OTR target must be between 10 and 100';
+    }
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      return;
+    }
+
     const updates: SessionUpdateData = {
       date,
       time: time || null,
@@ -177,9 +205,15 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  if (fieldErrors.date) {
+                    setFieldErrors((prev) => { const u = { ...prev }; delete u.date; return u; });
+                  }
+                }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${fieldErrors.date ? 'border-red-500' : ''}`}
               />
+              {fieldErrors.date && <p className="mt-1 text-sm text-red-400">{fieldErrors.date}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">
@@ -188,9 +222,15 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
               <input
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                onChange={(e) => {
+                  setTime(e.target.value);
+                  if (fieldErrors.time) {
+                    setFieldErrors((prev) => { const u = { ...prev }; delete u.time; return u; });
+                  }
+                }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${fieldErrors.time ? 'border-red-500' : ''}`}
               />
+              {fieldErrors.time && <p className="mt-1 text-sm text-red-400">{fieldErrors.time}</p>}
             </div>
           </div>
 
@@ -207,13 +247,19 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
                 max="100"
                 step="5"
                 value={otrTarget}
-                onChange={(e) => setOtrTarget(parseInt(e.target.value))}
+                onChange={(e) => {
+                  setOtrTarget(parseInt(e.target.value));
+                  if (fieldErrors.otrTarget) {
+                    setFieldErrors((prev) => { const u = { ...prev }; delete u.otrTarget; return u; });
+                  }
+                }}
                 className="flex-1"
               />
               <span className="text-2xl font-bold text-pink-500 w-16 text-center">
                 {otrTarget}
               </span>
             </div>
+            {fieldErrors.otrTarget && <p className="mt-1 text-sm text-red-400">{fieldErrors.otrTarget}</p>}
           </div>
 
           {/* Response Formats */}

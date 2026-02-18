@@ -13,3 +13,15 @@ export {
   WILSON_LESSON_COMPONENTS,
 } from './tracking';
 export type { LessonComponent } from './tracking';
+
+// Session logging components
+export {
+  SessionLoggingForm,
+  PacingSection,
+  MasterySection,
+  ErrorsSection,
+  PMSection,
+  FidelitySection,
+  getFidelityDefaults,
+} from './logging';
+export type { SessionLoggingData, SessionLoggingFormProps } from './logging';

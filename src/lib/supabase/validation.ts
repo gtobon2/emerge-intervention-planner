@@ -295,6 +295,54 @@ export function validateCurriculumPosition(
 }
 
 // ===========================================
+// GOAL SETTING VALIDATION
+// ===========================================
+
+export function validateGoalSetting(goal: {
+  measure_type?: string;
+  goal_score?: number;
+  benchmark_score?: number;
+  goal_target_date?: string;
+  benchmark_date?: string;
+}): ValidationResult {
+  const errors: string[] = [];
+  if (!goal.measure_type?.trim()) errors.push('Measure type is required');
+  if (goal.goal_score !== undefined && goal.goal_score !== null) {
+    if (goal.goal_score < 0) errors.push('Goal score must be positive');
+    if (goal.goal_score > 9999) errors.push('Goal score seems too high');
+  }
+  if (goal.benchmark_score !== undefined && goal.goal_score !== undefined) {
+    if (goal.benchmark_score >= goal.goal_score) {
+      errors.push('Goal score should be higher than benchmark');
+    }
+  }
+  // Date format checks
+  if (goal.goal_target_date && !/^\d{4}-\d{2}-\d{2}$/.test(goal.goal_target_date)) {
+    errors.push('Invalid goal target date format');
+  }
+  return { isValid: errors.length === 0, errors };
+}
+
+// ===========================================
+// PM DATA POINT VALIDATION
+// ===========================================
+
+export function validatePMDataPoint(data: {
+  score?: number;
+  date?: string;
+  measure_type?: string;
+}): ValidationResult {
+  const errors: string[] = [];
+  if (!data.measure_type?.trim()) errors.push('Measure type is required');
+  if (data.score === undefined || data.score === null) errors.push('Score is required');
+  else if (data.score < 0) errors.push('Score must be positive');
+  else if (data.score > 9999) errors.push('Score seems too high');
+  if (!data.date) errors.push('Date is required');
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date)) errors.push('Invalid date format');
+  return { isValid: errors.length === 0, errors };
+}
+
+// ===========================================
 // HELPER FUNCTIONS
 // ===========================================
 

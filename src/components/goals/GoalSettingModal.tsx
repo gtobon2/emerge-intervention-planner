@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { useGoalsStore } from '@/stores/goals';
 import type { StudentGoalInsert } from '@/lib/supabase/types';
+import { validateGoalSetting } from '@/lib/supabase/validation';
 
 export interface GoalSettingModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export function GoalSettingModal({
   const [applyAllBenchmark, setApplyAllBenchmark] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && groupId) {
@@ -87,6 +89,15 @@ export function GoalSettingModal({
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
+    // Clear field-level error for this row/field on change
+    const errorKey = `${index}_${field}`;
+    if (fieldErrors[errorKey]) {
+      setFieldErrors((prev) => {
+        const updated = { ...prev };
+        delete updated[errorKey];
+        return updated;
+      });
+    }
   };
 
   const handleApplyToAll = () => {
@@ -102,10 +113,51 @@ export function GoalSettingModal({
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
+    setFieldErrors({});
+
+    // Validate measure type at the top level
+    const newFieldErrors: Record<string, string> = {};
+    if (!measureType.trim()) {
+      newFieldErrors.measure_type = 'Measure type is required';
+    }
+
+    // Validate each row that has a goal score
+    const rowsWithGoals = rows.filter((row) => row.goalScore !== '');
+
+    rowsWithGoals.forEach((row) => {
+      const index = rows.indexOf(row);
+      const goalScore = Number(row.goalScore);
+      const benchmarkScore = row.benchmarkScore !== '' ? Number(row.benchmarkScore) : undefined;
+
+      const validation = validateGoalSetting({
+        measure_type: measureType,
+        goal_score: goalScore,
+        benchmark_score: benchmarkScore,
+        goal_target_date: row.goalTargetDate || undefined,
+        benchmark_date: row.benchmarkDate || undefined,
+      });
+
+      if (!validation.isValid) {
+        validation.errors.forEach((err) => {
+          if (err.includes('Goal score must be positive') || err.includes('Goal score seems too high')) {
+            newFieldErrors[`${index}_goalScore`] = err;
+          } else if (err.includes('higher than benchmark')) {
+            newFieldErrors[`${index}_benchmarkScore`] = err;
+          } else if (err.includes('goal target date')) {
+            newFieldErrors[`${index}_goalTargetDate`] = err;
+          }
+        });
+      }
+    });
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      setIsSaving(false);
+      return;
+    }
+
     try {
-      const goalsToSave: StudentGoalInsert[] = rows
-        .filter((row) => row.goalScore !== '')
-        .map((row) => ({
+      const goalsToSave: StudentGoalInsert[] = rowsWithGoals.map((row) => ({
           student_id: row.studentId,
           group_id: groupId,
           goal_score: Number(row.goalScore),
@@ -158,8 +210,18 @@ export function GoalSettingModal({
               { value: 'Custom', label: 'Custom Measure' },
             ]}
             value={measureType}
-            onChange={(e) => setMeasureType(e.target.value)}
+            onChange={(e) => {
+              setMeasureType(e.target.value);
+              if (fieldErrors.measure_type) {
+                setFieldErrors((prev) => {
+                  const updated = { ...prev };
+                  delete updated.measure_type;
+                  return updated;
+                });
+              }
+            }}
           />
+          {fieldErrors.measure_type && <p className="mt-1 text-sm text-red-400">{fieldErrors.measure_type}</p>}
         </div>
 
         {/* Apply to All */}
@@ -210,81 +272,154 @@ export function GoalSettingModal({
             ))}
           </div>
         ) : (
-          <div className="border border-border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
-                <thead>
-                  <tr className="bg-foundation">
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase">Student</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase">SMART Goal</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-24">Goal Score</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-32">Target Date</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-24">Benchmark</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-32">Benchmark Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={row.studentId} className="border-t border-border">
-                      <td className="px-3 py-2 text-sm font-medium text-text-primary whitespace-nowrap">
-                        {row.studentName}
-                      </td>
-                      <td className="px-3 py-2">
-                        <textarea
-                          value={row.smartGoalText}
-                          onChange={(e) => handleRowChange(index, 'smartGoalText', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement resize-none"
-                          rows={2}
-                          placeholder="By [date], [student] will [skill] at [level]..."
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          value={row.goalScore}
-                          onChange={(e) => handleRowChange(index, 'goalScore', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement"
-                          placeholder="--"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="date"
-                          value={row.goalTargetDate}
-                          onChange={(e) => handleRowChange(index, 'goalTargetDate', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          value={row.benchmarkScore}
-                          onChange={(e) => handleRowChange(index, 'benchmarkScore', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement"
-                          placeholder="--"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="date"
-                          value={row.benchmarkDate}
-                          onChange={(e) => handleRowChange(index, 'benchmarkDate', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-sm text-text-muted">
-                        No students in this group
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          <>
+            {/* Mobile: Card layout */}
+            <div className="space-y-4 sm:hidden">
+              {rows.map((row, index) => (
+                <div key={row.studentId} className="border border-border rounded-lg p-3 bg-surface/30 space-y-3">
+                  <div className="text-sm font-semibold text-text-primary">{row.studentName}</div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">SMART Goal</label>
+                    <textarea
+                      value={row.smartGoalText}
+                      onChange={(e) => handleRowChange(index, 'smartGoalText', e.target.value)}
+                      className="w-full px-2 py-1.5 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement resize-none min-h-[44px]"
+                      rows={2}
+                      placeholder="By [date], [student] will [skill] at [level]..."
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-text-muted mb-1">Goal Score</label>
+                      <input
+                        type="number"
+                        value={row.goalScore}
+                        onChange={(e) => handleRowChange(index, 'goalScore', e.target.value)}
+                        className={`w-full px-2 py-1.5 rounded border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement min-h-[44px] ${fieldErrors[`${index}_goalScore`] ? 'border-red-500' : 'border-border'}`}
+                        placeholder="--"
+                      />
+                      {fieldErrors[`${index}_goalScore`] && <p className="mt-1 text-sm text-red-400">{fieldErrors[`${index}_goalScore`]}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-muted mb-1">Target Date</label>
+                      <input
+                        type="date"
+                        value={row.goalTargetDate}
+                        onChange={(e) => handleRowChange(index, 'goalTargetDate', e.target.value)}
+                        className={`w-full px-2 py-1.5 rounded border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement min-h-[44px] ${fieldErrors[`${index}_goalTargetDate`] ? 'border-red-500' : 'border-border'}`}
+                      />
+                      {fieldErrors[`${index}_goalTargetDate`] && <p className="mt-1 text-sm text-red-400">{fieldErrors[`${index}_goalTargetDate`]}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-muted mb-1">Benchmark</label>
+                      <input
+                        type="number"
+                        value={row.benchmarkScore}
+                        onChange={(e) => handleRowChange(index, 'benchmarkScore', e.target.value)}
+                        className={`w-full px-2 py-1.5 rounded border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement min-h-[44px] ${fieldErrors[`${index}_benchmarkScore`] ? 'border-red-500' : 'border-border'}`}
+                        placeholder="--"
+                      />
+                      {fieldErrors[`${index}_benchmarkScore`] && <p className="mt-1 text-sm text-red-400">{fieldErrors[`${index}_benchmarkScore`]}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-muted mb-1">Benchmark Date</label>
+                      <input
+                        type="date"
+                        value={row.benchmarkDate}
+                        onChange={(e) => handleRowChange(index, 'benchmarkDate', e.target.value)}
+                        className="w-full px-2 py-1.5 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement min-h-[44px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {rows.length === 0 && (
+                <div className="px-4 py-6 text-center text-sm text-text-muted">
+                  No students in this group
+                </div>
+              )}
             </div>
-          </div>
+
+            {/* Desktop: Table layout */}
+            <div className="hidden sm:block border border-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                <table className="w-full min-w-[800px]">
+                  <thead>
+                    <tr className="bg-foundation">
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase">Student</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase">SMART Goal</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-24">Goal Score</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-32">Target Date</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-24">Benchmark</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-muted uppercase w-32">Benchmark Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, index) => (
+                      <tr key={row.studentId} className="border-t border-border">
+                        <td className="px-3 py-2 text-sm font-medium text-text-primary whitespace-nowrap">
+                          {row.studentName}
+                        </td>
+                        <td className="px-3 py-2">
+                          <textarea
+                            value={row.smartGoalText}
+                            onChange={(e) => handleRowChange(index, 'smartGoalText', e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement resize-none"
+                            rows={2}
+                            placeholder="By [date], [student] will [skill] at [level]..."
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            value={row.goalScore}
+                            onChange={(e) => handleRowChange(index, 'goalScore', e.target.value)}
+                            className={`w-full px-2 py-1 rounded border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement ${fieldErrors[`${index}_goalScore`] ? 'border-red-500' : 'border-border'}`}
+                            placeholder="--"
+                          />
+                          {fieldErrors[`${index}_goalScore`] && <p className="mt-1 text-xs text-red-400">{fieldErrors[`${index}_goalScore`]}</p>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="date"
+                            value={row.goalTargetDate}
+                            onChange={(e) => handleRowChange(index, 'goalTargetDate', e.target.value)}
+                            className={`w-full px-2 py-1 rounded border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement ${fieldErrors[`${index}_goalTargetDate`] ? 'border-red-500' : 'border-border'}`}
+                          />
+                          {fieldErrors[`${index}_goalTargetDate`] && <p className="mt-1 text-xs text-red-400">{fieldErrors[`${index}_goalTargetDate`]}</p>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            value={row.benchmarkScore}
+                            onChange={(e) => handleRowChange(index, 'benchmarkScore', e.target.value)}
+                            className={`w-full px-2 py-1 rounded border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement ${fieldErrors[`${index}_benchmarkScore`] ? 'border-red-500' : 'border-border'}`}
+                            placeholder="--"
+                          />
+                          {fieldErrors[`${index}_benchmarkScore`] && <p className="mt-1 text-xs text-red-400">{fieldErrors[`${index}_benchmarkScore`]}</p>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="date"
+                            value={row.benchmarkDate}
+                            onChange={(e) => handleRowChange(index, 'benchmarkDate', e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-movement"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-text-muted">
+                          No students in this group
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Actions */}

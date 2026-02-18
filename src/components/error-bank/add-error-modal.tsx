@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Modal, Input, Select, Textarea, Button } from '@/components/ui';
 import type { Curriculum, CurriculumPosition } from '@/lib/supabase/types';
+import { validateErrorBankEntry } from '@/lib/supabase/validation';
 
 interface AddErrorModalProps {
   isOpen: boolean;
@@ -117,15 +118,19 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
   const handleSubmit = () => {
     const newErrors: Record<string, string> = {};
 
-    // Validation
-    if (!formData.curriculum) {
-      newErrors.curriculum = 'Curriculum is required';
-    }
-    if (!formData.error_pattern.trim()) {
-      newErrors.error_pattern = 'Error pattern is required';
-    }
-    if (!formData.correction_protocol.trim()) {
-      newErrors.correction_protocol = 'Correction protocol is required';
+    // Use the shared validation function
+    const validation = validateErrorBankEntry({
+      curriculum: formData.curriculum,
+      error_pattern: formData.error_pattern,
+      correction_protocol: formData.correction_protocol,
+    });
+
+    if (!validation.isValid) {
+      validation.errors.forEach((err) => {
+        if (err.includes('Curriculum')) newErrors.curriculum = err;
+        else if (err.includes('Error pattern')) newErrors.error_pattern = err;
+        else if (err.includes('Correction protocol')) newErrors.correction_protocol = err;
+      });
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -197,7 +202,12 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
           label="Curriculum"
           options={curriculumOptions}
           value={formData.curriculum}
-          onChange={(e) => handleCurriculumChange(e.target.value as Curriculum)}
+          onChange={(e) => {
+            handleCurriculumChange(e.target.value as Curriculum);
+            if (errors.curriculum) {
+              setErrors((prev) => { const u = { ...prev }; delete u.curriculum; return u; });
+            }
+          }}
           error={errors.curriculum}
         />
 
@@ -317,7 +327,12 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
           label="Error Pattern"
           placeholder="e.g., Reverses b and d"
           value={formData.error_pattern}
-          onChange={(e) => setFormData({ ...formData, error_pattern: e.target.value })}
+          onChange={(e) => {
+            setFormData({ ...formData, error_pattern: e.target.value });
+            if (errors.error_pattern) {
+              setErrors((prev) => { const u = { ...prev }; delete u.error_pattern; return u; });
+            }
+          }}
           error={errors.error_pattern}
         />
 
@@ -335,7 +350,12 @@ export function AddErrorModal({ isOpen, onClose, onSave }: AddErrorModalProps) {
           label="Correction Protocol"
           placeholder="e.g., Use 'bed' trick: make fists with thumbs up..."
           value={formData.correction_protocol}
-          onChange={(e) => setFormData({ ...formData, correction_protocol: e.target.value })}
+          onChange={(e) => {
+            setFormData({ ...formData, correction_protocol: e.target.value });
+            if (errors.correction_protocol) {
+              setErrors((prev) => { const u = { ...prev }; delete u.correction_protocol; return u; });
+            }
+          }}
           error={errors.correction_protocol}
         />
 

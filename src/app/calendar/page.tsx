@@ -69,6 +69,15 @@ export default function CalendarPage() {
   const { sessions, isLoading } = useAllSessions();
   const { events: calendarEvents, fetchAllEvents } = useSchoolCalendarStore();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Fetch school calendar events on mount
   useEffect(() => {
@@ -258,7 +267,89 @@ export default function CalendarPage() {
                 <p>Loading sessions...</p>
               </div>
             </div>
+          ) : isMobile ? (
+            /* Mobile: Agenda/List View */
+            <div className="space-y-2">
+              {calendarDays
+                .filter(day => day.isCurrentMonth && (day.sessions.length > 0 || day.isNonStudentDay))
+                .map((day, index) => {
+                  const primaryEvent = day.calendarEvents[0];
+                  const eventStyle = primaryEvent ? getNonStudentDayStyle(primaryEvent.type) : null;
+                  return (
+                    <div
+                      key={index}
+                      className={`
+                        p-3 rounded-lg border transition-colors
+                        ${day.isNonStudentDay && eventStyle
+                          ? `${eventStyle.bg} border-transparent`
+                          : 'bg-surface/50 border-text-muted/10'
+                        }
+                        ${day.isToday ? 'ring-2 ring-movement' : ''}
+                      `}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span
+                          className={`
+                            text-sm font-semibold
+                            ${day.isNonStudentDay && eventStyle
+                              ? eventStyle.text
+                              : day.isToday
+                                ? 'text-movement'
+                                : 'text-text-primary'
+                            }
+                          `}
+                        >
+                          {DAY_NAMES[day.date.getDay()]}, {MONTH_NAMES[day.date.getMonth()].slice(0, 3)} {day.date.getDate()}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {day.isNonStudentDay && eventStyle && (
+                            <Ban className={`w-4 h-4 ${eventStyle.text}`} />
+                          )}
+                          {day.sessions.length > 0 && (
+                            <span className="text-xs bg-movement/20 text-movement px-2 py-0.5 rounded-full font-medium">
+                              {day.sessions.length} session{day.sessions.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {day.isNonStudentDay && primaryEvent && (
+                        <div className={`text-sm font-medium mb-2 ${eventStyle?.text}`}>
+                          {primaryEvent.title}
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5">
+                        {day.sessions.map((session) => (
+                          <button
+                            key={session.id}
+                            onClick={() => handleSessionClick(session)}
+                            className={`
+                              w-full text-left px-3 py-2 rounded-lg text-sm font-medium
+                              border transition-all active:scale-[0.98] min-h-[44px]
+                              flex items-center justify-between
+                              ${getStatusColor(session.status)}
+                            `}
+                          >
+                            <span className="font-semibold truncate">{session.group.name}</span>
+                            {session.time && (
+                              <span className="text-xs opacity-90 ml-2 shrink-0">{session.time}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              }
+              {calendarDays.filter(day => day.isCurrentMonth && (day.sessions.length > 0 || day.isNonStudentDay)).length === 0 && (
+                <div className="text-center py-8 text-text-muted text-sm">
+                  No sessions or events this month
+                </div>
+              )}
+            </div>
           ) : (
+            /* Desktop: Calendar Grid View */
             <>
               {/* Day Names Header */}
               <div className="grid grid-cols-7 gap-2 mb-2">

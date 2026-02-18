@@ -60,6 +60,24 @@ const notificationTypeConfig: Record<
     textColor: 'text-orange-600',
     label: 'Goals',
   },
+  error: {
+    icon: '❌',
+    bgColor: 'bg-red-500/10',
+    textColor: 'text-red-500',
+    label: 'Errors',
+  },
+  success: {
+    icon: '✅',
+    bgColor: 'bg-emerald-500/10',
+    textColor: 'text-emerald-500',
+    label: 'Success',
+  },
+  warning: {
+    icon: '⚠️',
+    bgColor: 'bg-amber-500/10',
+    textColor: 'text-amber-600',
+    label: 'Warnings',
+  },
 };
 
 type FilterType = NotificationType | 'all';

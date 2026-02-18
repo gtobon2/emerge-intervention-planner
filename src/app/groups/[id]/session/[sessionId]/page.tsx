@@ -66,6 +66,11 @@ import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, use
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
 import { toNumericId } from '@/lib/utils/id';
 import { exportSessionPlanToPDF } from '@/lib/export';
+import { SessionLoggingForm } from '@/components/sessions/logging';
+import type { SessionLoggingData } from '@/components/sessions/logging';
+import { PrintSessionLesson } from '@/components/sessions/print';
+import { Modal } from '@/components/ui/modal';
+import { toast } from '@/components/ui/toast-container';
 
 // Extended ObservedError type with id for local tracking
 interface ObservedErrorWithId extends ObservedError {
@@ -123,6 +128,8 @@ export default function SessionPage({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showLessonPlanEditor, setShowLessonPlanEditor] = useState(false);
+  const [showPrintView, setShowPrintView] = useState(false);
+  const [showLoggingForm, setShowLoggingForm] = useState(false);
 
   // Store actions
   const {
@@ -465,6 +472,31 @@ export default function SessionPage({
     }
   };
 
+  /** Save session logging data (pacing, mastery, errors, fidelity, notes) */
+  const handleLoggingFormSave = async (data: SessionLoggingData) => {
+    if (!session) return;
+
+    try {
+      await updateSession(session.id.toString(), {
+        pacing: data.pacing,
+        mastery_demonstrated: data.mastery_demonstrated,
+        exit_ticket_correct: data.exit_ticket_correct,
+        exit_ticket_total: data.exit_ticket_total,
+        errors_observed: data.errors_observed.length > 0 ? data.errors_observed : null,
+        notes: data.notes || null,
+      });
+
+      // Refresh session data
+      await fetchSessionById(params.sessionId);
+      setShowLoggingForm(false);
+      toast('success', 'Session Logged', 'Session data saved successfully.');
+    } catch (error) {
+      console.error('Error saving session log:', error);
+      toast('error', 'Save Failed', 'Failed to save session data. Please try again.');
+      throw error; // Re-throw so the form shows error state
+    }
+  };
+
   const handleAnticipatedErrorToggle = (errorId: string) => {
     setAnticipatedErrorsChecked((prev) => ({
       ...prev,
@@ -762,25 +794,18 @@ export default function SessionPage({
                         </button>
                         <hr className="my-1 border-gray-100" />
                         <button
-                          onClick={() => { window.print(); setShowOverflowMenu(false); }}
+                          onClick={() => { setShowPrintView(true); setShowOverflowMenu(false); }}
                           className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
                         >
                           <Printer className="w-4 h-4" />
-                          Print
+                          Print / Export PDF
                         </button>
                         <button
-                          onClick={() => {
-                            exportSessionPlanToPDF(
-                              session,
-                              { name: group.name, curriculum: group.curriculum, tier: group.tier, grade: group.grade },
-                              students.map(s => ({ name: s.name }))
-                            );
-                            setShowOverflowMenu(false);
-                          }}
+                          onClick={() => { setShowLoggingForm(true); setShowOverflowMenu(false); }}
                           className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
                         >
                           <FileText className="w-4 h-4" />
-                          Export PDF
+                          Log Session Data
                         </button>
                         {group.curriculum === 'wilson' && (
                           <button
@@ -1678,6 +1703,41 @@ export default function SessionPage({
             />
           </div>
         </div>
+      )}
+
+      {/* Print Session / Lesson Modal */}
+      {showPrintView && session && group && (
+        <Modal
+          isOpen={showPrintView}
+          onClose={() => setShowPrintView(false)}
+          title="Print / Export Lesson"
+          size="xl"
+        >
+          <PrintSessionLesson
+            session={session}
+            group={group}
+            students={students}
+          />
+        </Modal>
+      )}
+
+      {/* Session Logging Form Modal */}
+      {showLoggingForm && session && group && (
+        <Modal
+          isOpen={showLoggingForm}
+          onClose={() => setShowLoggingForm(false)}
+          title="Log Session Data"
+          size="xl"
+        >
+          <SessionLoggingForm
+            session={session}
+            students={students}
+            onSave={handleLoggingFormSave}
+            onCancel={() => setShowLoggingForm(false)}
+            isTier3={group.tier === 3}
+            curriculum={group.curriculum}
+          />
+        </Modal>
       )}
 
       {/* Print styles */}

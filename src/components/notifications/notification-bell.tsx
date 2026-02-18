@@ -51,6 +51,21 @@ const notificationTypeConfig: Record<
     bgColor: 'bg-orange-500/10',
     textColor: 'text-orange-600',
   },
+  error: {
+    icon: '❌',
+    bgColor: 'bg-red-500/10',
+    textColor: 'text-red-500',
+  },
+  success: {
+    icon: '✅',
+    bgColor: 'bg-emerald-500/10',
+    textColor: 'text-emerald-500',
+  },
+  warning: {
+    icon: '⚠️',
+    bgColor: 'bg-amber-500/10',
+    textColor: 'text-amber-600',
+  },
 };
 
 export function NotificationBell() {

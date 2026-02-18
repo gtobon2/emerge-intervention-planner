@@ -10,6 +10,7 @@ import { CaminoLessonBuilder } from '@/components/camino-planner';
 import type { WilsonLessonPlan } from '@/lib/curriculum/wilson-lesson-elements';
 import type { CaminoLessonPlan } from '@/lib/curriculum/camino/camino-lesson-elements';
 import { getErrorsForPosition, type ErrorBankSeedEntry } from '@/lib/error-banks';
+import { validateSession } from '@/lib/supabase/validation';
 
 interface PlanSessionModalProps {
   group: Group;
@@ -68,6 +69,8 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   const [numberOfDays, setNumberOfDays] = useState(3);
   const [skipWeekends, setSkipWeekends] = useState(true);
   const [repeatActivities, setRepeatActivities] = useState(true);
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Error bank suggestions
   const [suggestedErrors, setSuggestedErrors] = useState<ErrorBankSeedEntry[]>([]);
@@ -196,6 +199,31 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
   };
 
   const handleSave = () => {
+    setFieldErrors({});
+    const newFieldErrors: Record<string, string> = {};
+
+    // Validate date
+    if (!date || date.trim() === '') {
+      newFieldErrors.date = 'Session date is required';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      newFieldErrors.date = 'Date must be in YYYY-MM-DD format';
+    }
+
+    // Validate time format if provided
+    if (time && !/^\d{2}:\d{2}$/.test(time)) {
+      newFieldErrors.time = 'Time must be in HH:MM format';
+    }
+
+    // Validate OTR range
+    if (otrTarget < 10 || otrTarget > 100) {
+      newFieldErrors.otrTarget = 'OTR target must be between 10 and 100';
+    }
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      return;
+    }
+
     // Multi-day Wilson lesson plan (from Wilson Lesson Builder)
     if (multiDayPlan && multiDayPlan.days > 1) {
       const seriesId = crypto.randomUUID();
@@ -312,20 +340,36 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
               <div className="flex-shrink-0 px-4 py-3 bg-gray-50 border-b space-y-3">
                 <div className="flex items-center flex-wrap gap-4">
                   {/* Date & Time Compact */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Calendar className="w-4 h-4 text-gray-500" />
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    />
-                    <input
-                      type="time"
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                      className="px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    />
+                    <div>
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => {
+                          setDate(e.target.value);
+                          if (fieldErrors.date) {
+                            setFieldErrors((prev) => { const u = { ...prev }; delete u.date; return u; });
+                          }
+                        }}
+                        className={`px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${fieldErrors.date ? 'border-red-500' : ''}`}
+                      />
+                      {fieldErrors.date && <p className="mt-1 text-xs text-red-400">{fieldErrors.date}</p>}
+                    </div>
+                    <div>
+                      <input
+                        type="time"
+                        value={time}
+                        onChange={(e) => {
+                          setTime(e.target.value);
+                          if (fieldErrors.time) {
+                            setFieldErrors((prev) => { const u = { ...prev }; delete u.time; return u; });
+                          }
+                        }}
+                        className={`px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${fieldErrors.time ? 'border-red-500' : ''}`}
+                      />
+                      {fieldErrors.time && <p className="mt-1 text-xs text-red-400">{fieldErrors.time}</p>}
+                    </div>
                   </div>
 
                   {/* Planning Mode Toggle - Compact */}
@@ -409,21 +453,29 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                 {showAdvancedSettings && (
                   <div className="pt-3 border-t space-y-4">
                     {/* OTR Target */}
-                    <div className="flex items-center gap-4">
-                      <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                        <Target className="w-4 h-4" />
-                        OTR Target:
-                      </label>
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        step="5"
-                        value={otrTarget}
-                        onChange={(e) => setOtrTarget(parseInt(e.target.value))}
-                        className="w-32"
-                      />
-                      <span className="text-lg font-bold text-pink-500 w-10">{otrTarget}</span>
+                    <div>
+                      <div className="flex items-center gap-4">
+                        <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                          <Target className="w-4 h-4" />
+                          OTR Target:
+                        </label>
+                        <input
+                          type="range"
+                          min="10"
+                          max="100"
+                          step="5"
+                          value={otrTarget}
+                          onChange={(e) => {
+                            setOtrTarget(parseInt(e.target.value));
+                            if (fieldErrors.otrTarget) {
+                              setFieldErrors((prev) => { const u = { ...prev }; delete u.otrTarget; return u; });
+                            }
+                          }}
+                          className="w-32"
+                        />
+                        <span className="text-lg font-bold text-pink-500 w-10">{otrTarget}</span>
+                      </div>
+                      {fieldErrors.otrTarget && <p className="mt-1 text-sm text-red-400">{fieldErrors.otrTarget}</p>}
                     </div>
 
                     {/* Response Formats */}
@@ -523,9 +575,15 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                   <input
                     type="date"
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    onChange={(e) => {
+                      setDate(e.target.value);
+                      if (fieldErrors.date) {
+                        setFieldErrors((prev) => { const u = { ...prev }; delete u.date; return u; });
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${fieldErrors.date ? 'border-red-500' : ''}`}
                   />
+                  {fieldErrors.date && <p className="mt-1 text-sm text-red-400">{fieldErrors.date}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -534,9 +592,15 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                   <input
                     type="time"
                     value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    onChange={(e) => {
+                      setTime(e.target.value);
+                      if (fieldErrors.time) {
+                        setFieldErrors((prev) => { const u = { ...prev }; delete u.time; return u; });
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${fieldErrors.time ? 'border-red-500' : ''}`}
                   />
+                  {fieldErrors.time && <p className="mt-1 text-sm text-red-400">{fieldErrors.time}</p>}
                 </div>
               </div>
 
@@ -617,13 +681,19 @@ export function PlanSessionModal({ group, isOpen, onClose, onSave }: PlanSession
                     max="100"
                     step="5"
                     value={otrTarget}
-                    onChange={(e) => setOtrTarget(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      setOtrTarget(parseInt(e.target.value));
+                      if (fieldErrors.otrTarget) {
+                        setFieldErrors((prev) => { const u = { ...prev }; delete u.otrTarget; return u; });
+                      }
+                    }}
                     className="flex-1"
                   />
                   <span className="text-2xl font-bold text-pink-500 w-16 text-center">
                     {otrTarget}
                   </span>
                 </div>
+                {fieldErrors.otrTarget && <p className="mt-1 text-sm text-red-400">{fieldErrors.otrTarget}</p>}
               </div>
 
               {/* Response Formats */}
