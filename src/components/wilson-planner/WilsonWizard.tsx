@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { db } from '@/lib/local-db';
 import { WILSON_STEPS, getWilsonSubstep } from '@/lib/curriculum/wilson';
+import { ensureWilsonDataSeeded } from '@/lib/curriculum/wilson-data-seeder';
 import {
   WILSON_LESSON_SECTIONS,
   createEmptyLessonPlan,
@@ -89,6 +90,7 @@ export function WilsonWizard({
     const loadElements = async () => {
       setIsLoading(true);
       try {
+        await ensureWilsonDataSeeded();
         const elements = await db.wilsonLessonElements
           .where('substep')
           .equals(selectedSubstep)

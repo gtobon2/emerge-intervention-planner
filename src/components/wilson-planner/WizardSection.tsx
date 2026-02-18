@@ -195,10 +195,10 @@ export function WizardSection({
             </div>
           ) : (
             <p className="text-xs text-text-muted py-2">
-              No data for this substep.{' '}
+              No items for this section yet. You can add words and sounds via{' '}
               <a href="/settings/wilson-data" className="text-movement hover:underline">
-                Add via Settings &rarr; Wilson Data
-              </a>
+                Settings &rarr; Wilson Data
+              </a>.
             </p>
           )}
 

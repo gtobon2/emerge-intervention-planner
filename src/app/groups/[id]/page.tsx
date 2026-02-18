@@ -852,9 +852,9 @@ export default function GroupDetailPage() {
       <GoalSettingModal
         isOpen={showGoalModal}
         onClose={() => setShowGoalModal(false)}
-        groupId={parseInt(groupId)}
+        groupId={groupId}
         students={(selectedGroup.students || []).map((s) => ({
-          id: typeof s.id === 'string' ? parseInt(s.id) : s.id,
+          id: s.id,
           name: s.name,
         }))}
         curriculum={selectedGroup.curriculum}

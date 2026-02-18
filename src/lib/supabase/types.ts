@@ -322,6 +322,25 @@ export interface ProgressMonitoring {
   created_at: string;
 }
 
+export interface StudentGoal {
+  id: string;
+  student_id: string;
+  group_id: string;
+  goal_score: number;
+  smart_goal_text: string;
+  goal_target_date: string | null;
+  benchmark_score: number | null;
+  benchmark_date: string | null;
+  measure_type: string;
+  set_date: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StudentGoalInsert = Omit<StudentGoal, 'id' | 'created_at' | 'updated_at'>;
+export type StudentGoalUpdate = Partial<Omit<StudentGoalInsert, 'student_id' | 'group_id'>>;
+
 export interface ErrorBankEntry {
   id: string;
   curriculum: Curriculum;

@@ -1,15 +1,14 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { Student, ProgressMonitoring } from '@/lib/supabase/types';
-import type { LocalStudentGoal } from '@/lib/local-db';
+import type { Student, ProgressMonitoring, StudentGoal } from '@/lib/supabase/types';
 
 export interface ProgressChartProps {
   students: Student[];
   progressData: ProgressMonitoring[];
   groupId: string;
   title?: string;
-  studentGoals?: LocalStudentGoal[];
+  studentGoals?: StudentGoal[];
 }
 
 interface DataPoint {
@@ -70,7 +69,7 @@ export function ProgressChart({ students, progressData, groupId, title, studentG
 
   // Build goal lookup by student_id
   const goalMap = useMemo(() => {
-    const map = new Map<number, LocalStudentGoal>();
+    const map = new Map<string, StudentGoal>();
     if (studentGoals) {
       studentGoals.forEach(g => map.set(g.student_id, g));
     }
@@ -388,8 +387,7 @@ export function ProgressChart({ students, progressData, groupId, title, studentG
 
               {/* Goal lines, aimlines, and benchmark points per student */}
               {chartData.map((line) => {
-                const studentIdNum = typeof line.studentId === 'string' ? parseInt(line.studentId) : line.studentId;
-                const goal = goalMap.get(studentIdNum);
+                const goal = goalMap.get(line.studentId);
                 if (!goal || !goal.benchmark_date || goal.benchmark_score === null) return null;
 
                 const benchmarkDateIndex = allDates.indexOf(goal.benchmark_date);

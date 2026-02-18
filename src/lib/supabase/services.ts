@@ -37,6 +37,8 @@ import type {
   MembershipWithStudent,
   StudentWithGroups,
   MembershipStatus,
+  StudentGoal,
+  StudentGoalInsert,
 } from './types';
 
 // ============================================
@@ -848,6 +850,85 @@ export async function deleteProgressMonitoring(id: string): Promise<void> {
     .eq('id', id);
 
   if (error) throw new Error(error.message);
+}
+
+// ============================================
+// STUDENT GOALS
+// ============================================
+
+export async function fetchGoalsByGroupId(groupId: string): Promise<StudentGoal[]> {
+  const { data, error } = await supabase
+    .from('student_goals')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as StudentGoal[];
+}
+
+export async function fetchGoalByStudentAndGroup(studentId: string, groupId: string): Promise<StudentGoal | null> {
+  const { data, error } = await supabase
+    .from('student_goals')
+    .select('*')
+    .eq('student_id', studentId)
+    .eq('group_id', groupId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data as StudentGoal | null;
+}
+
+export async function upsertStudentGoal(goal: StudentGoalInsert): Promise<StudentGoal> {
+  const { data, error } = await supabase
+    .from('student_goals')
+    .upsert(goal, {
+      onConflict: 'student_id,group_id',
+      ignoreDuplicates: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as StudentGoal;
+}
+
+export async function upsertBulkStudentGoals(goals: StudentGoalInsert[]): Promise<StudentGoal[]> {
+  if (goals.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('student_goals')
+    .upsert(goals, {
+      onConflict: 'student_id,group_id',
+      ignoreDuplicates: false,
+    })
+    .select();
+
+  if (error) throw new Error(error.message);
+  return (data || []) as StudentGoal[];
+}
+
+export async function deleteStudentGoal(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('student_goals')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function fetchGoalsByGroupWithStudents(groupId: string): Promise<(StudentGoal & { student: { name: string } | null })[]> {
+  const { data, error } = await supabase
+    .from('student_goals')
+    .select(`
+      *,
+      student:students!inner(name)
+    `)
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as (StudentGoal & { student: { name: string } | null })[];
 }
 
 // ============================================

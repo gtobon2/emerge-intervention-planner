@@ -4,3 +4,4 @@ export { QuickStats } from './quick-stats';
 export { ActionItems } from './ActionItems';
 export { WeeklySnapshot } from './WeeklySnapshot';
 export { RecentActivity } from './RecentActivity';
+export { PrincipalDashboard } from './PrincipalDashboard';

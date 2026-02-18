@@ -79,10 +79,7 @@ export default function ProgressPage() {
   useEffect(() => {
     if (selectedGroupId) {
       fetchGroupById(selectedGroupId);
-      const groupIdNum = parseInt(selectedGroupId);
-      if (!isNaN(groupIdNum)) {
-        fetchGoalsForGroup(groupIdNum);
-      }
+      fetchGoalsForGroup(selectedGroupId);
     }
   }, [selectedGroupId, fetchGroupById, fetchGoalsForGroup]);
 
@@ -162,7 +159,7 @@ export default function ProgressPage() {
 
   // Stable students list for GoalSettingModal (memoized to prevent cascade)
   const goalModalStudents = useMemo(
-    () => students.map(s => ({ id: parseInt(s.id), name: s.name })),
+    () => students.map(s => ({ id: s.id, name: s.name })),
     [students]
   );
 
@@ -174,7 +171,7 @@ export default function ProgressPage() {
       .filter(g => g.benchmark_score !== null && g.benchmark_date)
       .map(goal => {
         const studentData = data
-          .filter(d => d.student_id && parseInt(d.student_id) === goal.student_id)
+          .filter(d => d.student_id === goal.student_id)
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const latestScore = studentData[0]?.score;
@@ -194,7 +191,7 @@ export default function ProgressPage() {
           }
         }
 
-        const student = students.find(s => parseInt(s.id) === goal.student_id);
+        const student = students.find(s => s.id === goal.student_id);
 
         return {
           studentName: student?.name || 'Unknown',
@@ -213,13 +210,10 @@ export default function ProgressPage() {
 
   const handleGoalModalClose = useCallback(() => {
     setIsGoalModalOpen(false);
-    const groupIdNum = parseInt(selectedGroupId);
-    if (!isNaN(groupIdNum)) {
-      fetchGoalsForGroup(groupIdNum);
+    if (selectedGroupId) {
+      fetchGoalsForGroup(selectedGroupId);
     }
   }, [selectedGroupId, fetchGoalsForGroup]);
-
-  const groupIdNum = useMemo(() => parseInt(selectedGroupId), [selectedGroupId]);
 
   // Lock measure type from active goals (before target date)
   const lockedMeasureType = useMemo(() => {
@@ -493,7 +487,7 @@ export default function ProgressPage() {
         <GoalSettingModal
           isOpen={isGoalModalOpen}
           onClose={handleGoalModalClose}
-          groupId={groupIdNum}
+          groupId={selectedGroupId}
           students={goalModalStudents}
           curriculum={selectedGroup.curriculum}
         />

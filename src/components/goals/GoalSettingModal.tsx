@@ -6,17 +6,18 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { useGoalsStore } from '@/stores/goals';
+import type { StudentGoalInsert } from '@/lib/supabase/types';
 
 export interface GoalSettingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  groupId: number;
-  students: Array<{ id: number; name: string }>;
+  groupId: string;
+  students: Array<{ id: string; name: string }>;
   curriculum: string;
 }
 
 interface StudentGoalRow {
-  studentId: number;
+  studentId: string;
   studentName: string;
   smartGoalText: string;
   goalScore: string;
@@ -102,18 +103,19 @@ export function GoalSettingModal({
     setIsSaving(true);
     setError(null);
     try {
-      const goalsToSave = rows
+      const goalsToSave: StudentGoalInsert[] = rows
         .filter((row) => row.goalScore !== '')
         .map((row) => ({
           student_id: row.studentId,
           group_id: groupId,
           goal_score: Number(row.goalScore),
           smart_goal_text: row.smartGoalText,
-          goal_target_date: row.goalTargetDate,
+          goal_target_date: row.goalTargetDate || null,
           benchmark_score: row.benchmarkScore !== '' ? Number(row.benchmarkScore) : null,
           benchmark_date: row.benchmarkDate || null,
           measure_type: measureType,
           set_date: new Date().toISOString().split('T')[0],
+          created_by: null,
         }));
 
       if (goalsToSave.length > 0) {

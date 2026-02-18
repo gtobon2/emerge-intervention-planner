@@ -31,9 +31,9 @@ interface NotificationsState {
   ) => void;
   generateDecisionAlerts: (
     pmData: Array<{
-      student_id: number;
+      student_id: string;
       student_name: string;
-      group_id: number;
+      group_id: string;
       group_name: string;
       scores: number[];
       goal: number | null;
@@ -51,7 +51,7 @@ interface NotificationsState {
     studentsWithoutGoals: Array<{
       student_name: string;
       group_name: string;
-      group_id: number;
+      group_id: string;
     }>
   ) => void;
 }

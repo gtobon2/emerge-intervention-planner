@@ -22,6 +22,7 @@ import {
   generateElementId,
 } from '@/lib/curriculum/wilson-lesson-elements';
 import { loadWilsonData, getWilsonDataStats, clearWilsonData } from '@/lib/curriculum/wilson-data-loader';
+import { clearWilsonSeedFlag } from '@/lib/curriculum/wilson-data-seeder';
 
 type TabType = 'sounds' | 'words' | 'nonsense' | 'hf-words' | 'sentences';
 
@@ -84,6 +85,7 @@ export default function WilsonDataPage() {
   const handleImport = async () => {
     setIsImporting(true);
     try {
+      clearWilsonSeedFlag();
       const result = await loadWilsonData();
       if (result.success) {
         setSaveMessage(`Imported ${result.count} substeps successfully!`);
@@ -117,6 +119,7 @@ export default function WilsonDataPage() {
     }
     try {
       await clearWilsonData();
+      clearWilsonSeedFlag();
       setSaveMessage('All Wilson data cleared');
       setDataStats({ substepCount: 0, totalWords: 0, totalSentences: 0, totalStories: 0 });
       // Reset current view to empty
@@ -461,7 +464,7 @@ export default function WilsonDataPage() {
                   <p className="text-sm text-text-muted">
                     {dataStats && dataStats.substepCount > 0
                       ? `${dataStats.substepCount} substeps loaded with ${dataStats.totalWords.toLocaleString()} words, ${dataStats.totalSentences.toLocaleString()} sentences, ${dataStats.totalStories} stories`
-                      : 'No data loaded yet. Import the Wilson curriculum data to get started.'}
+                      : 'Wilson data auto-loads when you first open the lesson wizard. Use Re-import to refresh.'}
                   </p>
                 </div>
               </div>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Filter, Users, CalendarDays, Ban, Calendar } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select, Card, CardContent } from '@/components/ui';
-import { GroupCard, TodaySchedule, QuickStats, ActionItems, WeeklySnapshot, RecentActivity } from '@/components/dashboard';
+import { GroupCard, TodaySchedule, QuickStats, ActionItems, WeeklySnapshot, RecentActivity, PrincipalDashboard } from '@/components/dashboard';
 import { useGroupsStore, useFilteredGroups } from '@/stores/groups';
 import { useSessionsStore } from '@/stores/sessions';
 import { useStudentsStore } from '@/stores/students';
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useCyclesStore, getWeekOfCycle, getCycleProgress } from '@/stores/cycles';
 import { useSchoolCalendarStore } from '@/stores/school-calendar';
 import { fetchAssignedStudentsWithGroupInfo, type StudentWithGroupInfo } from '@/lib/supabase/student-assignments';
+import { fetchGoalsByGroupId } from '@/lib/supabase/services';
 import { isMockMode } from '@/lib/supabase/config';
 import { supabase } from '@/lib/supabase/client';
 import { useNotificationsStore } from '@/stores/notifications';
@@ -69,7 +70,8 @@ export default function DashboardPage() {
 
   // Stats state
   const [weekSessions, setWeekSessions] = useState<{ total: number; completed: number }>({ total: 0, completed: 0 });
-  const [pmDataDue, setPmDataDue] = useState(0);
+  const [pmDataByTier, setPmDataByTier] = useState<{ tier2Due: number; tier3Due: number }>({ tier2Due: 0, tier3Due: 0 });
+  const pmDataDue = pmDataByTier.tier2Due + pmDataByTier.tier3Due;
 
   // Notification & action items state — use individual selectors to avoid
   // re-rendering when notification list/unreadCount changes
@@ -211,7 +213,7 @@ export default function DashboardPage() {
 
         // Fetch PM records from Supabase for all user groups
         const groupIds = groups.map(g => g.id);
-        if (groupIds.length === 0) { setPmDataDue(0); return; }
+        if (groupIds.length === 0) { setPmDataByTier({ tier2Due: 0, tier3Due: 0 }); return; }
 
         const { data: pmRecords } = await supabase
           .from('progress_monitoring')
@@ -223,7 +225,8 @@ export default function DashboardPage() {
           ? assignedStudents.map(s => ({ id: s.id, group_id: s.group_id }))
           : allStudents.map(s => ({ id: s.id, group_id: s.group_id }));
 
-        let dueCount = 0;
+        let tier2Due = 0;
+        let tier3Due = 0;
 
         for (const group of groups) {
           const groupStudents = studentsData.filter(s => s.group_id === group.id);
@@ -236,14 +239,14 @@ export default function DashboardPage() {
             const lastPMDate = studentPM?.date || '1970-01-01';
 
             if (group.tier === 3 && lastPMDate < oneWeekAgo) {
-              dueCount++;
+              tier3Due++;
             } else if (group.tier === 2 && lastPMDate < twoWeeksAgo) {
-              dueCount++;
+              tier2Due++;
             }
           }
         }
 
-        setPmDataDue(dueCount);
+        setPmDataByTier({ tier2Due, tier3Due });
       } catch (error) {
         console.error('Error calculating PM due:', error);
       }
@@ -270,14 +273,57 @@ export default function DashboardPage() {
           .in('group_id', groupIds);
         const pmData = pmRecords || [];
 
-        // Decision rule alerts (skipped — goals are not yet in Supabase)
-        if (notificationPreferences.decisionRuleAlerts) {
-          generateDecisionAlerts([]);
+        // Decision rule alerts — now powered by Supabase goals
+        if (notificationPreferences.decisionRuleAlerts && groupIds.length > 0) {
+          try {
+            const allGoalsNested = await Promise.all(groupIds.map(gid => fetchGoalsByGroupId(gid)));
+            const allGoals = allGoalsNested.flat();
+
+            const decisionRulePayload = allGoals
+              .filter(goal => goal.goal_score != null)
+              .map(goal => {
+                const studentScores = pmData
+                  .filter(pm => pm.student_id === goal.student_id)
+                  .sort((a, b) => a.date.localeCompare(b.date))
+                  .map(pm => pm.score);
+                const groupName = groups.find(g => g.id === goal.group_id)?.name || '';
+                const student = studentsData.find(s => s.id === goal.student_id);
+                return {
+                  student_id: goal.student_id,
+                  student_name: student?.name || 'Unknown',
+                  group_id: goal.group_id,
+                  group_name: groupName,
+                  scores: studentScores,
+                  goal: goal.goal_score,
+                };
+              });
+            generateDecisionAlerts(decisionRulePayload);
+          } catch {
+            generateDecisionAlerts([]);
+          }
         }
 
-        // Goal not set alerts (skipped — no Supabase goals table yet)
-        if (notificationPreferences.goalNotSetAlerts) {
-          generateGoalAlerts([]);
+        // Goal not set alerts — checks for students without goals
+        if (notificationPreferences.goalNotSetAlerts && groupIds.length > 0) {
+          try {
+            const allGoalsNested = await Promise.all(groupIds.map(gid => fetchGoalsByGroupId(gid)));
+            const allGoals = allGoalsNested.flat();
+            const goalStudentIds = new Set(allGoals.map(g => g.student_id));
+
+            const studentsWithoutGoals = studentsData
+              .filter(s => !goalStudentIds.has(s.id) && s.group_id)
+              .map(s => {
+                const groupName = groups.find(g => g.id === s.group_id)?.name || '';
+                return {
+                  student_name: s.name,
+                  group_name: groupName,
+                  group_id: s.group_id || '',
+                };
+              });
+            generateGoalAlerts(studentsWithoutGoals);
+          } catch {
+            generateGoalAlerts([]);
+          }
         }
 
         // PM collected this week
@@ -357,21 +403,21 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="space-y-4 md:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-text-primary">Dashboard</h1>
-            <p className="text-sm md:text-base text-text-muted mt-1">
-              {isAdmin
-                ? 'Welcome back! Here\'s your system-wide overview.'
-                : 'Welcome back! Here\'s your intervention overview.'}
-            </p>
+        {/* Header - only shown for non-admin (PrincipalDashboard has its own) */}
+        {!isAdmin && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-text-primary">Dashboard</h1>
+              <p className="text-sm md:text-base text-text-muted mt-1">
+                Welcome back! Here&apos;s your intervention overview.
+              </p>
+            </div>
+            <Button className="gap-2 w-full sm:w-auto min-h-[44px]" onClick={() => router.push('/groups')}>
+              <Plus className="w-4 h-4" />
+              <span>Plan Session</span>
+            </Button>
           </div>
-          <Button className="gap-2 w-full sm:w-auto min-h-[44px]" onClick={() => router.push('/groups')}>
-            <Plus className="w-4 h-4" />
-            <span>Plan Session</span>
-          </Button>
-        </div>
+        )}
 
         {/* New User State - No assignments yet */}
         {isNewUser ? (
@@ -397,6 +443,20 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+        ) : isAdmin ? (
+          <PrincipalDashboard
+            groups={groups}
+            allStudents={allStudents}
+            allSessions={filteredAllSessions}
+            todaySessions={filteredTodaySessions}
+            pmDataByTier={pmDataByTier}
+            pmCollectedThisWeek={pmCollectedThisWeek}
+            weekSessions={weekSessions}
+            currentCycle={currentCycle}
+            groupsNeedingAttention={groupsNeedingAttention}
+            isLoading={groupsLoading || sessionsLoading}
+            upcomingNonStudentDays={upcomingNonStudentDays}
+          />
         ) : (
           <>
             {/* Cycle & Calendar Info Banner */}
@@ -470,7 +530,7 @@ export default function DashboardPage() {
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-base sm:text-lg font-semibold text-text-primary">
-                    {isAdmin ? 'All Groups' : 'Your Groups'}
+                    Your Groups
                   </h2>
                   <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-text-muted hidden sm:block" />

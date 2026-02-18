@@ -167,14 +167,23 @@ function isSoundNew(sound: string, substep: string): boolean {
   return newSounds.includes(sound);
 }
 
+const VALID_SUBSTEPS = new Set([
+  '1.1', '1.2', '1.3', '1.4', '1.5', '1.6',
+  '2.1', '2.2', '2.3', '2.4', '2.5',
+  '3.1', '3.2', '3.3', '3.4',
+  '4.1', '4.2', '4.3', '4.4',
+  '5.1', '5.2', '5.3', '5.4',
+  '6.1', '6.2', '6.3', '6.4',
+]);
+
 export async function loadWilsonData(): Promise<{ success: boolean; message: string; count: number }> {
   try {
     const data = wilsonData as RawWilsonData[];
     let count = 0;
 
     for (const item of data) {
-      // Skip invalid substeps
-      if (!item.substep || item.substep.includes('48')) continue;
+      // Skip substeps not in the official Wilson scope & sequence
+      if (!item.substep || !VALID_SUBSTEPS.has(item.substep)) continue;
 
       const stepNumber = getStepNumber(item.substep);
       const substepName = getSubstepName(item.substep);
