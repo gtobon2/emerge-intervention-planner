@@ -49,7 +49,7 @@ export function SessionNotesPanel({
                 ${
                   isListening
                     ? 'bg-red-500 text-white animate-pulse shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-foundation text-text-secondary hover:bg-border'
                 }
               `}
               title={isListening ? 'Stop voice input' : 'Click to start voice input'}
@@ -74,7 +74,7 @@ export function SessionNotesPanel({
           <p className="text-sm text-red-500 mt-2">{voiceError}</p>
         )}
         {!isVoiceSupported && (
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-text-muted mt-2">
             Voice input not supported in this browser. Use Chrome, Edge, or Safari for voice features.
           </p>
         )}
@@ -83,7 +83,7 @@ export function SessionNotesPanel({
         <textarea
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
-          className="w-full h-32 p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-movement focus:border-movement"
+          className="w-full h-32 p-3 border border-border rounded-lg resize-none focus:ring-2 focus:ring-movement focus:border-movement bg-surface text-text-primary"
           placeholder="Add observations, student responses, or notes for next session..."
         />
       </CardContent>

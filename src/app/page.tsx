@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, Filter, AlertCircle, Users, CalendarDays, Ban, Calendar } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Filter, Users, CalendarDays, Ban, Calendar } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Select, Card, CardContent } from '@/components/ui';
 import { GroupCard, TodaySchedule, QuickStats, ActionItems, WeeklySnapshot, RecentActivity } from '@/components/dashboard';
@@ -48,6 +49,7 @@ function getCurrentWeekDates(): { start: string; end: string } {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { groups, fetchGroupsWithVisibility, isLoading: groupsLoading, filter, setFilter } = useGroupsStore();
   const { fetchTodaySessionsByRole, fetchSessionsByRole, allSessions, todaySessions, isLoading: sessionsLoading } = useSessionsStore();
   const { allStudents, fetchAllStudents } = useStudentsStore();
@@ -72,11 +74,8 @@ export default function DashboardPage() {
   // Notification & action items state — use individual selectors to avoid
   // re-rendering when notification list/unreadCount changes
   const generateDecisionAlerts = useNotificationsStore(s => s.generateDecisionAlerts);
-  const generateAttendanceFlags = useNotificationsStore(s => s.generateAttendanceFlags);
   const generateGoalAlerts = useNotificationsStore(s => s.generateGoalAlerts);
   const { notificationPreferences } = useSettingsStore();
-  const [decisionAlertCount, setDecisionAlertCount] = useState(0);
-  const [attendanceFlagCount, setAttendanceFlagCount] = useState(0);
   const [pmCollectedThisWeek, setPmCollectedThisWeek] = useState(0);
 
   // Fetch assigned students for interventionists
@@ -173,6 +172,18 @@ export default function DashboardPage() {
     return 0;
   }, [userRole, userProfile, allStudents, assignedStudents]);
 
+  // Build a map of group_id -> student count for GroupCard display
+  const studentCountsByGroup = useMemo(() => {
+    const counts = new Map<string, number>();
+    const studentsData = userRole === 'interventionist' ? assignedStudents : allStudents;
+    for (const student of studentsData) {
+      if (student.group_id) {
+        counts.set(student.group_id, (counts.get(student.group_id) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [allStudents, assignedStudents, userRole]);
+
   // Calculate sessions this week from the role-filtered allSessions
   // allSessions is already filtered by role at the database level
   useEffect(() => {
@@ -259,17 +270,9 @@ export default function DashboardPage() {
           .in('group_id', groupIds);
         const pmData = pmRecords || [];
 
-        // Decision rule alerts (skipped when no goals — goals are not yet in Supabase)
+        // Decision rule alerts (skipped — goals are not yet in Supabase)
         if (notificationPreferences.decisionRuleAlerts) {
-          // Without a Supabase goals table, decision alerts can't fire.
-          // Set count to 0 and pass empty data.
-          setDecisionAlertCount(0);
           generateDecisionAlerts([]);
-        }
-
-        // Attendance flags
-        if (notificationPreferences.attendanceFlags) {
-          setAttendanceFlagCount(0);
         }
 
         // Goal not set alerts (skipped — no Supabase goals table yet)
@@ -290,7 +293,7 @@ export default function DashboardPage() {
     if (groups.length > 0) {
       generateNotifications();
     }
-  }, [groups, allStudents, assignedStudents, userRole, notificationPreferences, generateDecisionAlerts, generateAttendanceFlags, generateGoalAlerts]);
+  }, [groups, allStudents, assignedStudents, userRole, notificationPreferences, generateDecisionAlerts, generateGoalAlerts]);
 
   // Calculate groups needing attention (no sessions in past 7 days or mastery = 'no')
   // Filtered by user's groups
@@ -364,9 +367,9 @@ export default function DashboardPage() {
                 : 'Welcome back! Here\'s your intervention overview.'}
             </p>
           </div>
-          <Button className="gap-2 w-full sm:w-auto min-h-[44px]">
+          <Button className="gap-2 w-full sm:w-auto min-h-[44px]" onClick={() => router.push('/groups')}>
             <Plus className="w-4 h-4" />
-            <span>New Session</span>
+            <span>Plan Session</span>
           </Button>
         </div>
 
@@ -376,14 +379,21 @@ export default function DashboardPage() {
             <CardContent className="py-12">
               <div className="text-center">
                 <Users className="w-12 h-12 mx-auto mb-4 text-text-muted opacity-50" />
-                <h3 className="text-lg font-medium text-text-primary mb-2">No Data Yet</h3>
-                <p className="text-text-muted max-w-md mx-auto">
-                  {userRole === 'interventionist'
-                    ? 'You don\'t have any students assigned or groups created yet. Contact your administrator to get students assigned, then create intervention groups.'
-                    : userRole === 'teacher'
-                    ? 'You don\'t have any groups created yet. Create a group using students from your grade level.'
-                    : 'Your account hasn\'t been fully configured yet. Please contact your administrator to get started.'}
+                <h3 className="text-lg font-medium text-text-primary mb-2">Get Started</h3>
+                <p className="text-text-muted max-w-md mx-auto mb-6">
+                  Follow these steps to set up your intervention planner:
                 </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 max-w-lg mx-auto">
+                  <Button variant="primary" onClick={() => router.push('/groups/new')} className="w-full sm:w-auto min-h-[44px]">
+                    1. Create Your First Group
+                  </Button>
+                  <Button variant="secondary" onClick={() => router.push('/students')} className="w-full sm:w-auto min-h-[44px]">
+                    2. Add Students
+                  </Button>
+                  <Button variant="secondary" onClick={() => router.push('/groups')} className="w-full sm:w-auto min-h-[44px]">
+                    3. Plan Your First Session
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -449,9 +459,9 @@ export default function DashboardPage() {
             {/* Action Items */}
             <ActionItems
               pmDue={pmDataDue}
-              decisionAlerts={decisionAlertCount}
+              decisionAlerts={0}
               incompleteSessionsThisWeek={weekSessions.total - weekSessions.completed}
-              attendanceFlags={attendanceFlagCount}
+              attendanceFlags={0}
             />
 
             {/* Main Content */}
@@ -494,7 +504,7 @@ export default function DashboardPage() {
                       <GroupCard
                         key={group.id}
                         group={group}
-                        studentCount={0} // Would be fetched
+                        studentCount={studentCountsByGroup.get(group.id) || 0}
                       />
                     ))}
                   </div>

@@ -24,6 +24,7 @@ import {
   Printer,
   FileText,
   BookOpen,
+  MoreVertical,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -108,6 +109,15 @@ export default function SessionPage({
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Error banner state (replaces alert() calls)
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Active session tab state
+  const [activeTab, setActiveTab] = useState<'lesson' | 'students' | 'notes' | 'errors'>('lesson');
+
+  // Overflow menu state
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+
   // Modal states
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -126,6 +136,7 @@ export default function SessionPage({
   const { selectedGroup, fetchGroupById, isLoading: groupLoading } = useGroupsStore();
   const { students: storeStudents, fetchStudentsForGroup } = useStudentsStore();
   const { setContext, clearContext } = useAIContextStore();
+  const { createSession } = useSessionsStore();
 
   // Session tracking state
   const [anticipatedErrors, setAnticipatedErrors] = useState<AnticipatedError[]>([]);
@@ -448,7 +459,7 @@ export default function SessionPage({
       }
     } catch (error) {
       console.error('Error completing session:', error);
-      alert('Failed to save session data. Please try again.');
+      setSaveError('Failed to save session data. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -589,9 +600,46 @@ export default function SessionPage({
   };
 
   const handleCreateRescheduledSession = async (data: SessionPlanData) => {
-    // In production, create a new session with the data
-    // For now, just navigate back to group page
-    router.push(`/groups/${params.id}`);
+    try {
+      await createSession({
+        group_id: params.id,
+        date: data.date,
+        time: data.time || null,
+        status: 'planned',
+        curriculum_position: data.curriculum_position,
+        advance_after: false,
+        planned_otr_target: data.planned_otr_target,
+        planned_response_formats: data.planned_response_formats,
+        planned_practice_items: data.planned_practice_items,
+        cumulative_review_items: null,
+        anticipated_errors: data.anticipated_errors,
+        actual_otr_estimate: null,
+        pacing: null,
+        components_completed: null,
+        exit_ticket_correct: null,
+        exit_ticket_total: null,
+        mastery_demonstrated: null,
+        errors_observed: null,
+        unexpected_errors: null,
+        pm_score: null,
+        pm_trend: null,
+        notes: data.notes || null,
+        wilson_lesson_plan: data.wilson_lesson_plan || null,
+        wilson_lesson_progress: null,
+        camino_lesson_plan: data.camino_lesson_plan || null,
+        camino_lesson_progress: null,
+        series_id: data.series_id || null,
+        series_order: data.series_order ?? null,
+        series_total: data.series_total ?? null,
+        dbi_adaptation_notes: null,
+        next_session_notes: null,
+        fidelity_checklist: null,
+      });
+      router.push(`/groups/${params.id}`);
+    } catch (error) {
+      console.error('Error creating rescheduled session:', error);
+      setSaveError('Failed to create rescheduled session. Please try again.');
+    }
   };
 
   const handleSaveToBank = async (
@@ -642,7 +690,7 @@ export default function SessionPage({
       }
     } catch (error) {
       console.error('Failed to save error to bank:', error);
-      alert('Failed to save error to bank. Please try again.');
+      setSaveError('Failed to save error to bank. Please try again.');
     }
   };
 
@@ -684,61 +732,69 @@ export default function SessionPage({
 
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap print:hidden">
               {!isSessionActive && session.status === 'planned' && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => window.print()}
-                    className="gap-1 min-h-[44px]"
+                <div className="relative">
+                  <button
+                    onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                   >
-                    <Printer className="w-4 h-4" />
-                    <span className="hidden sm:inline">Print</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => exportSessionPlanToPDF(
-                      session,
-                      { name: group.name, curriculum: group.curriculum, tier: group.tier, grade: group.grade },
-                      students.map(s => ({ name: s.name }))
-                    )}
-                    className="gap-1 min-h-[44px]"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="hidden sm:inline">PDF</span>
-                  </Button>
-                  {group.curriculum === 'wilson' && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowLessonPlanEditor(true)}
-                      className="gap-1 min-h-[44px]"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span className="hidden sm:inline">
-                        {session.wilson_lesson_plan ? 'Edit Plan' : 'Plan Lesson'}
-                      </span>
-                    </Button>
+                    <MoreVertical className="w-5 h-5 text-gray-500" />
+                  </button>
+                  {showOverflowMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowOverflowMenu(false)}
+                      />
+                      <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[160px] z-20">
+                        <button
+                          onClick={() => { setShowEditModal(true); setShowOverflowMenu(false); }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => { setShowCancelModal(true); setShowOverflowMenu(false); }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Cancel Session
+                        </button>
+                        <hr className="my-1 border-gray-100" />
+                        <button
+                          onClick={() => { window.print(); setShowOverflowMenu(false); }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <Printer className="w-4 h-4" />
+                          Print
+                        </button>
+                        <button
+                          onClick={() => {
+                            exportSessionPlanToPDF(
+                              session,
+                              { name: group.name, curriculum: group.curriculum, tier: group.tier, grade: group.grade },
+                              students.map(s => ({ name: s.name }))
+                            );
+                            setShowOverflowMenu(false);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Export PDF
+                        </button>
+                        {group.curriculum === 'wilson' && (
+                          <button
+                            onClick={() => { setShowLessonPlanEditor(true); setShowOverflowMenu(false); }}
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <BookOpen className="w-4 h-4" />
+                            {session.wilson_lesson_plan ? 'Edit Plan' : 'Plan Lesson'}
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowEditModal(true)}
-                    className="gap-1 min-h-[44px]"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span className="hidden sm:inline">Edit</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowCancelModal(true)}
-                    className="gap-1 min-h-[44px] text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    <span className="hidden sm:inline">Cancel</span>
-                  </Button>
-                </>
+                </div>
               )}
               {isSessionActive ? (
                 <>
@@ -805,6 +861,24 @@ export default function SessionPage({
           </div>
         </div>
       </header>
+
+      {/* Error Banner */}
+      {saveError && (
+        <div className="max-w-7xl mx-auto px-4 pt-4">
+          <div className="flex items-center justify-between gap-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>{saveError}</span>
+            </div>
+            <button
+              onClick={() => setSaveError(null)}
+              className="p-1 hover:bg-red-100 rounded flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 py-4 md:py-6">
         {!isSessionActive ? (
@@ -1084,440 +1158,473 @@ export default function SessionPage({
             </div>
           </div>
         ) : (
-          // Active session view
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main tracking area */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Student Circles - Per-student tracking */}
-              <StudentOTRPanel
-                students={students}
-                studentOTRs={studentOTRs}
-                targetOTR={session.planned_otr_target || 40}
-                onStudentOTR={handleStudentOTR}
-              />
-
-              {/* OTR Counter - Group level */}
-              <Card>
-                <CardContent className="py-6">
-                  <OTRCounter target={session.planned_otr_target || 40} />
-                </CardContent>
-              </Card>
-
-              {/* Wilson Lesson Tracker - Shows full lesson plan with cross-off */}
-              {session.wilson_lesson_plan && (
-                <WilsonLessonTracker
-                  sessionId={toNumericId(session.id) || 0}
-                  lessonPlan={session.wilson_lesson_plan}
-                  progress={wilsonLessonProgress}
-                  onProgressChange={handleWilsonProgressChange}
-                />
-              )}
-
-              {/* Camino Lesson Tracker - Shows full lesson plan with cross-off */}
-              {session.camino_lesson_plan && (
-                <CaminoLessonTracker
-                  sessionId={toNumericId(session.id) || 0}
-                  lessonPlan={session.camino_lesson_plan}
-                  progress={caminoLessonProgress}
-                  onProgressChange={handleCaminoProgressChange}
-                />
-              )}
-
-              {/* Fallback: Basic Lesson Components Checklist (when no Wilson or Camino plan) */}
-              {!session.wilson_lesson_plan && !session.camino_lesson_plan && (
-                <LessonComponentsPanel
-                  components={WILSON_LESSON_COMPONENTS}
-                  completedComponents={componentsCompleted}
-                  onToggle={handleComponentToggle}
-                />
-              )}
-
-              {/* Notes */}
-              <SessionNotesPanel
-                notes={notes}
-                onNotesChange={setNotes}
-                isListening={isListening}
-                isVoiceSupported={isVoiceSupported}
-                voiceError={voiceError}
-                onToggleVoice={toggleVoiceInput}
-              />
+          // Active session view with tabbed layout
+          <div className="space-y-4">
+            {/* Tab navigation */}
+            <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+              {([
+                { key: 'lesson', label: 'Lesson' },
+                { key: 'students', label: 'Students' },
+                { key: 'notes', label: 'Notes & Assessment' },
+                { key: 'errors', label: 'Errors' },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors min-h-[44px] ${
+                    activeTab === tab.key
+                      ? 'border-movement text-movement'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            {/* Side panel - Attendance and Error tracking */}
-            <div className="space-y-4">
-              {/* Session Attendance */}
-              <AttendancePanel
-                sessionId={session.id}
-                students={students}
-              />
+            {/* Tab: Lesson (tracker + OTR) */}
+            {activeTab === 'lesson' && (
+              <div className="space-y-6">
+                {/* OTR Counter - Group level */}
+                <Card>
+                  <CardContent className="py-6">
+                    <OTRCounter target={session.planned_otr_target || 40} />
+                  </CardContent>
+                </Card>
 
-              {/* Anticipated Errors */}
-              <Card>
-                <CardHeader>
-                  <button
-                    onClick={() => setShowErrorPanel(!showErrorPanel)}
-                    className="w-full flex items-center justify-between"
-                  >
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-amber-500" />
-                      Error Tracking
-                    </CardTitle>
-                    {showErrorPanel ? (
-                      <ChevronUp className="w-5 h-5" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5" />
-                    )}
-                  </button>
-                </CardHeader>
-                {showErrorPanel && (
+                {/* Wilson Lesson Tracker */}
+                {session.wilson_lesson_plan && (
+                  <WilsonLessonTracker
+                    sessionId={toNumericId(session.id) || 0}
+                    lessonPlan={session.wilson_lesson_plan}
+                    progress={wilsonLessonProgress}
+                    onProgressChange={handleWilsonProgressChange}
+                  />
+                )}
+
+                {/* Camino Lesson Tracker */}
+                {session.camino_lesson_plan && (
+                  <CaminoLessonTracker
+                    sessionId={toNumericId(session.id) || 0}
+                    lessonPlan={session.camino_lesson_plan}
+                    progress={caminoLessonProgress}
+                    onProgressChange={handleCaminoProgressChange}
+                  />
+                )}
+
+                {/* Fallback: Basic Lesson Components Checklist */}
+                {!session.wilson_lesson_plan && !session.camino_lesson_plan && (
+                  <LessonComponentsPanel
+                    components={WILSON_LESSON_COMPONENTS}
+                    completedComponents={componentsCompleted}
+                    onToggle={handleComponentToggle}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Tab: Students (attendance + per-student OTR) */}
+            {activeTab === 'students' && (
+              <div className="space-y-6">
+                <AttendancePanel
+                  sessionId={session.id}
+                  students={students}
+                />
+                <StudentOTRPanel
+                  students={students}
+                  studentOTRs={studentOTRs}
+                  targetOTR={session.planned_otr_target || 40}
+                  onStudentOTR={handleStudentOTR}
+                />
+              </div>
+            )}
+
+            {/* Tab: Notes & Assessment (notes + exit ticket + pacing) */}
+            {activeTab === 'notes' && (
+              <div className="space-y-6">
+                <SessionNotesPanel
+                  notes={notes}
+                  onNotesChange={setNotes}
+                  isListening={isListening}
+                  isVoiceSupported={isVoiceSupported}
+                  voiceError={voiceError}
+                  onToggleVoice={toggleVoiceInput}
+                />
+
+                {/* Exit Ticket */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Exit Ticket</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={exitTicketCorrect || ''}
+                        onChange={(e) =>
+                          setExitTicketCorrect(
+                            e.target.value ? parseInt(e.target.value) : null
+                          )
+                        }
+                        className="w-16 px-2 py-1 border rounded text-center"
+                        placeholder="0"
+                      />
+                      <span>/</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={exitTicketTotal || ''}
+                        onChange={(e) =>
+                          setExitTicketTotal(
+                            e.target.value ? parseInt(e.target.value) : null
+                          )
+                        }
+                        className="w-16 px-2 py-1 border rounded text-center"
+                        placeholder="0"
+                      />
+                      <span className="text-sm text-gray-500">correct</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Quick assessments */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Quick Assessment</CardTitle>
+                  </CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="text-sm text-gray-500 mb-3">
-                      Check errors observed and note if correction worked
-                    </p>
-                    {anticipatedErrors.map((error) => (
-                      <div
-                        key={error.id}
-                        className={`p-3 rounded-lg border transition-colors ${
-                          anticipatedErrorsChecked[error.id]
-                            ? 'bg-amber-50 border-amber-300'
-                            : 'bg-gray-50 border-gray-200'
-                        }`}
-                      >
-                        <label className="flex items-start gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={anticipatedErrorsChecked[error.id] || false}
-                            onChange={() =>
-                              handleAnticipatedErrorToggle(error.id)
-                            }
-                            className="mt-1"
-                          />
-                          <div className="flex-1">
-                            <p className="font-medium text-sm text-gray-900">
-                              {error.error_pattern}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              <span className="font-medium">Correction:</span> {error.correction_protocol}
-                            </p>
-                          </div>
-                        </label>
-
-                        {anticipatedErrorsChecked[error.id] && (
-                          <>
-                            {/* Who made this error + did correction work? */}
-                            <div className="mt-2 ml-6">
-                              <p className="text-xs text-gray-500 mb-2">Who made this error? Did correction work?</p>
-                              <div className="space-y-2">
-                                {students.map((student, index) => {
-                                  const isSelected = (errorStudents[error.id] || []).includes(student.id);
-                                  const studentCorrectionResult = correctionWorked[error.id]?.[student.id];
-                                  return (
-                                    <div key={student.id} className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleToggleErrorStudent(error.id, student.id)}
-                                        className={`
-                                          w-8 h-8 rounded-full flex items-center justify-center
-                                          text-xs font-bold transition-all flex-shrink-0
-                                          ${isSelected
-                                            ? STUDENT_COLORS[index % STUDENT_COLORS.length]
-                                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                                          }
-                                        `}
-                                        title={`${student.name} - click to toggle`}
-                                      >
-                                        {getInitials(student.name)}
-                                      </button>
-                                      {isSelected && (
-                                        <div className="flex gap-1">
-                                          <button
-                                            onClick={() => handleCorrectionWorked(error.id, student.id, true)}
-                                            className={`px-2 py-1 rounded text-xs ${
-                                              studentCorrectionResult === true
-                                                ? 'bg-emerald-500 text-white'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                            }`}
-                                          >
-                                            ✓
-                                          </button>
-                                          <button
-                                            onClick={() => handleCorrectionWorked(error.id, student.id, false)}
-                                            className={`px-2 py-1 rounded text-xs ${
-                                              studentCorrectionResult === false
-                                                ? 'bg-red-500 text-white'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                            }`}
-                                          >
-                                            ✗
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                            {/* Save to Error Bank button */}
-                            <div className="mt-3 ml-6">
-                              {savedToBank[error.id] ? (
-                                <div className="flex items-center gap-1 text-xs text-emerald-600">
-                                  <CheckCircle className="w-3 h-3" />
-                                  <span>Saved to Error Bank</span>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleSaveToBank(
-                                    error.id,
-                                    error.error_pattern,
-                                    error.correction_protocol
-                                  )}
-                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
-                                >
-                                  <Save className="w-3 h-3" />
-                                  <span>Save to Bank</span>
-                                </button>
-                              )}
-                            </div>
-                          </>
+                    <div>
+                      <label className="text-xs text-gray-600 block mb-2">
+                        Pacing
+                      </label>
+                      <div className="flex gap-2">
+                        {(['too_slow', 'just_right', 'too_fast'] as Pacing[]).map(
+                          (p) => (
+                            <button
+                              key={p}
+                              onClick={() => setPacing(p)}
+                              className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
+                                pacing === p
+                                  ? 'bg-movement text-white'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {p.replace('_', ' ')}
+                            </button>
+                          )
                         )}
                       </div>
-                    ))}
+                    </div>
 
-                    {/* Unexpected errors */}
-                    {unexpectedErrors.length > 0 && (
-                      <div className="pt-3 border-t">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">
-                          New Errors Observed
-                        </h4>
-                        {unexpectedErrors.map((error, i) => {
-                          const errorId = error.id;
-                          const errorStudent = students.find(s => s.id === (error as any).student_id);
-                          const studentIndex = students.findIndex(s => s.id === (error as any).student_id);
-                          return (
-                            <div
-                              key={i}
-                              className="p-2 bg-red-50 border border-red-200 rounded text-sm mb-2"
-                            >
-                              <div className="flex items-start gap-2">
-                                {errorStudent && (
-                                  <div
-                                    className={`
-                                      w-6 h-6 rounded-full flex items-center justify-center
-                                      text-xs font-bold flex-shrink-0
-                                      ${STUDENT_COLORS[studentIndex % STUDENT_COLORS.length]}
-                                    `}
-                                    title={errorStudent.name}
-                                  >
-                                    {getInitials(errorStudent.name)}
-                                  </div>
-                                )}
-                                <div className="flex-1">
-                                  <p className="font-medium">{error.error_pattern}</p>
-                                  {error.correction_used && (
-                                    <p className="text-xs text-gray-600">
-                                      Correction: {error.correction_used}
-                                    </p>
-                                  )}
-                                  {/* Save to Error Bank button */}
-                                  <div className="mt-2">
-                                    {savedToBank[errorId] ? (
-                                      <div className="flex items-center gap-1 text-xs text-emerald-600">
-                                        <CheckCircle className="w-3 h-3" />
-                                        <span>Saved to Error Bank</span>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={() => handleSaveToBank(
-                                          errorId,
-                                          error.error_pattern,
-                                          error.correction_used || 'No correction specified',
-                                          true
-                                        )}
-                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
-                                      >
-                                        <Save className="w-3 h-3" />
-                                        <span>Save to Bank</span>
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Add new error form */}
-                    {showNewErrorForm ? (
-                      <div className="p-3 bg-gray-100 rounded-lg space-y-2">
-                        <input
-                          type="text"
-                          placeholder="Error pattern observed..."
-                          value={newErrorPattern}
-                          onChange={(e) => setNewErrorPattern(e.target.value)}
-                          className="w-full px-2 py-1 text-sm border rounded"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Correction used..."
-                          value={newErrorCorrection}
-                          onChange={(e) => setNewErrorCorrection(e.target.value)}
-                          className="w-full px-2 py-1 text-sm border rounded"
-                        />
-                        {/* Student selector */}
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Who made this error?</p>
-                          <div className="flex flex-wrap gap-1">
-                            {students.map((student, index) => (
-                              <button
-                                key={student.id}
-                                type="button"
-                                onClick={() => setNewErrorStudent(
-                                  newErrorStudent === student.id ? '' : student.id
-                                )}
-                                className={`
-                                  w-8 h-8 rounded-full flex items-center justify-center
-                                  text-xs font-bold transition-all
-                                  ${newErrorStudent === student.id
-                                    ? STUDENT_COLORS[index % STUDENT_COLORS.length]
-                                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                                  }
-                                `}
-                                title={student.name}
-                              >
-                                {getInitials(student.name)}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={handleAddUnexpectedError}
-                          >
-                            Add
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setShowNewErrorForm(false);
-                              setNewErrorStudent('');
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setShowNewErrorForm(true)}
-                        className="w-full"
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Log New Error
-                      </Button>
-                    )}
-                  </CardContent>
-                )}
-              </Card>
-
-              {/* Exit Ticket */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Exit Ticket</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      value={exitTicketCorrect || ''}
-                      onChange={(e) =>
-                        setExitTicketCorrect(
-                          e.target.value ? parseInt(e.target.value) : null
-                        )
-                      }
-                      className="w-16 px-2 py-1 border rounded text-center"
-                      placeholder="0"
-                    />
-                    <span>/</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={exitTicketTotal || ''}
-                      onChange={(e) =>
-                        setExitTicketTotal(
-                          e.target.value ? parseInt(e.target.value) : null
-                        )
-                      }
-                      className="w-16 px-2 py-1 border rounded text-center"
-                      placeholder="0"
-                    />
-                    <span className="text-sm text-gray-500">correct</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Quick assessments */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Quick Assessment</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <label className="text-xs text-gray-600 block mb-2">
-                      Pacing
-                    </label>
-                    <div className="flex gap-2">
-                      {(['too_slow', 'just_right', 'too_fast'] as Pacing[]).map(
-                        (p) => (
+                    <div>
+                      <label className="text-xs text-gray-600 block mb-2">
+                        Mastery
+                      </label>
+                      <div className="flex gap-2">
+                        {(['yes', 'partial', 'no'] as MasteryLevel[]).map((m) => (
                           <button
-                            key={p}
-                            onClick={() => setPacing(p)}
+                            key={m}
+                            onClick={() => setMastery(m)}
                             className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
-                              pacing === p
-                                ? 'bg-movement text-white'
+                              mastery === m
+                                ? m === 'yes'
+                                  ? 'bg-emerald-500 text-white'
+                                  : m === 'partial'
+                                  ? 'bg-amber-500 text-white'
+                                  : 'bg-red-500 text-white'
                                 : 'bg-gray-100 text-gray-700'
                             }`}
                           >
-                            {p.replace('_', ' ')}
+                            {m}
                           </button>
-                        )
-                      )}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-                  <div>
-                    <label className="text-xs text-gray-600 block mb-2">
-                      Mastery
-                    </label>
-                    <div className="flex gap-2">
-                      {(['yes', 'partial', 'no'] as MasteryLevel[]).map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => setMastery(m)}
-                          className={`px-3 py-2 rounded text-xs flex-1 min-h-[44px] ${
-                            mastery === m
-                              ? m === 'yes'
-                                ? 'bg-emerald-500 text-white'
-                                : m === 'partial'
-                                ? 'bg-amber-500 text-white'
-                                : 'bg-red-500 text-white'
-                              : 'bg-gray-100 text-gray-700'
+            {/* Tab: Errors */}
+            {activeTab === 'errors' && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <button
+                      onClick={() => setShowErrorPanel(!showErrorPanel)}
+                      className="w-full flex items-center justify-between"
+                      aria-expanded={showErrorPanel}
+                      aria-controls="error-panel-content"
+                    >
+                      <CardTitle className="flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                        Error Tracking
+                      </CardTitle>
+                      {showErrorPanel ? (
+                        <ChevronUp className="w-5 h-5" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5" />
+                      )}
+                    </button>
+                  </CardHeader>
+                  {showErrorPanel && (
+                    <CardContent id="error-panel-content" className="space-y-3">
+                      <p className="text-sm text-gray-500 mb-3">
+                        Check errors observed and note if correction worked
+                      </p>
+                      {anticipatedErrors.map((error) => (
+                        <div
+                          key={error.id}
+                          className={`p-3 rounded-lg border transition-colors ${
+                            anticipatedErrorsChecked[error.id]
+                              ? 'bg-amber-50 border-amber-300'
+                              : 'bg-gray-50 border-gray-200'
                           }`}
                         >
-                          {m}
-                        </button>
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={anticipatedErrorsChecked[error.id] || false}
+                              onChange={() =>
+                                handleAnticipatedErrorToggle(error.id)
+                              }
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm text-gray-900">
+                                {error.error_pattern}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                <span className="font-medium">Correction:</span> {error.correction_protocol}
+                              </p>
+                            </div>
+                          </label>
+
+                          {anticipatedErrorsChecked[error.id] && (
+                            <>
+                              {/* Who made this error + did correction work? */}
+                              <div className="mt-2 ml-6">
+                                <p className="text-xs text-gray-500 mb-2">Who made this error? Did correction work?</p>
+                                <div className="space-y-2">
+                                  {students.map((student, index) => {
+                                    const isSelected = (errorStudents[error.id] || []).includes(student.id);
+                                    const studentCorrectionResult = correctionWorked[error.id]?.[student.id];
+                                    return (
+                                      <div key={student.id} className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => handleToggleErrorStudent(error.id, student.id)}
+                                          className={`
+                                            w-8 h-8 rounded-full flex items-center justify-center
+                                            text-xs font-bold transition-all flex-shrink-0
+                                            ${isSelected
+                                              ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                              : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                            }
+                                          `}
+                                          title={`${student.name} - click to toggle`}
+                                        >
+                                          {getInitials(student.name)}
+                                        </button>
+                                        {isSelected && (
+                                          <div className="flex gap-1">
+                                            <button
+                                              onClick={() => handleCorrectionWorked(error.id, student.id, true)}
+                                              className={`px-2 py-1 rounded text-xs ${
+                                                studentCorrectionResult === true
+                                                  ? 'bg-emerald-500 text-white'
+                                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                              }`}
+                                            >
+                                              ✓
+                                            </button>
+                                            <button
+                                              onClick={() => handleCorrectionWorked(error.id, student.id, false)}
+                                              className={`px-2 py-1 rounded text-xs ${
+                                                studentCorrectionResult === false
+                                                  ? 'bg-red-500 text-white'
+                                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                              }`}
+                                            >
+                                              ✗
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              {/* Save to Error Bank button */}
+                              <div className="mt-3 ml-6">
+                                {savedToBank[error.id] ? (
+                                  <div className="flex items-center gap-1 text-xs text-emerald-600">
+                                    <CheckCircle className="w-3 h-3" />
+                                    <span>Saved to Error Bank</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleSaveToBank(
+                                      error.id,
+                                      error.error_pattern,
+                                      error.correction_protocol
+                                    )}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                    <span>Save to Bank</span>
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+
+                      {/* Unexpected errors */}
+                      {unexpectedErrors.length > 0 && (
+                        <div className="pt-3 border-t">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">
+                            New Errors Observed
+                          </h4>
+                          {unexpectedErrors.map((error, i) => {
+                            const errorId = error.id;
+                            const errorStudent = students.find(s => s.id === (error as any).student_id);
+                            const studentIndex = students.findIndex(s => s.id === (error as any).student_id);
+                            return (
+                              <div
+                                key={i}
+                                className="p-2 bg-red-50 border border-red-200 rounded text-sm mb-2"
+                              >
+                                <div className="flex items-start gap-2">
+                                  {errorStudent && (
+                                    <div
+                                      className={`
+                                        w-6 h-6 rounded-full flex items-center justify-center
+                                        text-xs font-bold flex-shrink-0
+                                        ${STUDENT_COLORS[studentIndex % STUDENT_COLORS.length]}
+                                      `}
+                                      title={errorStudent.name}
+                                    >
+                                      {getInitials(errorStudent.name)}
+                                    </div>
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="font-medium">{error.error_pattern}</p>
+                                    {error.correction_used && (
+                                      <p className="text-xs text-gray-600">
+                                        Correction: {error.correction_used}
+                                      </p>
+                                    )}
+                                    {/* Save to Error Bank button */}
+                                    <div className="mt-2">
+                                      {savedToBank[errorId] ? (
+                                        <div className="flex items-center gap-1 text-xs text-emerald-600">
+                                          <CheckCircle className="w-3 h-3" />
+                                          <span>Saved to Error Bank</span>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleSaveToBank(
+                                            errorId,
+                                            error.error_pattern,
+                                            error.correction_used || 'No correction specified',
+                                            true
+                                          )}
+                                          className="flex items-center gap-1 px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+                                        >
+                                          <Save className="w-3 h-3" />
+                                          <span>Save to Bank</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add new error form */}
+                      {showNewErrorForm ? (
+                        <div className="p-3 bg-gray-100 rounded-lg space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Error pattern observed..."
+                            value={newErrorPattern}
+                            onChange={(e) => setNewErrorPattern(e.target.value)}
+                            className="w-full px-2 py-1 text-sm border rounded"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Correction used..."
+                            value={newErrorCorrection}
+                            onChange={(e) => setNewErrorCorrection(e.target.value)}
+                            className="w-full px-2 py-1 text-sm border rounded"
+                          />
+                          {/* Student selector */}
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Who made this error?</p>
+                            <div className="flex flex-wrap gap-1">
+                              {students.map((student, index) => (
+                                <button
+                                  key={student.id}
+                                  type="button"
+                                  onClick={() => setNewErrorStudent(
+                                    newErrorStudent === student.id ? '' : student.id
+                                  )}
+                                  className={`
+                                    w-8 h-8 rounded-full flex items-center justify-center
+                                    text-xs font-bold transition-all
+                                    ${newErrorStudent === student.id
+                                      ? STUDENT_COLORS[index % STUDENT_COLORS.length]
+                                      : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                    }
+                                  `}
+                                  title={student.name}
+                                >
+                                  {getInitials(student.name)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={handleAddUnexpectedError}
+                            >
+                              Add
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setShowNewErrorForm(false);
+                                setNewErrorStudent('');
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setShowNewErrorForm(true)}
+                          className="w-full"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Log New Error
+                        </Button>
+                      )}
+                    </CardContent>
+                  )}
+                </Card>
+              </div>
+            )}
           </div>
         )}
       </div>

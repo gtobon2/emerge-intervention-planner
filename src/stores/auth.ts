@@ -5,6 +5,9 @@ import { isMockMode } from '@/lib/supabase/config';
 import { fetchProfileById, type Profile } from '@/lib/supabase/profiles';
 import type { User, Session } from '@supabase/supabase-js';
 
+// Track the auth listener subscription so we don't accumulate listeners
+let authListenerUnsubscribe: (() => void) | null = null;
+
 // User roles for access control
 export type UserRole = 'admin' | 'interventionist' | 'teacher';
 
@@ -44,6 +47,7 @@ interface AuthState {
   fetchUserProfile: () => Promise<void>;
   clearError: () => void;
   isAdmin: () => boolean;
+  cleanup: () => void;
 }
 
 // Mock user for development when Supabase is not configured
@@ -148,8 +152,14 @@ export const useAuthStore = create<AuthState>()(
             isInitialized: true,
           });
 
+          // Clean up any existing listener before setting a new one
+          if (authListenerUnsubscribe) {
+            authListenerUnsubscribe();
+            authListenerUnsubscribe = null;
+          }
+
           // Set up auth state listener
-          supabase.auth.onAuthStateChange(async (_event, session) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             let newProfile: Profile | null = null;
             let newRole: UserRole | null = null;
 
@@ -170,6 +180,7 @@ export const useAuthStore = create<AuthState>()(
               userProfile: newProfile,
             });
           });
+          authListenerUnsubscribe = () => subscription.unsubscribe();
         } catch (error: any) {
           set({
             error: error.message || 'Failed to initialize auth',
@@ -486,6 +497,13 @@ export const useAuthStore = create<AuthState>()(
 
       isAdmin: () => {
         return get().userRole === 'admin';
+      },
+
+      cleanup: () => {
+        if (authListenerUnsubscribe) {
+          authListenerUnsubscribe();
+          authListenerUnsubscribe = null;
+        }
       },
     }),
     {

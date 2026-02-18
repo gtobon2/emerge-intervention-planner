@@ -147,8 +147,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const allSessions = await supabaseService.fetchAllSessions();
-      const todaySessionsRaw = allSessions.filter(s => s.date === today);
+      const todaySessionsRaw = await supabaseService.fetchSessionsByDate(today);
 
       const groups = await supabaseService.fetchAllGroups();
       const groupMap = new Map(groups.map(g => [g.id, g]));
@@ -192,11 +191,14 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const sessions = await supabaseService.fetchSessionsByRole(role, userId);
-      const todaySessionsRaw = sessions.filter(s => s.date === today);
-
       const groups = await supabaseService.fetchGroupsByRole(role, userId);
       const groupMap = new Map(groups.map(g => [g.id, g]));
+      const groupIds = groups.map(g => g.id);
+
+      // Fetch only today's sessions for the user's groups server-side
+      const todaySessionsRaw = role === 'admin'
+        ? await supabaseService.fetchSessionsByDate(today)
+        : await supabaseService.fetchSessionsByDateAndGroups(today, groupIds);
 
       const todaySessions: TodaySession[] = todaySessionsRaw
         .map(session => {
@@ -408,7 +410,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     };
 
     try {
-      await get().updateSession(id, updates);
+      const updatedSession = await supabaseService.updateSession(id, updates);
+
+      set((state) => ({
+        sessions: state.sessions.map((s) => (s.id === id ? updatedSession : s)),
+        selectedSession:
+          state.selectedSession?.id === id
+            ? { ...state.selectedSession, ...updatedSession }
+            : state.selectedSession,
+        isLoading: false,
+      }));
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
     }

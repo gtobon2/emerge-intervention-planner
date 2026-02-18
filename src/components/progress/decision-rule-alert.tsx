@@ -90,6 +90,12 @@ export function DecisionRuleAlert({ data, goal, className = '' }: DecisionRuleAl
   const rule = checkDecisionRule(data, goal);
 
   if (!rule) {
+    const pointCount = data.length;
+    const lastPoint = data.length > 0
+      ? [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+      : null;
+    const hasGoal = goal !== undefined && goal !== null;
+
     return (
       <div className={`p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg ${className}`}>
         <div className="flex items-start gap-3">
@@ -97,8 +103,15 @@ export function DecisionRuleAlert({ data, goal, className = '' }: DecisionRuleAl
           <div>
             <h3 className="font-semibold text-blue-400 mb-1">Insufficient Data</h3>
             <p className="text-sm text-text-muted">
-              Need at least 4 data points with a goal set to apply decision rules.
+              {!hasGoal
+                ? `${pointCount} data point${pointCount !== 1 ? 's' : ''} collected. Set a goal to enable decision rules.`
+                : `${pointCount} of 4 required data points collected.`}
             </p>
+            {lastPoint && (
+              <p className="text-xs text-text-muted mt-1">
+                Last data point collected on {new Date(lastPoint.date).toLocaleDateString()}.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -69,9 +69,9 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-        <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Cannot Edit Session</h2>
-          <p className="text-gray-600 mb-4">
+        <div className="relative bg-surface rounded-xl shadow-xl w-full max-w-md p-6">
+          <h2 className="text-xl font-bold text-text-primary mb-4">Cannot Edit Session</h2>
+          <p className="text-text-secondary mb-4">
             Only planned sessions can be edited. This session has a status of &quot;{session.status}&quot;.
           </p>
           <Button variant="primary" onClick={onClose} className="w-full">
@@ -151,16 +151,16 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-surface rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-surface border-b border-border px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Edit Session</h2>
-            <p className="text-sm text-gray-500">{group.name}</p>
+            <h2 className="text-xl font-bold text-text-primary">Edit Session</h2>
+            <p className="text-sm text-text-muted">{group.name}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-foundation rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -171,7 +171,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Date
               </label>
               <input
@@ -182,7 +182,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">
                 Time
               </label>
               <input
@@ -196,7 +196,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
 
           {/* OTR Target */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               <Target className="w-4 h-4 inline mr-1" />
               OTR Target
             </label>
@@ -218,7 +218,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
 
           {/* Response Formats */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Response Formats
             </label>
             <div className="flex flex-wrap gap-2">
@@ -231,7 +231,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
                     px-3 py-2 rounded-lg text-sm font-medium transition-colors
                     ${responseFormats.includes(format.value)
                       ? 'bg-pink-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      : 'bg-foundation text-text-secondary hover:bg-border'
                     }
                   `}
                 >
@@ -243,7 +243,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
 
           {/* Practice Items */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Planned Practice Items
             </label>
             <div className="space-y-2">
@@ -252,7 +252,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
                   <select
                     value={item.type}
                     onChange={(e) => handleUpdatePracticeItem(index, 'type', e.target.value)}
-                    className="px-3 py-2 border rounded-lg text-sm bg-white"
+                    className="px-3 py-2 border border-border rounded-lg text-sm bg-surface"
                   >
                     <option value="review">Review</option>
                     <option value="new">New</option>
@@ -289,7 +289,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
 
           {/* Anticipated Errors */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               <AlertTriangle className="w-4 h-4 inline mr-1 text-amber-500" />
               Anticipated Errors
             </label>
@@ -317,7 +317,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
               </div>
             )}
 
-            <div className="space-y-2 p-3 bg-gray-50 rounded-lg">
+            <div className="space-y-2 p-3 bg-foundation rounded-lg">
               <input
                 type="text"
                 value={newErrorPattern}
@@ -346,7 +346,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Planning Notes (optional)
             </label>
             <textarea
@@ -359,7 +359,7 @@ export function EditSessionModal({ session, group, isOpen, onClose, onSave }: Ed
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex justify-end gap-3">
+        <div className="sticky bottom-0 bg-surface border-t border-border px-6 py-4 flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { exportToFile, clearAllData as clearDatabase } from '@/lib/local-db/backup';
+import { useUIStore } from './ui';
 
 export type UserRole = 'interventionist' | 'coach' | 'admin';
 export type Theme = 'light' | 'dark' | 'system';
@@ -144,7 +145,6 @@ export const useSettingsStore = create<SettingsState>()(
 
         // Update UI store if sidebar preference changes
         if (preferences.sidebarDefaultExpanded !== undefined) {
-          const { useUIStore } = require('./ui');
           useUIStore.getState().setSidebarCollapsed(!preferences.sidebarDefaultExpanded);
         }
       },
@@ -212,8 +212,14 @@ export const useSettingsStore = create<SettingsState>()(
           // Clear all data from IndexedDB
           await clearDatabase();
 
-          // Clear local storage (settings, help state, etc.)
-          localStorage.clear();
+          // Clear only app-specific localStorage keys (preserve Supabase auth tokens)
+          const appKeys = [
+            'emerge-settings-store',
+            'emerge-ui-store',
+            'emerge-help-store',
+            'emerge-notifications-store',
+          ];
+          appKeys.forEach(key => localStorage.removeItem(key));
 
           // Reset settings to defaults
           get().resetToDefaults();

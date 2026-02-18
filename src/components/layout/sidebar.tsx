@@ -34,21 +34,46 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/groups', label: 'Groups', icon: Users },
-  { href: '/students', label: 'Students', icon: UserCheck },
-  { href: '/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/schedule', label: 'Schedule', icon: CalendarClock },
-  { href: '/progress', label: 'Progress', icon: TrendingUp },
-  { href: '/error-bank', label: 'Error Bank', icon: BookOpen },
-  { href: '/worksheets', label: 'Worksheets', icon: ClipboardList },
-  { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
-  { href: '/materials', label: 'Materials', icon: Package },
-  { href: '/letters', label: 'Family Letters', icon: FileText },
-  { href: '/reports', label: 'Reports', icon: FileText },
-  { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
-  { href: '/admin/export', label: 'Data Export', icon: Download, adminOnly: true },
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: 'CORE',
+    items: [
+      { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/groups', label: 'Groups', icon: Users },
+      { href: '/students', label: 'Students', icon: UserCheck },
+      { href: '/calendar', label: 'Calendar', icon: Calendar },
+      { href: '/progress', label: 'Progress', icon: TrendingUp },
+    ],
+  },
+  {
+    label: 'SESSION TOOLS',
+    items: [
+      { href: '/schedule', label: 'Schedule', icon: CalendarClock },
+      { href: '/error-bank', label: 'Error Bank', icon: BookOpen },
+    ],
+  },
+  {
+    label: 'RESOURCES',
+    items: [
+      { href: '/worksheets', label: 'Worksheets', icon: ClipboardList },
+      { href: '/worksheets-spanish', label: 'Spanish Worksheets', icon: Languages },
+      { href: '/materials', label: 'Materials', icon: Package },
+      { href: '/letters', label: 'Family Letters', icon: FileText },
+      { href: '/reports', label: 'Reports', icon: FileText },
+    ],
+  },
+  {
+    label: 'ADMIN',
+    items: [
+      { href: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
+      { href: '/admin/export', label: 'Data Export', icon: Download, adminOnly: true },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -57,13 +82,13 @@ export function Sidebar() {
   const { sidebarOpen, sidebarCollapsed, toggleSidebar, setSidebarCollapsed } = useUIStore();
   const { isAdmin, signOut, currentDemoUser, userRole, isLoading } = useAuth();
 
-  // Filter nav items based on user role
-  const filteredNavItems = navItems.filter(item => {
-    if (item.adminOnly && !isAdmin) {
-      return false;
-    }
-    return true;
-  });
+  // Filter nav groups based on user role
+  const filteredNavGroups = navGroups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => !item.adminOnly || isAdmin),
+    }))
+    .filter(group => group.items.length > 0);
 
   const handleLogout = async () => {
     try {
@@ -145,31 +170,45 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {filteredNavItems.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/' && pathname.startsWith(item.href));
+        <nav className="flex-1 p-3 overflow-y-auto">
+          {filteredNavGroups.map((group, groupIndex) => (
+            <div key={group.label} className={groupIndex > 0 ? 'mt-4' : ''}>
+              {!sidebarCollapsed && (
+                <p className="px-3 mb-1 text-[10px] font-semibold tracking-wider text-text-muted/60 uppercase">
+                  {group.label}
+                </p>
+              )}
+              {sidebarCollapsed && groupIndex > 0 && (
+                <div className="mx-3 mb-2 border-t border-text-muted/10" />
+              )}
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href ||
+                    (item.href !== '/' && pathname.startsWith(item.href));
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg
-                  transition-colors min-h-[44px]
-                  ${isActive
-                    ? 'bg-movement/10 text-movement'
-                    : 'text-text-muted hover:text-text-primary hover:bg-foundation'
-                  }
-                `}
-              >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                {!sidebarCollapsed && (
-                  <span className="font-medium">{item.label}</span>
-                )}
-              </Link>
-            );
-          })}
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg
+                        transition-colors min-h-[44px]
+                        ${isActive
+                          ? 'bg-movement/10 text-movement'
+                          : 'text-text-muted hover:text-text-primary hover:bg-foundation'
+                        }
+                      `}
+                    >
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                      {!sidebarCollapsed && (
+                        <span className="font-medium">{item.label}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Settings & User */}

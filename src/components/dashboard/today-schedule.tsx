@@ -39,6 +39,11 @@ export function TodaySchedule({ sessions, isLoading }: TodayScheduleProps) {
           <div className="text-center py-8 text-text-muted">
             <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>No sessions scheduled for today</p>
+            <Link href="/groups">
+              <Button variant="secondary" size="sm" className="mt-4">
+                Plan a Session
+              </Button>
+            </Link>
           </div>
         ) : (
           <div className="space-y-3">

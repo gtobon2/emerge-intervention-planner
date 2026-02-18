@@ -87,10 +87,19 @@ export const useProgressStore = create<ProgressState>((set) => ({
     try {
       const newDataPoint = await supabaseService.createProgressMonitoring(dataPoint);
 
-      set((state) => ({
-        data: [...state.data, newDataPoint],
-        isLoading: false,
-      }));
+      set((state) => {
+        // Find the student from existing dataWithStudents entries
+        const existingEntry = state.dataWithStudents.find(
+          (d) => d.student_id === newDataPoint.student_id && d.student
+        );
+        const student = existingEntry?.student || null;
+
+        return {
+          data: [...state.data, newDataPoint],
+          dataWithStudents: [...state.dataWithStudents, { ...newDataPoint, student }],
+          isLoading: false,
+        };
+      });
 
       return newDataPoint;
     } catch (err) {

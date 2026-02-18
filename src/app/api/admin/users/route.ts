@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@/lib/supabase/server';
 
 // Create admin client with service role key for admin operations
 function createAdminClient() {
@@ -18,9 +19,40 @@ function createAdminClient() {
   });
 }
 
+// Verify the caller is an authenticated admin user
+async function requireAdmin(): Promise<NextResponse | null> {
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile || profile.role !== 'admin') {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  return null; // Authorized
+}
+
 // GET /api/admin/users - Fetch all users with profiles
 export async function GET() {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const supabase = createAdminClient();
 
     // Fetch all profiles
@@ -50,6 +82,9 @@ export async function GET() {
 // POST /api/admin/users - Create a new user (admin operation)
 export async function POST(request: NextRequest) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const supabase = createAdminClient();
     const body = await request.json();
 
@@ -153,6 +188,9 @@ export async function POST(request: NextRequest) {
 // PATCH /api/admin/users - Update user role
 export async function PATCH(request: NextRequest) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const supabase = createAdminClient();
     const body = await request.json();
 
@@ -242,6 +280,9 @@ export async function PATCH(request: NextRequest) {
 // DELETE /api/admin/users - Delete a user
 export async function DELETE(request: NextRequest) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const supabase = createAdminClient();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');

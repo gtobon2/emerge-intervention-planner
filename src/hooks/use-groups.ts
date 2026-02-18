@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useGroupsStore } from '@/stores/groups';
 import type { GroupInsert, GroupUpdate } from '@/lib/supabase/types';
 
@@ -15,14 +15,9 @@ export function useGroups() {
   const deleteGroup = useGroupsStore((state) => state.deleteGroup);
   const setFilter = useGroupsStore((state) => state.setFilter);
 
-  const hasFetched = useRef(false);
-
   useEffect(() => {
-    if (!hasFetched.current && groups.length === 0 && !isLoading) {
-      hasFetched.current = true;
-      fetchGroups();
-    }
-  }, [groups.length, isLoading, fetchGroups]);
+    fetchGroups();
+  }, [fetchGroups]);
 
   return {
     groups,

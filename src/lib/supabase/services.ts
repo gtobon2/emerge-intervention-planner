@@ -595,6 +595,31 @@ export async function fetchAllSessions(): Promise<Session[]> {
   return (data || []) as Session[];
 }
 
+export async function fetchSessionsByDate(date: string): Promise<Session[]> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('date', date)
+    .order('time', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as Session[];
+}
+
+export async function fetchSessionsByDateAndGroups(date: string, groupIds: string[]): Promise<Session[]> {
+  if (groupIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('date', date)
+    .in('group_id', groupIds)
+    .order('time', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as Session[];
+}
+
 export async function fetchSessionById(id: string): Promise<Session | null> {
   const { data, error } = await supabase
     .from('sessions')

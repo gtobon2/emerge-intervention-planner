@@ -488,7 +488,7 @@ export function WilsonWizard({
       </div>
 
       {/* Bottom Navigation */}
-      <div className="flex items-center justify-between px-4 py-3 pr-20 border-t border-border bg-surface z-10 relative">
+      <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface z-10 relative">
         <button
           onClick={() => setCurrentStep(s => s - 1)}
           disabled={!canGoBack}

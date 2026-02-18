@@ -51,12 +51,13 @@ export default function GroupsPage() {
   const { user, userRole } = useAuthStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
-  // Form state
+  // Form state — initialize with real defaults so formData matches the visible UI
   const [formData, setFormData] = useState({
     name: '',
-    curriculum: '' as Curriculum | '',
-    tier: '' as '2' | '3' | '',
+    curriculum: 'wilson' as Curriculum | '',
+    tier: '2' as '2' | '3' | '',
     grade: '',
   });
 
@@ -88,7 +89,9 @@ export default function GroupsPage() {
 
       if (result) {
         setIsCreateModalOpen(false);
-        setFormData({ name: '', curriculum: '', tier: '', grade: '' });
+        setFormData({ name: '', curriculum: 'wilson', tier: '2', grade: '' });
+        setSuccessMessage(`Group "${formData.name}" created successfully`);
+        setTimeout(() => setSuccessMessage(''), 3000);
       }
     } finally {
       setIsSaving(false);
@@ -119,6 +122,13 @@ export default function GroupsPage() {
             <span>New Group</span>
           </Button>
         </div>
+
+        {/* Success Message */}
+        {successMessage && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-sm">
+            {successMessage}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center p-4 bg-surface rounded-xl">

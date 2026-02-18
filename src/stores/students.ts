@@ -91,6 +91,7 @@ export const useStudentsStore = create<StudentsState>((set) => ({
       set((state) => ({
         students: [...state.students, newStudent],
         allStudents: [...state.allStudents, newStudent],
+        visibleStudents: [...state.visibleStudents, newStudent],
         isLoading: false,
       }));
 

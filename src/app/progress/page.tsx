@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { TrendingUp, Plus, Filter, Calendar, BarChart3, Target } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Select } from '@/components/ui';
@@ -15,7 +16,13 @@ import { useGroupsStore } from '@/stores/groups';
 import { useGoalsStore } from '@/stores/goals';
 import { GoalSettingModal } from '@/components/goals/GoalSettingModal';
 
+const PROGRESS_GROUP_KEY = 'emerge-progress-selected-group';
+
 export default function ProgressPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initializedRef = useRef(false);
+
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [dateRange, setDateRange] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,6 +45,35 @@ export default function ProgressPage() {
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
+
+  // Restore selected group from URL searchParams or localStorage on mount
+  useEffect(() => {
+    if (initializedRef.current || groups.length === 0) return;
+    initializedRef.current = true;
+
+    const paramGroup = searchParams.get('group');
+    const savedGroup = typeof window !== 'undefined'
+      ? localStorage.getItem(PROGRESS_GROUP_KEY)
+      : null;
+    const restoredId = paramGroup || savedGroup || '';
+
+    // Only restore if the group actually exists
+    if (restoredId && groups.some(g => g.id === restoredId)) {
+      setSelectedGroupId(restoredId);
+    }
+  }, [groups, searchParams]);
+
+  // Persist group selection to URL and localStorage on change
+  const handleGroupChange = useCallback((groupId: string) => {
+    setSelectedGroupId(groupId);
+    if (groupId) {
+      localStorage.setItem(PROGRESS_GROUP_KEY, groupId);
+      router.replace(`?group=${groupId}`, { scroll: false });
+    } else {
+      localStorage.removeItem(PROGRESS_GROUP_KEY);
+      router.replace('?', { scroll: false });
+    }
+  }, [router]);
 
   // Fetch group details (including students) and goals when selection changes
   useEffect(() => {
@@ -239,7 +275,7 @@ export default function ProgressPage() {
               })),
             ]}
             value={selectedGroupId}
-            onChange={(e) => setSelectedGroupId(e.target.value)}
+            onChange={(e) => handleGroupChange(e.target.value)}
             className="w-64"
           />
 

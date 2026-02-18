@@ -192,7 +192,7 @@ export function AttendancePanel({
         <CardContent>
           <div className="animate-pulse space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-10 bg-gray-200 rounded" />
+              <div key={i} className="h-10 bg-border rounded" />
             ))}
           </div>
         </CardContent>
@@ -258,7 +258,7 @@ export function AttendancePanel({
                 key={student.id}
                 className={`
                   flex items-center justify-between p-3 rounded-lg border transition-colors
-                  ${status ? 'bg-gray-50' : 'bg-white'}
+                  ${status ? 'bg-foundation' : 'bg-surface'}
                 `}
               >
                 <div className="flex items-center gap-3">
@@ -272,7 +272,7 @@ export function AttendancePanel({
                     {getInitials(student.name)}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">{student.name}</p>
+                    <p className="font-medium text-text-primary">{student.name}</p>
                     {status && (
                       <p className={`text-xs ${getAttendanceStatusColor(status)}`}>
                         {getAttendanceStatusIcon(status)} {getAttendanceStatusLabel(status)}
@@ -292,7 +292,7 @@ export function AttendancePanel({
                         className={`
                           w-9 h-9 rounded-lg border-2 flex items-center justify-center
                           text-sm font-bold transition-all
-                          ${isSelected ? btn.color : `bg-white text-gray-400 border-gray-200 ${btn.hoverColor}`}
+                          ${isSelected ? btn.color : `bg-surface text-text-muted border-border ${btn.hoverColor}`}
                           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                         `}
                         title={getAttendanceStatusLabel(btn.status)}
