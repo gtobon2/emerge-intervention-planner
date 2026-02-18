@@ -15,7 +15,6 @@ import {
   type GeneratedWorksheet,
   WORKSHEET_TEMPLATES,
 } from '@/lib/worksheets';
-import { exportWorksheetToPDF, exportAnswerKeyToPDF } from '@/lib/worksheets/pdf-export';
 import { WILSON_STEPS, getAllWilsonSubsteps } from '@/lib/curriculum/wilson';
 import { getWordsForSubstep, getCumulativeWords } from '@/lib/worksheets/word-utils';
 
@@ -163,22 +162,25 @@ export default function WorksheetsPage() {
     setIsGenerating(false);
   };
 
-  // Export handlers
-  const handleExportPDF = () => {
+  // Export handlers (lazy-load jsPDF on demand)
+  const handleExportPDF = async () => {
     if (worksheet) {
+      const { exportWorksheetToPDF } = await import('@/lib/worksheets/pdf-export');
       exportWorksheetToPDF(worksheet);
     }
   };
 
-  const handleExportAnswerKey = () => {
+  const handleExportAnswerKey = async () => {
     if (worksheet && worksheet.answerKey) {
+      const { exportAnswerKeyToPDF } = await import('@/lib/worksheets/pdf-export');
       exportAnswerKeyToPDF(worksheet);
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     // Generate PDF and print
     if (worksheet) {
+      const { exportWorksheetToPDF } = await import('@/lib/worksheets/pdf-export');
       exportWorksheetToPDF(worksheet);
     }
   };

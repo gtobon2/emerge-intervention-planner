@@ -15,8 +15,6 @@ import {
 import { type DifficultyLevel, DIFFICULTY_SETTINGS } from '@/lib/worksheets/types';
 import { DESPEGANDO_PHASES } from '@/lib/curriculum/despegando';
 import { getCumulativeSpanishWords } from '@/lib/worksheets/spanish-word-utils';
-import { exportWorksheetToPDF, exportAnswerKeyToPDF } from '@/lib/worksheets/pdf-export';
-
 export default function SpanishWorksheetsPage() {
   // Configuration state
   const [selectedTemplate, setSelectedTemplate] = useState<SpanishWorksheetTemplate>('syllable_grid');

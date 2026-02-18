@@ -6,7 +6,6 @@ import { Button, Card, CardHeader, CardTitle, CardContent, Input } from '@/compo
 import { SessionWithGroup } from '@/lib/supabase/types';
 import { formatCurriculumPosition } from '@/lib/supabase/types';
 import { convertToCSV, downloadCSV, generateTimestampedFilename, formatCSVDate, formatReportDate } from '@/lib/export-utils';
-import { exportSessionReportToPDF } from '@/lib/export';
 
 interface SessionReportProps {
   sessions: SessionWithGroup[];
@@ -110,11 +109,12 @@ export function SessionReport({ sessions }: SessionReportProps) {
     }
   };
 
-  // Export to PDF
-  const handleExportPDF = () => {
+  // Export to PDF (lazy-loads jsPDF on demand)
+  const handleExportPDF = async () => {
     setIsExportingPDF(true);
 
     try {
+      const { exportSessionReportToPDF } = await import('@/lib/export');
       // Map SessionWithGroup to Session format for PDF export
       const sessionsForPDF = filteredSessions.map(s => ({
         ...s,

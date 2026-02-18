@@ -30,8 +30,8 @@ interface ScheduleGridProps {
   onSessionDragEnd?: () => void;
   draggingSession?: SessionWithGroup | null;
   // Session management
-  onCancelSession?: (sessionId: string) => void;
-  onDeleteSession?: (sessionId: string) => void;
+  onCancelSession?: (sessionId: string, sessionName?: string) => void;
+  onDeleteSession?: (sessionId: string, sessionName?: string) => void;
   // Bulk selection
   bulkSelectMode?: boolean;
   selectedSessionIds?: Set<string>;
@@ -509,9 +509,7 @@ export function ScheduleGrid({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm(`Delete session for ${session.group.name}?`)) {
-                                    onDeleteSession(session.id);
-                                  }
+                                  onDeleteSession(session.id, session.group.name);
                                 }}
                                 className="absolute -right-1 -top-1 hidden group-hover/session:flex
                                   w-4 h-4 bg-red-500 rounded-full items-center justify-center
@@ -612,7 +610,7 @@ export function ScheduleGrid({
             {onCancelSession && (
               <button
                 onClick={() => {
-                  onCancelSession(contextMenu.sessionId);
+                  onCancelSession(contextMenu.sessionId, contextMenu.sessionName);
                   setContextMenu(null);
                 }}
                 className="w-full px-3 py-2 text-left text-sm text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 flex items-center gap-2"
@@ -624,9 +622,7 @@ export function ScheduleGrid({
             {onDeleteSession && (
               <button
                 onClick={() => {
-                  if (confirm(`Delete session for ${contextMenu.sessionName}?`)) {
-                    onDeleteSession(contextMenu.sessionId);
-                  }
+                  onDeleteSession(contextMenu.sessionId, contextMenu.sessionName);
                   setContextMenu(null);
                 }}
                 className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"

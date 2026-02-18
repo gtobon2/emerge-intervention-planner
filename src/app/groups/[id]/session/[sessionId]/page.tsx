@@ -65,7 +65,6 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useErrorsStore, useSessionsStore, useGroupsStore, useStudentsStore, useAIContextStore } from '@/stores';
 import { saveStudentSessionTracking } from '@/lib/local-db/hooks';
 import { toNumericId } from '@/lib/utils/id';
-import { exportSessionPlanToPDF } from '@/lib/export';
 import { SessionLoggingForm } from '@/components/sessions/logging';
 import type { SessionLoggingData } from '@/components/sessions/logging';
 import { PrintSessionLesson } from '@/components/sessions/print';

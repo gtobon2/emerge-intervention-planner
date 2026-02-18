@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useRef, useCallback } from 'react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type jsPDF from 'jspdf';
 import type { Session, Group, Student } from '@/lib/supabase/types';
 import {
   getCurriculumLabel,
@@ -18,13 +17,8 @@ import { CaminoLessonPrint } from './CaminoLessonPrint';
 import { GenericSessionPrint } from './GenericSessionPrint';
 import './print-styles.css';
 
-// Extend jsPDF type to include autoTable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: typeof autoTable;
-    lastAutoTable: { finalY: number };
-  }
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AutoTableFn = (doc: jsPDF, options: any) => void;
 
 // ============================================
 // Types
@@ -139,7 +133,7 @@ function addPDFFooter(doc: jsPDF) {
   }
 }
 
-function addStudentRoster(doc: jsPDF, students: Student[], yPos: number): number {
+function addStudentRoster(doc: jsPDF, students: Student[], yPos: number, autoTableFn: AutoTableFn): number {
   if (students.length === 0) return yPos;
 
   doc.setFontSize(11);
@@ -147,7 +141,7 @@ function addStudentRoster(doc: jsPDF, students: Student[], yPos: number): number
   doc.text('Student Roster', 14, yPos);
   yPos += 5;
 
-  autoTable(doc, {
+  autoTableFn(doc, {
     startY: yPos,
     head: [['#', 'Student Name', 'Grade', 'Notes']],
     body: students.map((s, i) => [
@@ -426,7 +420,7 @@ function addCaminoLessonPDF(doc: jsPDF, plan: CaminoLessonPlan, yPos: number): n
   return yPos;
 }
 
-function addGenericSessionPDF(doc: jsPDF, session: Session, group: Group, yPos: number): number {
+function addGenericSessionPDF(doc: jsPDF, session: Session, group: Group, yPos: number, autoTableFn: AutoTableFn): number {
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // Curriculum header
@@ -469,7 +463,7 @@ function addGenericSessionPDF(doc: jsPDF, session: Session, group: Group, yPos: 
     doc.text('Practice Items', 14, yPos);
     yPos += 4;
 
-    autoTable(doc, {
+    autoTableFn(doc, {
       startY: yPos,
       head: [['Type', 'Item']],
       body: session.planned_practice_items.map(item => [item.type, item.item]),
@@ -496,7 +490,7 @@ function addGenericSessionPDF(doc: jsPDF, session: Session, group: Group, yPos: 
     doc.text('Anticipated Errors', 14, yPos);
     yPos += 4;
 
-    autoTable(doc, {
+    autoTableFn(doc, {
       startY: yPos,
       head: [['Error Pattern', 'Correction']],
       body: session.anticipated_errors.map(e => [e.error_pattern, e.correction_protocol]),
@@ -565,16 +559,21 @@ export function PrintSessionLesson({ session, group, students }: PrintSessionLes
     window.print();
   }, []);
 
-  // ---- PDF Download Handler ----
-  const handleDownloadPDF = useCallback(() => {
-    const doc = new jsPDF();
+  // ---- PDF Download Handler (lazy-loads jsPDF on demand) ----
+  const handleDownloadPDF = useCallback(async () => {
+    const [{ default: JsPDF }, { default: autoTablePlugin }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+
+    const doc = new JsPDF();
 
     // Header
     let yPos = addPDFHeader(doc, group, session);
 
     // Student roster
     if (students.length > 0) {
-      yPos = addStudentRoster(doc, students, yPos);
+      yPos = addStudentRoster(doc, students, yPos, autoTablePlugin);
     }
 
     // Curriculum-specific content
@@ -583,7 +582,7 @@ export function PrintSessionLesson({ session, group, students }: PrintSessionLes
     } else if (isCamino) {
       yPos = addCaminoLessonPDF(doc, session.camino_lesson_plan!, yPos);
     } else {
-      yPos = addGenericSessionPDF(doc, session, group, yPos);
+      yPos = addGenericSessionPDF(doc, session, group, yPos, autoTablePlugin);
     }
 
     // Footer

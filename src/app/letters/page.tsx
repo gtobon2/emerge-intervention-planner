@@ -12,7 +12,7 @@ import {
   Select,
   Textarea,
 } from '@/components/ui';
-import { generateLetterPDF, generateBatchLetterPDF, getLetterContent } from '@/lib/letters';
+import { getLetterContent } from '@/lib/letters/templates';
 import type { LetterType, LetterData } from '@/lib/letters';
 import { useSettingsStore } from '@/stores/settings';
 import { useGroupsStore } from '@/stores/groups';
@@ -204,18 +204,23 @@ export default function LettersPage() {
     }
   }, [letterData]);
 
-  const handleDownloadSingle = () => {
-    if (letterData) generateLetterPDF(letterData);
+  const handleDownloadSingle = async () => {
+    if (letterData) {
+      const { generateLetterPDF } = await import('@/lib/letters/pdf-generator');
+      generateLetterPDF(letterData);
+    }
   };
 
-  const handleDownloadBatch = () => {
+  const handleDownloadBatch = async () => {
     if (batchLetterData.length > 0) {
+      const { generateBatchLetterPDF } = await import('@/lib/letters/pdf-generator');
       generateBatchLetterPDF(batchLetterData, selectedGroup?.name);
     }
   };
 
-  const handleDownloadAll = () => {
+  const handleDownloadAll = async () => {
     if (allLetterData.length > 0) {
+      const { generateBatchLetterPDF } = await import('@/lib/letters/pdf-generator');
       generateBatchLetterPDF(allLetterData, 'all-students');
     }
   };

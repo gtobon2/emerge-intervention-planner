@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Plus, Settings, Users, Calendar, Clock, ChevronLeft, ChevronRight, GripVertical, Download, FileText, CheckSquare, X, Trash2, Ban } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { Button, Modal, Input, Select, Card, Checkbox } from '@/components/ui';
+import { ConfirmModal } from '@/components/ui/modal';
 import { useScheduleStore } from '@/stores/schedule';
 import { db } from '@/lib/local-db';
 import { useGroupsStore } from '@/stores/groups';
@@ -26,7 +27,6 @@ import {
   checkConstraintConflict,
 } from '@/lib/scheduling/day-slots';
 import Link from 'next/link';
-import { exportScheduleToPDF, exportScheduleToCSV } from '@/lib/export';
 import type { WeekDay, Group, SessionWithGroup } from '@/lib/supabase/types';
 
 export default function SchedulePage() {
@@ -77,6 +77,12 @@ export default function SchedulePage() {
   } | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
+  // Confirmation dialog state for cancel/delete operations
+  const [cancelConfirm, setCancelConfirm] = useState<{ sessionId: string; sessionName?: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ sessionId: string; sessionName?: string } | null>(null);
+  const [bulkCancelConfirm, setBulkCancelConfirm] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+
   useEffect(() => {
     fetchAll();
     fetchGroups();
@@ -122,20 +128,30 @@ export default function SchedulePage() {
 
   const handleBulkCancel = useCallback(async () => {
     if (selectedSessionIds.size === 0) return;
+    setBulkCancelConfirm(true);
+  }, [selectedSessionIds]);
+
+  const executeBulkCancel = useCallback(async () => {
     for (const id of selectedSessionIds) {
       await cancelSession(id);
     }
     fetchAllSessions();
     exitBulkSelect();
+    setBulkCancelConfirm(false);
   }, [selectedSessionIds, cancelSession, fetchAllSessions, exitBulkSelect]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedSessionIds.size === 0) return;
+    setBulkDeleteConfirm(true);
+  }, [selectedSessionIds]);
+
+  const executeBulkDelete = useCallback(async () => {
     for (const id of selectedSessionIds) {
       await deleteSession(id);
     }
     fetchAllSessions();
     exitBulkSelect();
+    setBulkDeleteConfirm(false);
   }, [selectedSessionIds, deleteSession, fetchAllSessions, exitBulkSelect]);
 
   // Week navigation state
@@ -581,7 +597,7 @@ export default function SchedulePage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => exportScheduleToPDF(weekSessions, weekRangeDisplay)}
+              onClick={async () => { const { exportScheduleToPDF } = await import('@/lib/export'); exportScheduleToPDF(weekSessions, weekRangeDisplay); }}
               className="p-2"
               title="Export PDF"
               disabled={weekSessions.length === 0}
@@ -591,7 +607,7 @@ export default function SchedulePage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => exportScheduleToCSV(weekSessions, weekRangeDisplay)}
+              onClick={async () => { const { exportScheduleToCSV } = await import('@/lib/export'); exportScheduleToCSV(weekSessions, weekRangeDisplay); }}
               className="p-2"
               title="Export CSV"
               disabled={weekSessions.length === 0}
@@ -653,11 +669,7 @@ export default function SchedulePage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => {
-                  if (confirm(`Delete ${selectedSessionIds.size} session(s)? This cannot be undone.`)) {
-                    handleBulkDelete();
-                  }
-                }}
+                onClick={handleBulkDelete}
                 disabled={selectedSessionIds.size === 0}
                 className="gap-1.5 text-red-700"
               >
@@ -709,13 +721,11 @@ export default function SchedulePage() {
                 onSessionDragStart={handleSessionDragStart}
                 onSessionDragEnd={handleSessionDragEnd}
                 draggingSession={draggingSession}
-                onDeleteSession={async (id) => {
-                  await deleteSession(id);
-                  fetchAllSessions();
+                onDeleteSession={(id, name) => {
+                  setDeleteConfirm({ sessionId: id, sessionName: name });
                 }}
-                onCancelSession={async (id) => {
-                  await cancelSession(id);
-                  fetchAllSessions();
+                onCancelSession={(id, name) => {
+                  setCancelConfirm({ sessionId: id, sessionName: name });
                 }}
                 bulkSelectMode={bulkSelectMode}
                 selectedSessionIds={selectedSessionIds}
@@ -939,7 +949,7 @@ export default function SchedulePage() {
                 <strong>{getDayDisplayName(pendingReschedule.newDay)}</strong> at{' '}
                 <strong>{formatTimeDisplay(pendingReschedule.newTime)}</strong>
               </p>
-              
+
               <div className="p-3 bg-surface rounded-lg">
                 <p className="text-sm">
                   There {pendingReschedule.futureSessionsCount === 1 ? 'is' : 'are'}{' '}
@@ -982,6 +992,62 @@ export default function SchedulePage() {
             </div>
           )}
         </Modal>
+
+        {/* Cancel Session Confirmation Modal */}
+        <ConfirmModal
+          isOpen={!!cancelConfirm}
+          onClose={() => setCancelConfirm(null)}
+          onConfirm={async () => {
+            if (cancelConfirm) {
+              await cancelSession(cancelConfirm.sessionId);
+              fetchAllSessions();
+              setCancelConfirm(null);
+            }
+          }}
+          title="Cancel Session?"
+          message={`This will mark the session${cancelConfirm?.sessionName ? ` for ${cancelConfirm.sessionName}` : ''} as cancelled. You can reschedule it later if needed.`}
+          confirmText="Cancel Session"
+          variant="danger"
+        />
+
+        {/* Delete Session Confirmation Modal */}
+        <ConfirmModal
+          isOpen={!!deleteConfirm}
+          onClose={() => setDeleteConfirm(null)}
+          onConfirm={async () => {
+            if (deleteConfirm) {
+              await deleteSession(deleteConfirm.sessionId);
+              fetchAllSessions();
+              setDeleteConfirm(null);
+            }
+          }}
+          title="Delete Session?"
+          message={`This will permanently delete the session${deleteConfirm?.sessionName ? ` for ${deleteConfirm.sessionName}` : ''}. This action cannot be undone.`}
+          confirmText="Delete Session"
+          variant="danger"
+        />
+
+        {/* Bulk Cancel Confirmation Modal */}
+        <ConfirmModal
+          isOpen={bulkCancelConfirm}
+          onClose={() => setBulkCancelConfirm(false)}
+          onConfirm={executeBulkCancel}
+          title="Cancel Selected Sessions?"
+          message={`This will mark ${selectedSessionIds.size} session${selectedSessionIds.size !== 1 ? 's' : ''} as cancelled. You can reschedule them later if needed.`}
+          confirmText={`Cancel ${selectedSessionIds.size} Session${selectedSessionIds.size !== 1 ? 's' : ''}`}
+          variant="danger"
+        />
+
+        {/* Bulk Delete Confirmation Modal */}
+        <ConfirmModal
+          isOpen={bulkDeleteConfirm}
+          onClose={() => setBulkDeleteConfirm(false)}
+          onConfirm={executeBulkDelete}
+          title="Delete Selected Sessions?"
+          message={`This will permanently delete ${selectedSessionIds.size} session${selectedSessionIds.size !== 1 ? 's' : ''}. This action cannot be undone.`}
+          confirmText={`Delete ${selectedSessionIds.size} Session${selectedSessionIds.size !== 1 ? 's' : ''}`}
+          variant="danger"
+        />
       </div>
     </AppLayout>
   );

@@ -30,8 +30,6 @@ import {
   type GroupProgressComparison,
 } from '@/lib/analytics';
 import { getCurriculumLabel } from '@/lib/supabase/types';
-import { exportPatternAnalysisToPDF } from '@/lib/export';
-
 interface AIRecommendations {
   criticalFindings: string[];
   immediateActions: string[];
@@ -82,10 +80,11 @@ export function CrossGroupInsights() {
     }));
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!analysis) return;
     setIsExportingPDF(true);
     try {
+      const { exportPatternAnalysisToPDF } = await import('@/lib/export');
       exportPatternAnalysisToPDF(analysis, {
         fileName: `cross-group-analysis-${new Date().toISOString().split('T')[0]}`,
       });
