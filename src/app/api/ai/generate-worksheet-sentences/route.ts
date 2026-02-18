@@ -337,7 +337,6 @@ export async function POST(request: NextRequest) {
 
             // Only include if meets threshold
             if (!valid) {
-              console.log(`Sentence below ${decodableThreshold * 100}% decodable (${decodablePercent}%): "${s.sentence}"`);
               continue;
             }
 

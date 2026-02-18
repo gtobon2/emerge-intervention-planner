@@ -9,7 +9,6 @@ export function registerServiceWorker() {
   }
 
   if (!('serviceWorker' in navigator)) {
-    console.log('Service workers are not supported in this browser');
     return;
   }
 
@@ -19,8 +18,6 @@ export function registerServiceWorker() {
         scope: '/',
       });
 
-      console.log('Service Worker registered successfully:', registration.scope);
-
       // Check for updates
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
@@ -28,9 +25,6 @@ export function registerServiceWorker() {
 
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // New service worker available
-            console.log('New service worker available');
-
             // Optionally notify user about update
             if (confirm('New version available! Reload to update?')) {
               newWorker.postMessage({ type: 'SKIP_WAITING' });
@@ -42,7 +36,7 @@ export function registerServiceWorker() {
 
       // Handle controller change
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service worker controller changed');
+        // Controller changed - new service worker has taken over
       });
     } catch (error) {
       console.error('Service Worker registration failed:', error);
@@ -62,7 +56,6 @@ export async function unregisterServiceWorker() {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const registration of registrations) {
       await registration.unregister();
-      console.log('Service Worker unregistered');
     }
   } catch (error) {
     console.error('Service Worker unregistration failed:', error);

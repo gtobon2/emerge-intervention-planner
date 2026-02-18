@@ -186,7 +186,6 @@ export function SuggestionsPanel({ groups }: SuggestionsPanelProps) {
       setIsSchedulingModalOpen(false);
       setCyclePreview(null);
 
-      console.log(`Created ${sessionsCreated} sessions for cycle`);
     } catch (error) {
       console.error('Error creating sessions:', error);
     } finally {
@@ -304,8 +303,6 @@ export function SuggestionsPanel({ groups }: SuggestionsPanelProps) {
       setSelectedSlots([]);
       clearSuggestions();
 
-      // Show success (could add a toast notification here)
-      console.log(`Created ${sessionsCreated} sessions`);
     } catch (error) {
       console.error('Error creating sessions:', error);
     } finally {

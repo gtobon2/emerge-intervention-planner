@@ -15,17 +15,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
-        console.log('[DatabaseProvider] Starting database initialization...');
         const result = await initializeDatabase();
 
         if (!result.success) {
           console.error('[DatabaseProvider] Database initialization failed:', result.error);
           setError(result.error || 'Failed to initialize database');
-        } else {
-          console.log('[DatabaseProvider] Database initialized successfully');
-          if (result.seededWithDemo) {
-            console.log('[DatabaseProvider] Database seeded with demo data');
-          }
         }
 
         setIsInitialized(true);

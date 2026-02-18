@@ -512,7 +512,6 @@ export async function POST(request: NextRequest) {
 
     if (!isAIConfigured()) {
       // Use fallback when AI is not configured
-      console.log('AI not configured, using fallback lesson');
       aiResponse = generateFallbackLesson(substep, substepName);
     } else {
       const prompt = generateLessonPrompt(substep, substepName);

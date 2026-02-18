@@ -131,9 +131,10 @@ export async function POST(request: NextRequest) {
 
     if (authError) {
       console.error('Error creating auth user:', authError);
+      const status = authError.message?.toLowerCase().includes('already') ? 409 : 400;
       return NextResponse.json(
         { error: authError.message || 'Failed to create user' },
-        { status: 400 }
+        { status }
       );
     }
 
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
         created_by: created_by || null,
       },
       tempPassword,
-      message: `User created successfully. Temporary password: ${tempPassword}`,
+      message: 'User created successfully',
     });
   } catch (error) {
     console.error('Error in POST /api/admin/users:', error);
@@ -262,9 +263,17 @@ export async function PATCH(request: NextRequest) {
 
     // Also update user metadata in auth.users if role changed
     if (role) {
-      await supabase.auth.admin.updateUserById(user_id, {
-        user_metadata: { role },
-      });
+      try {
+        await supabase.auth.admin.updateUserById(user_id, {
+          user_metadata: { role },
+        });
+      } catch (metadataError) {
+        console.error('Failed to update user role metadata:', metadataError);
+        return NextResponse.json(
+          { error: 'Profile updated but role metadata update failed' },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ user: profile });
@@ -299,9 +308,10 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       console.error('Error deleting user:', error);
+      const status = error.message?.toLowerCase().includes('not found') ? 404 : 500;
       return NextResponse.json(
         { error: error.message || 'Failed to delete user' },
-        { status: 500 }
+        { status }
       );
     }
 

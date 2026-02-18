@@ -15,7 +15,6 @@ export function OfflineIndicator() {
     setIsOnline(navigator.onLine);
 
     const handleOnline = () => {
-      console.log('Connection restored');
       setIsOnline(true);
 
       // Show "Back online" message briefly
@@ -24,7 +23,6 @@ export function OfflineIndicator() {
     };
 
     const handleOffline = () => {
-      console.log('Connection lost');
       setIsOnline(false);
       setShowBanner(true);
     };

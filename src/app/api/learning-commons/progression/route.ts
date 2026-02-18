@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const componentId = searchParams.get('componentId');
     const depth = parseInt(searchParams.get('depth') || '5', 10);
+    const clampedDepth = Math.max(1, Math.min(depth, 10));
 
     if (!componentId) {
       return NextResponse.json(
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const progression = buildLearningProgression(componentId, depth);
+    const progression = buildLearningProgression(componentId, clampedDepth);
     const prerequisites = getPrerequisites(componentId);
     const dependents = getDependents(componentId);
 
