@@ -127,7 +127,14 @@ export function FidelitySection({
       </div>
 
       {/* Completion progress bar */}
-      <div className="w-full h-1.5 rounded-full bg-border overflow-hidden">
+      <div
+        className="w-full h-1.5 rounded-full bg-border overflow-hidden"
+        role="progressbar"
+        aria-valuenow={completionPercent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Fidelity completion"
+      >
         <div
           className={`h-full rounded-full transition-all duration-300 ${
             completionPercent === 100 ? 'bg-green-500' : 'bg-movement'
@@ -162,6 +169,7 @@ export function FidelitySection({
               <button
                 type="button"
                 onClick={() => setExpandedNotes(expandedNotes === index ? null : index)}
+                aria-expanded={expandedNotes === index}
                 className="p-1 text-text-muted hover:text-text-primary transition-colors"
                 title="Add notes"
               >

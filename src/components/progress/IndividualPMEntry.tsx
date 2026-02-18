@@ -76,7 +76,7 @@ function MiniTrend({ scores, goalLine }: { scores: number[]; goalLine?: number }
 
   return (
     <div className="flex items-center gap-2">
-      <svg width={width} height={height} className="shrink-0">
+      <svg width={width} height={height} className="shrink-0" role="img" aria-label="Score trend">
         {/* Goal line */}
         {goalY != null && (
           <line

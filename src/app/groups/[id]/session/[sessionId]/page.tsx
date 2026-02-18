@@ -611,10 +611,15 @@ export default function SessionPage({
 
   // Save error to error bank
   const handleEditSession = async (sessionId: string, updates: any) => {
-    await updateSession(sessionId, updates);
-    // Refresh session data
-    if (session) {
-      setSession({ ...session, ...updates });
+    try {
+      await updateSession(sessionId, updates);
+      if (session) {
+        setSession({ ...session, ...updates });
+      }
+      toast('success', 'Session Updated', 'Changes saved successfully.');
+    } catch (error) {
+      console.error('Error updating session:', error);
+      toast('error', 'Update Failed', 'Failed to save changes.');
     }
   };
 

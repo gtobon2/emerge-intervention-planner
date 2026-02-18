@@ -77,11 +77,15 @@ function CollapsibleSection({
   isFilled,
   children,
 }: CollapsibleSectionProps) {
+  const sectionId = `section-${title.toLowerCase().replace(/\s+/g, '-')}`;
+
   return (
     <div className="border border-border rounded-xl overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={sectionId}
         className="w-full flex items-center justify-between p-4 min-h-[52px] hover:bg-surface-elevated transition-colors"
       >
         <div className="flex items-center gap-2.5">
@@ -99,7 +103,7 @@ function CollapsibleSection({
         />
       </button>
       {isOpen && (
-        <div className="px-4 pb-4 pt-1 border-t border-border">
+        <div id={sectionId} className="px-4 pb-4 pt-1 border-t border-border">
           {children}
         </div>
       )}

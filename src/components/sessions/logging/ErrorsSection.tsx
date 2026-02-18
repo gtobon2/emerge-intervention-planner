@@ -107,6 +107,7 @@ export function ErrorsSection({
               <button
                 type="button"
                 onClick={() => setExpandedIndex(isExpanded ? null : index)}
+                aria-expanded={isExpanded}
                 className="w-full flex items-center justify-between p-3 min-h-[44px] text-left hover:bg-surface-elevated transition-colors"
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -157,7 +158,7 @@ export function ErrorsSection({
                             onClick={() => updateError(index, 'error_pattern', type.value)}
                             disabled={disabled}
                             className={`
-                              px-3 py-1.5 rounded-lg text-xs font-medium min-h-[36px]
+                              px-3 py-1.5 rounded-lg text-xs font-medium min-h-[44px]
                               border transition-all
                               ${
                                 isSelected

@@ -104,6 +104,7 @@ export default function ProgressPage() {
 
   // Fetch group details (including students) and goals when selection changes
   useEffect(() => {
+    setEditingDataPoint(null);
     if (selectedGroupId) {
       fetchGroupById(selectedGroupId);
       fetchGoalsForGroup(selectedGroupId);

@@ -276,10 +276,19 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     try {
       const newSession = await supabaseService.createSession(session);
 
-      set((state) => ({
-        sessions: [newSession, ...state.sessions],
-        isLoading: false,
-      }));
+      set((state) => {
+        // Try to find the group from an existing allSessions entry with the same group_id
+        const existingWithGroup = state.allSessions.find((s) => s.group_id === newSession.group_id);
+        const newAllSessions = existingWithGroup
+          ? [{ ...newSession, group: existingWithGroup.group }, ...state.allSessions]
+          : state.allSessions;
+
+        return {
+          sessions: [newSession, ...state.sessions],
+          allSessions: newAllSessions,
+          isLoading: false,
+        };
+      });
 
       return newSession;
     } catch (err) {
@@ -296,6 +305,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
       set((state) => ({
         sessions: state.sessions.map((s) => (s.id === id ? updatedSession : s)),
+        allSessions: state.allSessions.map((s) => (s.id === id ? { ...s, ...updatedSession } : s)),
         selectedSession:
           state.selectedSession?.id === id
             ? { ...state.selectedSession, ...updatedSession }
@@ -392,6 +402,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
       set((state) => ({
         sessions: state.sessions.filter((s) => s.id !== id),
+        allSessions: state.allSessions.filter((s) => s.id !== id),
         selectedSession:
           state.selectedSession?.id === id ? null : state.selectedSession,
         isLoading: false,
@@ -414,6 +425,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
       set((state) => ({
         sessions: state.sessions.map((s) => (s.id === id ? updatedSession : s)),
+        allSessions: state.allSessions.map((s) => (s.id === id ? { ...s, ...updatedSession } : s)),
         selectedSession:
           state.selectedSession?.id === id
             ? { ...state.selectedSession, ...updatedSession }

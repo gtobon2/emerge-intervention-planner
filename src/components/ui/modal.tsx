@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, ReactNode } from 'react';
+import { Fragment, ReactNode, useEffect, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './button';
 
@@ -21,6 +21,56 @@ export function Modal({
   size = 'md',
   showCloseButton = true
 }: ModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  // Focus trap and restore focus on unmount
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Save the previously focused element
+    previouslyFocusedRef.current = document.activeElement as HTMLElement;
+
+    // Focus the modal container
+    modalRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      const modal = modalRef.current;
+      if (!modal) return;
+
+      const focusableElements = modal.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length === 0) return;
+
+      const firstFocusable = focusableElements[0];
+      const lastFocusable = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstFocusable) {
+          e.preventDefault();
+          lastFocusable.focus();
+        }
+      } else {
+        if (document.activeElement === lastFocusable) {
+          e.preventDefault();
+          firstFocusable.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus to previously focused element
+      previouslyFocusedRef.current?.focus();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const sizeStyles = {
@@ -43,6 +93,11 @@ export function Modal({
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          tabIndex={-1}
           className={`
             w-full ${sizeStyles[size]}
             bg-surface rounded-xl shadow-xl
@@ -55,7 +110,7 @@ export function Modal({
           {(title || showCloseButton) && (
             <div className="flex items-center justify-between px-6 py-4 border-b border-text-muted/10">
               {title && (
-                <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
+                <h2 id="modal-title" className="text-lg font-semibold text-text-primary">{title}</h2>
               )}
               {showCloseButton && (
                 <button
