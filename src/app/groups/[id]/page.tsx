@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
+  Activity,
   ArrowLeft,
   Plus,
   Calendar,
@@ -35,6 +36,7 @@ import type { EnhancedGroupSchedule, WeekDay } from '@/lib/supabase/types';
 import { canUserAccessGroup } from '@/lib/supabase/services';
 import { useCyclesStore } from '@/stores/cycles';
 import * as supabaseService from '@/lib/supabase/services';
+import { isPMOverdue, getPMFrequencyDays } from '@/lib/supabase/validation';
 import type { Session, PMTrend } from '@/lib/supabase/types';
 
 // Day label helper
@@ -67,6 +69,7 @@ export default function GroupDetailPage() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pmTrend, setPmTrend] = useState<PMTrend | null>(null);
+  const [lastPMDate, setLastPMDate] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
 
@@ -170,13 +173,22 @@ export default function GroupDetailPage() {
         // Fetch PM records from Supabase for this group
         const pmRecords = await supabaseService.fetchProgressByGroupId(groupId);
 
-        if (pmRecords.length < 2) {
+        if (pmRecords.length === 0) {
           setPmTrend(null);
+          setLastPMDate(null);
           return;
         }
 
         // Sort by date descending (most recent first)
         const sortedRecords = pmRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+        // Capture the most recent PM date for the PM status indicator
+        setLastPMDate(sortedRecords[0].date);
+
+        if (sortedRecords.length < 2) {
+          setPmTrend(null);
+          return;
+        }
 
         // Take last 3 records (or all if less than 3)
         const recentRecords = sortedRecords.slice(0, 3);
@@ -197,6 +209,7 @@ export default function GroupDetailPage() {
       } catch (error) {
         console.error('Error calculating PM trend:', error);
         setPmTrend(null);
+        setLastPMDate(null);
       }
     }
 
@@ -385,6 +398,28 @@ export default function GroupDetailPage() {
               <BookOpen className="w-4 h-4 flex-shrink-0" />
               <span className="truncate">Current Position: {positionLabel}</span>
             </div>
+            {/* PM Status Indicator */}
+            {(() => {
+              const pmOverdue = isPMOverdue(selectedGroup.tier, lastPMDate);
+              const daysSinceLastPM = lastPMDate
+                ? Math.floor((Date.now() - new Date(lastPMDate).getTime()) / (1000 * 60 * 60 * 24))
+                : null;
+              const frequencyLabel = getPMFrequencyDays(selectedGroup.tier) === 7 ? 'weekly' : 'bi-weekly';
+
+              return (
+                <div className={`flex items-center gap-1.5 text-xs mt-1 ${pmOverdue ? 'text-red-400' : 'text-emerald-500'}`}>
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>
+                    {lastPMDate
+                      ? pmOverdue
+                        ? `PM overdue (${daysSinceLastPM}d ago, ${frequencyLabel})`
+                        : `PM current (${daysSinceLastPM}d ago, ${frequencyLabel})`
+                      : `PM overdue (no data, ${frequencyLabel})`
+                    }
+                  </span>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {canEdit ? (

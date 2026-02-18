@@ -3,6 +3,7 @@ import { useSessionsStore } from '@/stores/sessions';
 import { useStudentsStore } from '@/stores/students';
 import { useProgressStore } from '@/stores/progress';
 import { useSettingsStore } from '@/stores/settings';
+import { useGroupsStore } from '@/stores/groups';
 import { useEffect } from 'react';
 import type { Notification, NotificationType } from '@/stores/notifications';
 
@@ -35,6 +36,7 @@ export function useNotificationGenerator() {
   const allStudents = useStudentsStore((state) => state.allStudents);
   const progressData = useProgressStore((state) => state.data);
   const notificationPreferences = useSettingsStore((state) => state.notificationPreferences);
+  const groups = useGroupsStore((state) => state.groups);
 
   useEffect(() => {
     // Only generate reminders if enabled in settings
@@ -56,12 +58,15 @@ export function useNotificationGenerator() {
       };
     });
 
-    // Generate reminders
-    generateReminders(allSessions, studentsWithPMData, notificationPreferences.reminderTiming);
+    // Prepare groups data with tier info for tier-aware PM thresholds
+    const groupsWithTier = groups.map((g) => ({ id: g.id, tier: g.tier }));
+
+    // Generate reminders with tier-aware PM thresholds
+    generateReminders(allSessions, studentsWithPMData, notificationPreferences.reminderTiming, groupsWithTier);
 
     // Set up interval to check for reminders every 5 minutes
     const interval = setInterval(() => {
-      generateReminders(allSessions, studentsWithPMData, notificationPreferences.reminderTiming);
+      generateReminders(allSessions, studentsWithPMData, notificationPreferences.reminderTiming, groupsWithTier);
     }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
@@ -69,6 +74,7 @@ export function useNotificationGenerator() {
     allSessions,
     allStudents,
     progressData,
+    groups,
     notificationPreferences.sessionReminders,
     notificationPreferences.pmDataDueReminders,
     notificationPreferences.reminderTiming,

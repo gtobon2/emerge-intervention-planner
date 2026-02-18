@@ -13,6 +13,7 @@ import type {
   ErrorBankInsert,
   Curriculum,
   CurriculumPosition,
+  Tier,
 } from './types';
 
 // ===========================================
@@ -340,6 +341,30 @@ export function validatePMDataPoint(data: {
   if (!data.date) errors.push('Date is required');
   else if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date)) errors.push('Invalid date format');
   return { isValid: errors.length === 0, errors };
+}
+
+// ===========================================
+// PM FREQUENCY HELPERS
+// ===========================================
+
+/**
+ * Get the expected PM frequency in days based on tier.
+ * Tier 3 = weekly (7 days), Tier 2 = bi-weekly (14 days).
+ */
+export function getPMFrequencyDays(tier: Tier): number {
+  return tier === 3 ? 7 : 14;
+}
+
+/**
+ * Check whether PM data is overdue for a given tier and last PM date.
+ * Returns true if no PM date exists or if the elapsed days exceed the tier threshold.
+ */
+export function isPMOverdue(tier: Tier, lastPMDate: string | null): boolean {
+  if (!lastPMDate) return true;
+  const daysSince = Math.floor(
+    (Date.now() - new Date(lastPMDate).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  return daysSince > getPMFrequencyDays(tier);
 }
 
 // ===========================================

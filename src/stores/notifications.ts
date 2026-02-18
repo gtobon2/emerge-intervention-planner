@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionWithGroup } from '@/lib/supabase/types';
+import { getPMFrequencyDays } from '@/lib/supabase/validation';
 
 export type NotificationType = 'session_reminder' | 'pm_due' | 'session_completed' | 'info' | 'pm_reminder' | 'decision_rule_alert' | 'attendance_flag' | 'goal_not_set' | 'error' | 'success' | 'warning';
 
@@ -27,7 +28,8 @@ interface NotificationsState {
   generateReminders: (
     sessions: SessionWithGroup[],
     students: Array<{ id: string; name: string; group_id: string; lastPMDate?: string }>,
-    reminderTiming: '15min' | '30min' | '1hour'
+    reminderTiming: '15min' | '30min' | '1hour',
+    groups?: Array<{ id: string; tier: number }>
   ) => void;
   generateDecisionAlerts: (
     pmData: Array<{
@@ -152,7 +154,7 @@ export const useNotificationsStore = create<NotificationsState>()(
         });
       },
 
-      generateReminders: (sessions, students, reminderTiming) => {
+      generateReminders: (sessions, students, reminderTiming, groups) => {
         const now = new Date();
         const reminderMinutes = getReminderMinutes(reminderTiming);
         const reminderWindowStart = new Date(now.getTime() + reminderMinutes * 60000);
@@ -181,17 +183,26 @@ export const useNotificationsStore = create<NotificationsState>()(
           }
         });
 
-        // Generate PM due reminders for students without recent data
-        const pmDueThresholdDays = 7; // Alert if no PM data in 7 days
-        const pmDueDate = new Date(now.getTime() - pmDueThresholdDays * 24 * 60 * 60 * 1000);
+        // Build a map of group_id -> tier for tier-aware PM thresholds
+        const groupTierMap = new Map<string, number>();
+        if (groups) {
+          groups.forEach((g) => groupTierMap.set(g.id, g.tier));
+        }
 
+        // Generate PM due reminders for students without recent data
+        // Tier 3 = weekly (7 days), Tier 2 = bi-weekly (14 days), fallback = 7 days
         students.forEach((student) => {
+          const tier = groupTierMap.get(student.group_id);
+          const thresholdDays = tier ? getPMFrequencyDays(tier as 2 | 3) : 7;
+          const pmDueDate = new Date(now.getTime() - thresholdDays * 24 * 60 * 60 * 1000);
+          const frequencyLabel = thresholdDays === 7 ? 'weekly' : 'bi-weekly';
+
           if (!student.lastPMDate) {
             // No PM data ever recorded
             get().addNotification({
               type: 'pm_due',
               title: 'PM Data Due',
-              message: `PM data due for ${student.name} - no data recorded yet`,
+              message: `PM data due for ${student.name} (${frequencyLabel}) - no data recorded yet`,
               link: `/groups/${student.group_id}`,
             });
           } else {
@@ -203,7 +214,7 @@ export const useNotificationsStore = create<NotificationsState>()(
               get().addNotification({
                 type: 'pm_due',
                 title: 'PM Data Due',
-                message: `PM data due for ${student.name} - last recorded ${daysSince} days ago`,
+                message: `PM data due for ${student.name} (${frequencyLabel}) - last recorded ${daysSince} days ago`,
                 link: `/groups/${student.group_id}`,
               });
             }

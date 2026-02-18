@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Loader2, Save } from 'lucide-react';
 import { db } from '@/lib/local-db';
 import { WILSON_STEPS, getWilsonSubstep } from '@/lib/curriculum/wilson';
 import { ensureWilsonDataSeeded } from '@/lib/curriculum/wilson-data-seeder';
@@ -31,6 +31,26 @@ interface SectionState {
   notes: string;
   dayAssignment: number;
   activities: string[];
+}
+
+interface WizardDraft {
+  currentStep: number;
+  selectedSubstep: string;
+  numDays: number;
+  isGroup: boolean;
+  sections: Record<string, SectionState>;
+  savedAt: string;
+}
+
+function formatTimeAgo(date: string): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 const STEPS = ['Setup', 'Word Study', 'Spelling', 'Fluency', 'Review'] as const;
@@ -84,6 +104,75 @@ export function WilsonWizard({
     }
     return initial as Record<LessonComponentType, SectionState>;
   });
+
+  // --- Draft persistence ---
+  const storageKey = sessionId
+    ? `wilson_wizard_session_${sessionId}`
+    : `wilson_wizard_new_${initialSubstep || 'default'}`;
+
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftDate, setDraftDate] = useState<string>('');
+
+  // Check for existing draft on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const draft: WizardDraft = JSON.parse(raw);
+        if (draft.savedAt) {
+          setHasDraft(true);
+          setDraftDate(draft.savedAt);
+        }
+      }
+    } catch {
+      // Corrupt or missing draft — ignore
+    }
+  }, [storageKey]);
+
+  const restoreDraft = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return;
+      const draft: WizardDraft = JSON.parse(raw);
+      setCurrentStep(draft.currentStep);
+      setSelectedSubstep(draft.selectedSubstep);
+      setNumDays(draft.numDays);
+      setIsGroup(draft.isGroup);
+      setSections(draft.sections as Record<LessonComponentType, SectionState>);
+      setDraftRestored(true);
+      setHasDraft(false);
+    } catch {
+      // Corrupt draft — discard
+      localStorage.removeItem(storageKey);
+      setHasDraft(false);
+    }
+  }, [storageKey]);
+
+  const discardDraft = useCallback(() => {
+    localStorage.removeItem(storageKey);
+    setHasDraft(false);
+  }, [storageKey]);
+
+  // Auto-save draft with 1-second debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const draft: WizardDraft = {
+        currentStep,
+        selectedSubstep,
+        numDays,
+        isGroup,
+        sections,
+        savedAt: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(draft));
+      } catch {
+        // localStorage full or unavailable — silently ignore
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [currentStep, selectedSubstep, numDays, isGroup, sections, storageKey]);
 
   // Load element bank from IndexedDB when substep changes
   useEffect(() => {
@@ -359,12 +448,15 @@ export function WilsonWizard({
 
         onSave?.(multiDayPlan);
       }
+
+      // Clear draft on successful save
+      localStorage.removeItem(storageKey);
     } catch (error) {
       console.error('Error saving lesson plan:', error);
     } finally {
       setIsSaving(false);
     }
-  }, [sections, numDays, selectedSubstep, substepLabel, sessionId, onSave]);
+  }, [sections, numDays, selectedSubstep, substepLabel, sessionId, onSave, storageKey]);
 
   // Navigation
   const canGoNext = currentStep < STEPS.length - 1;
@@ -421,6 +513,24 @@ export function WilsonWizard({
           </div>
         ) : (
           <>
+            {hasDraft && !draftRestored && (
+              <div className="flex items-center justify-between p-3 mb-4 bg-breakthrough/10 border border-breakthrough/20 rounded-xl text-sm">
+                <div className="flex items-center gap-2">
+                  <Save className="w-4 h-4 text-breakthrough" />
+                  <span className="text-text-primary">
+                    Draft saved {formatTimeAgo(draftDate)} — restore your progress?
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={restoreDraft} className="px-3 py-1 rounded-lg text-xs font-medium bg-breakthrough text-foundation">
+                    Restore
+                  </button>
+                  <button onClick={discardDraft} className="px-3 py-1 rounded-lg text-xs font-medium text-text-muted hover:text-text-primary">
+                    Discard
+                  </button>
+                </div>
+              </div>
+            )}
             {currentStep === 0 && (
               <WizardSetup
                 selectedSubstep={selectedSubstep}
